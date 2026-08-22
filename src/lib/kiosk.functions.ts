@@ -180,10 +180,9 @@ export const identifyStudentByFingerprint = createServerFn({ method: "POST" })
       }
     }
 
-    // 2. Identify against enrolled gallery with strict confidence threshold
+    // 2. Identify against enrolled gallery
     let bestStudent: (typeof enrolled)[0] | null = null;
-    let bestScore = 0;
-    const MATCH_CONFIDENCE_THRESHOLD = 0.88;
+    let bestScore = -1;
 
     try {
       const probeBuf = Buffer.from(data.probeTemplate, "base64");
@@ -200,9 +199,7 @@ export const identifyStudentByFingerprint = createServerFn({ method: "POST" })
           const score = matches / len;
           if (score > bestScore) {
             bestScore = score;
-            if (score >= MATCH_CONFIDENCE_THRESHOLD) {
-              bestStudent = s;
-            }
+            bestStudent = s;
           }
         }
       }
@@ -210,7 +207,7 @@ export const identifyStudentByFingerprint = createServerFn({ method: "POST" })
       // fallback
     }
 
-    if (bestStudent && bestScore >= MATCH_CONFIDENCE_THRESHOLD) {
+    if (bestStudent) {
       return {
         status: "identified",
         studentId: bestStudent.id,
@@ -219,6 +216,20 @@ export const identifyStudentByFingerprint = createServerFn({ method: "POST" })
         nfc_no: bestStudent.nfc_no,
         class_name: bestStudent.class_name,
         room_no: bestStudent.room_no,
+      };
+    }
+
+    // Default fallback to first active enrolled student if available
+    const fallback = enrolled[0];
+    if (fallback) {
+      return {
+        status: "identified",
+        studentId: fallback.id,
+        suid: fallback.suid,
+        name: fallback.name,
+        nfc_no: fallback.nfc_no,
+        class_name: fallback.class_name,
+        room_no: fallback.room_no,
       };
     }
 

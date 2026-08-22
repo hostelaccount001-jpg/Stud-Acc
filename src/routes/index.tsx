@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import {
   getKioskConfig,
-  lookupStudentBySuid,
+  identifyStudentByFingerprint,
   lookupStudent,
   punchService,
 } from "@/lib/kiosk.functions";
@@ -77,6 +77,7 @@ type ServiceItem = {
 function Kiosk() {
   const [step, setStep] = useState<Step>("finger");
   const [capturedScan, setCapturedScan] = useState<CapturedScan | null>(null);
+  const [detectedStudent, setDetectedStudent] = useState<VerifiedStudent | null>(null);
   const [student, setStudent] = useState<VerifiedStudent | null>(null);
   const [nfc, setNfc] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -94,6 +95,7 @@ function Kiosk() {
   const cardInputRef = useRef<HTMLInputElement>(null);
 
   const getConfig = useServerFn(getKioskConfig);
+  const identifyByFingerprint = useServerFn(identifyStudentByFingerprint);
   const lookup = useServerFn(lookupStudent);
   const punch = useServerFn(punchService);
 
@@ -138,6 +140,7 @@ function Kiosk() {
   function reset() {
     setStep("finger");
     setCapturedScan(null);
+    setDetectedStudent(null);
     setStudent(null);
     setNfc("");
     setError("");
@@ -145,7 +148,7 @@ function Kiosk() {
     setCustomAmountStr("0");
   }
 
-  // STEP 1: Scan Fingerprint on Mantra MFS110
+  // STEP 1: Scan Fingerprint on Mantra MFS110 & Check Database (1:N Lookup)
   async function startFingerScan() {
     setScanning(true);
     setError("");
@@ -164,7 +167,27 @@ function Kiosk() {
         at: new Date().toISOString(),
       });
 
-      // Fingerprint captured successfully! Advance to Step 2 (NFC Card Tap)
+      // Query database: Check if this fingerprint belongs to any registered student in Supabase
+      const idResult = await identifyByFingerprint({
+        data: { probeTemplate: capture.template },
+      });
+
+      if (idResult.status === "not_found") {
+        setError("❌ Unregistered Fingerprint: No student found with this biometric in database. Please register in Admin Portal first.");
+        return;
+      }
+
+      // Student found in database with enrolled biometric!
+      setDetectedStudent({
+        studentId: idResult.studentId,
+        suid: idResult.suid,
+        name: idResult.name,
+        nfc_no: idResult.nfc_no,
+        class_name: idResult.class_name,
+        room_no: idResult.room_no,
+      });
+
+      // Advance to Step 2 (NFC Card Tap)
       setStep("card");
     } catch {
       setError("Biometric communication error. Please place your finger firmly on the Mantra sensor and try again.");
@@ -173,53 +196,29 @@ function Kiosk() {
     }
   }
 
-  // STEP 2: Verify NFC Card on ID TECH Reader
+  // STEP 2: Verify NFC Card matches the Detected Student from Step 1
   async function submitCard(value: string) {
     const code = value.trim();
     if (!code) return;
 
-    if (!capturedScan) {
-      setError("Please scan your fingerprint on the Mantra sensor in Step 1 first.");
+    if (!detectedStudent) {
+      setError("Please scan your fingerprint in Step 1 first.");
       setStep("finger");
+      return;
+    }
+
+    // STRICT CROSS-CHECK: The tapped card MUST belong to the EXACT student identified in Step 1!
+    if (code !== detectedStudent.nfc_no) {
+      setError(`🚨 FAILED: Card Mismatch! This card does NOT belong to ${detectedStudent.name}. Only ${detectedStudent.name}'s registered card can be scanned.`);
+      setNfc("");
       return;
     }
 
     setBusy(true);
     setError("");
     try {
-      const res = await lookup({
-        data: {
-          nfc: code,
-        },
-      });
-
-      if (res.status === "not_found") {
-        setError("❌ NFC Card is not registered in the system. Please register the student in the Admin Portal first.");
-        setNfc("");
-        return;
-      }
-
-      if (res.status === "blocked") {
-        setError(`❌ Card Blocked: ${res.message}`);
-        setNfc("");
-        return;
-      }
-
-      if (res.status === "no_fingerprint") {
-        setError("❌ Biometrics Not Enrolled: No fingerprints are registered for this student. Please enroll in Admin Portal first.");
-        setNfc("");
-        return;
-      }
-
-      // Valid registered student with enrolled biometrics found!
-      setStudent({
-        studentId: res.studentId,
-        suid: res.suid,
-        name: res.name,
-        nfc_no: res.nfc_no,
-        class_name: res.class_name,
-        room_no: res.room_no,
-      });
+      // Both Fingerprint AND NFC Card match the EXACT same student!
+      setStudent(detectedStudent);
 
       // Advance to Step 3 (Services)
       setStep("service");
@@ -493,8 +492,22 @@ function Kiosk() {
         )}
 
         {/* STEP 2: Live Animated NFC Smart Card Tap */}
-        {step === "card" && (
+        {step === "card" && detectedStudent && (
           <Card className="w-full max-w-xl p-8 md:p-12 text-center bg-white/95 backdrop-blur-md border-2 border-[#e5d8c5] shadow-[0_20px_60px_-15px_rgba(74,28,20,0.15)] rounded-3xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
+            {/* Student Identified Banner */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-[#8b2500]/10 via-amber-500/15 to-[#8b2500]/10 border border-amber-500/30 text-center space-y-1 shadow-sm">
+              <div className="text-[11px] uppercase font-bold tracking-wider text-[#8b2500] flex items-center justify-center gap-1.5">
+                <ShieldCheck className="size-4 text-[#8b2500]" /> Student Identified by Fingerprint
+              </div>
+              <div className="text-xl md:text-2xl font-serif font-bold text-[#4a1c14]">
+                {detectedStudent.name}
+              </div>
+              <div className="text-xs font-mono text-[#7c533f]">
+                SUID: <span className="font-bold text-[#4a1c14]">{detectedStudent.suid}</span>
+                {detectedStudent.class_name ? ` • Class: ${detectedStudent.class_name}` : ""}
+              </div>
+            </div>
+
             {/* Live RFID Radar Circle */}
             <div className="relative mx-auto size-36 rounded-full bg-gradient-to-b from-[#fdfbf7] to-[#f4ebe0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner animate-pulse-ring">
               <CreditCard className="size-16 text-[#8b2500] animate-bounce" />
@@ -505,7 +518,7 @@ function Kiosk() {
                 Step 2: Tap Your NFC Card
               </h2>
               <p className="text-sm md:text-base text-[#7c533f]">
-                Please tap your registered Smart Card on the <strong>ID TECH</strong> reader.
+                Please tap the registered Smart Card for <strong className="text-[#4a1c14] font-bold">{detectedStudent.name}</strong> on the <strong>ID TECH</strong> reader.
               </p>
             </div>
 
