@@ -357,8 +357,8 @@ function Kiosk() {
         </Link>
 
         {/* Top Center Title & Subtitle */}
-        <div className="max-w-4xl mx-auto px-16">
-          <h1 className="text-3xl md:text-5xl font-serif font-bold tracking-tight text-[#4a1c14] drop-shadow-sm">
+        <div className="max-w-5xl mx-auto px-4">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-[42px] font-serif font-bold tracking-tight text-[#4a1c14] drop-shadow-sm whitespace-nowrap">
             {title}
           </h1>
           <p className="text-sm md:text-base font-medium text-[#7c533f] tracking-wide mt-1">
