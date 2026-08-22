@@ -175,7 +175,9 @@ function Kiosk() {
       });
 
       if (ident.status === "not_found") {
-        setError("Fingerprint not recognized. Please enroll this student in the Admin Portal first.");
+        setError("❌ Fingerprint Not Recognized! This fingerprint is not enrolled for any active student. Please enroll your fingerprint in the Admin Portal first.");
+        setCapturedScan(null);
+        setDetectedStudent(null);
         return;
       }
 

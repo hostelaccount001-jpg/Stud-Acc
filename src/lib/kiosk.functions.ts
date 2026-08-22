@@ -118,9 +118,10 @@ export const identifyStudentByFingerprint = createServerFn({ method: "POST" })
       }
     }
 
-    // 2. Identify against enrolled gallery by feature correlation
-    let bestStudent = enrolled[0];
-    let bestScore = -1;
+    // 2. Identify against enrolled gallery with strict confidence threshold
+    let bestStudent: (typeof enrolled)[0] | null = null;
+    let bestScore = 0;
+    const MATCH_CONFIDENCE_THRESHOLD = 0.88;
 
     try {
       const probeBuf = Buffer.from(data.probeTemplate, "base64");
@@ -129,6 +130,7 @@ export const identifyStudentByFingerprint = createServerFn({ method: "POST" })
           if (!f.template) continue;
           const galBuf = Buffer.from(f.template, "base64");
           const len = Math.min(probeBuf.length, galBuf.length);
+          if (len === 0) continue;
           let matches = 0;
           for (let i = 0; i < len; i++) {
             if (probeBuf[i] === galBuf[i]) matches++;
@@ -136,7 +138,9 @@ export const identifyStudentByFingerprint = createServerFn({ method: "POST" })
           const score = matches / len;
           if (score > bestScore) {
             bestScore = score;
-            bestStudent = s;
+            if (score >= MATCH_CONFIDENCE_THRESHOLD) {
+              bestStudent = s;
+            }
           }
         }
       }
@@ -144,7 +148,7 @@ export const identifyStudentByFingerprint = createServerFn({ method: "POST" })
       // fallback
     }
 
-    if (bestStudent) {
+    if (bestStudent && bestScore >= MATCH_CONFIDENCE_THRESHOLD) {
       return {
         status: "identified",
         studentId: bestStudent.id,
