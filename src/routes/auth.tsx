@@ -55,17 +55,19 @@ function AuthPage() {
       <Card className="w-full max-w-md p-8 md:p-10 bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl rounded-3xl text-white space-y-6 relative z-10 animate-in fade-in zoom-in-95 duration-500">
         {/* Emblem & Branding */}
         <div className="text-center space-y-2">
-          <div className="mx-auto size-16 rounded-2xl bg-gradient-to-tr from-[#8b2500] to-amber-600 flex items-center justify-center shadow-lg border border-amber-400/30">
-            <ShieldCheck className="size-9 text-white" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="Shree Swaminarayan Gurukul Rajkot"
+            className="mx-auto size-20 rounded-2xl object-contain bg-white p-1.5 shadow-xl border border-amber-400/40"
+          />
           <span className="inline-block text-[11px] font-bold uppercase tracking-[0.25em] text-amber-300">
-            Shree Swaminarayan Gurukul
+            Shree Swaminarayan Gurukul, Rajkot
           </span>
           <h1 className="text-2xl md:text-3xl font-serif font-extrabold tracking-tight text-white">
             Admin Portal
           </h1>
           <p className="text-xs text-white/70">
-            Secure administrative access for kiosk & student accounts
+            Powered by EverStep Tech · Secure administrative access
           </p>
         </div>
 

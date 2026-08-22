@@ -349,6 +349,11 @@ function Kiosk() {
         >
           <Settings className="size-4" /> Admin Portal
         </Link>
+        <img
+          src="/logo.png"
+          alt="Shree Swaminarayan Gurukul Rajkot Logo"
+          className="mx-auto size-20 md:size-24 rounded-3xl object-contain bg-white p-2 shadow-xl border border-amber-400/40"
+        />
         <h1 className="text-3xl md:text-5xl font-serif font-bold tracking-tight text-[#4a1c14] drop-shadow-sm">
           {title}
         </h1>
@@ -727,8 +732,10 @@ function Kiosk() {
       </Dialog>
 
       {/* Terminal Footer */}
-      <footer className="text-center text-xs font-medium text-[#8f6853] py-2">
-        Shree Swaminarayan Gurukul Kiosk Terminal • Powered by Mantra MFS110 Biometrics & NFC
+      <footer className="text-center text-xs font-medium text-[#8f6853] py-2 flex flex-col sm:flex-row items-center justify-center gap-2">
+        <span>Shree Swaminarayan Gurukul, Rajkot · Cashless Kiosk Terminal</span>
+        <span className="hidden sm:inline">|</span>
+        <span className="font-semibold text-[#6b4a3a]">Powered by EverStep Tech</span>
       </footer>
     </div>
   );

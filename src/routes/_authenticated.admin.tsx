@@ -73,16 +73,19 @@ function AdminLayout() {
         {/* Brand Header */}
         <div className="space-y-1 pb-6 border-b border-white/10">
           <div className="flex items-center gap-3">
-            <div className="size-11 rounded-2xl bg-gradient-to-tr from-[#8b2500] to-amber-500 flex items-center justify-center shadow-lg border border-amber-400/30">
-              <ShieldCheck className="size-6 text-white" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Shree Swaminarayan Gurukul Rajkot"
+              className="size-12 rounded-2xl object-contain bg-white p-1 shadow-lg border border-amber-400/40"
+            />
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-amber-300">
                 Gurukul ERP
               </p>
-              <h2 className="text-lg font-serif font-extrabold tracking-tight text-white leading-tight">
+              <h2 className="text-base font-serif font-extrabold tracking-tight text-white leading-tight">
                 Admin Console
               </h2>
+              <p className="text-[9px] text-white/50 font-sans tracking-wide">by EverStep Tech</p>
             </div>
           </div>
         </div>
@@ -142,11 +145,16 @@ function AdminLayout() {
 
       {/* MOBILE TOP BAR */}
       <div className="lg:hidden fixed top-0 inset-x-0 z-40 bg-[#2c1810] text-white p-4 flex items-center justify-between shadow-lg">
-        <div className="flex items-center gap-2">
-          <div className="size-8 rounded-xl bg-gradient-to-tr from-[#8b2500] to-amber-500 flex items-center justify-center">
-            <ShieldCheck className="size-4 text-white" />
+        <div className="flex items-center gap-2.5">
+          <img
+            src="/logo.png"
+            alt="Logo"
+            className="size-8 rounded-lg object-contain bg-white p-0.5"
+          />
+          <div>
+            <span className="font-serif font-bold text-sm block leading-tight">Gurukul Admin</span>
+            <span className="text-[9px] text-amber-300/80 font-sans block">by EverStep Tech</span>
           </div>
-          <span className="font-serif font-bold text-sm">Gurukul Admin</span>
         </div>
 
         <button
