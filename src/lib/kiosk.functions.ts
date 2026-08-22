@@ -19,6 +19,7 @@ const punchSchema = z.object({
 export type KioskConfig = {
   services: { id: string; name: string; price: number; print_receipt: boolean }[];
   settings: Record<string, string>;
+  enrolledStudents: { id: string; suid: string; name: string; class_name?: string | null; nfc_no: string }[];
 };
 
 export type IdentifyResult =
@@ -68,23 +69,84 @@ export type PunchResult =
       };
     };
 
+const suidSchema = z.object({
+  suid: z.string().trim().min(1).max(32),
+});
+
 export const getKioskConfig = createServerFn({ method: "GET" }).handler(
   async (): Promise<KioskConfig> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const [{ data: services }, { data: settings }] = await Promise.all([
+    const [{ data: services }, { data: settings }, { data: students }] = await Promise.all([
       supabaseAdmin
         .from("services")
         .select("id, name, price, print_receipt")
         .eq("active", true)
         .order("sort_order", { ascending: true }),
       supabaseAdmin.from("settings").select("key, value"),
+      supabaseAdmin
+        .from("students")
+        .select("id, suid, name, class_name, nfc_no, fingerprints, blocked")
+        .eq("blocked", false),
     ]);
+
+    const enrolled = (students ?? []).filter(
+      (s) => Array.isArray(s.fingerprints) && s.fingerprints.length > 0,
+    );
+
     return {
       services: (services ?? []).map((s) => ({ ...s, price: Number(s.price) })),
       settings: Object.fromEntries((settings ?? []).map((s) => [s.key, s.value])),
+      enrolledStudents: enrolled.map((s) => ({
+        id: s.id,
+        suid: s.suid,
+        name: s.name,
+        class_name: s.class_name,
+        nfc_no: s.nfc_no,
+      })),
     };
   },
 );
+
+export const lookupStudentBySuid = createServerFn({ method: "POST" })
+  .validator((input: unknown) => suidSchema.parse(input))
+  .handler(async ({ data }): Promise<LookupResult> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: student } = await supabaseAdmin
+      .from("students")
+      .select("id, suid, name, nfc_no, class_name, room_no, blocked, fingerprints")
+      .eq("suid", data.suid)
+      .maybeSingle();
+
+    if (!student) return { status: "not_found" };
+
+    if (student.blocked) {
+      const { data: msg } = await supabaseAdmin
+        .from("settings")
+        .select("value")
+        .eq("key", "msg_blocked")
+        .maybeSingle();
+      return { status: "blocked", message: msg?.value ?? "Student account is blocked." };
+    }
+
+    const fingerRecords = Array.isArray(student.fingerprints) ? student.fingerprints : [];
+    if (fingerRecords.length === 0) {
+      return {
+        status: "no_fingerprint",
+        message: "No fingerprints enrolled for this student. Please add finger in Admin Portal first.",
+      };
+    }
+
+    return {
+      status: "ok",
+      studentId: student.id,
+      suid: student.suid,
+      name: student.name,
+      nfc_no: student.nfc_no,
+      class_name: student.class_name,
+      room_no: student.room_no,
+      fingerprintsCount: fingerRecords.length,
+    };
+  });
 
 export const identifyStudentByFingerprint = createServerFn({ method: "POST" })
   .validator((input: unknown) => identifySchema.parse(input))
