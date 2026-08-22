@@ -256,6 +256,54 @@ function StudentsPage() {
     toast.success("Sample Excel downloaded!");
   }
 
+  async function exportStudents() {
+    try {
+      const { data, error } = await supabase
+        .from("students")
+        .select("*")
+        .order("suid");
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        toast.error("No students found to export");
+        return;
+      }
+
+      const rows = data.map((s, idx) => ({
+        "Sr No": idx + 1,
+        "SUID / GR No": s.suid,
+        "Student Name": s.name,
+        "NFC Card UID": s.nfc_no,
+        "Class / Std": s.class_name || "-",
+        "Room No": s.room_no || "-",
+        "Enrolled Fingers": Array.isArray(s.fingerprints) ? s.fingerprints.length : 0,
+        "Card Status": s.blocked ? "BLOCKED" : "ACTIVE",
+        "Created At": s.created_at ? new Date(s.created_at).toLocaleDateString("en-IN") : "-",
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws["!cols"] = [
+        { wch: 8 },
+        { wch: 16 },
+        { wch: 32 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 12 },
+        { wch: 18 },
+        { wch: 14 },
+        { wch: 16 },
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Students");
+      const dateStr = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `Gurukul-Students-Export-${dateStr}.xlsx`);
+      toast.success(`Exported ${data.length} students to Excel successfully!`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to export students");
+    }
+  }
+
   async function handleUpload(file: File) {
     try {
       const buf = await file.arrayBuffer();
@@ -367,6 +415,15 @@ function StudentsPage() {
             className="btn-luxury-secondary px-4 py-2.5 text-xs gap-2"
           >
             <Download className="size-4 text-[#8b2500]" /> Sample Excel
+          </button>
+
+          <button
+            type="button"
+            onClick={exportStudents}
+            disabled={studentList.length === 0}
+            className="btn-luxury-secondary px-4 py-2.5 text-xs gap-2 text-emerald-800 border-emerald-300 hover:bg-emerald-50 shadow-sm"
+          >
+            <Download className="size-4 text-emerald-600" /> Export Excel ({studentList.length})
           </button>
 
           <button
