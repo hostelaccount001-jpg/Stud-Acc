@@ -343,23 +343,28 @@ function Kiosk() {
 
       {/* Top Header */}
       <header className="relative text-center space-y-2 py-4">
+        {/* Top Left Logo (Click opens Admin Portal) */}
         <Link
           to="/admin"
-          className="absolute right-0 top-0 inline-flex items-center gap-2 rounded-full border border-[#e5d8c5] bg-white/80 px-4 py-2 text-xs font-semibold text-[#6b4a3a] shadow-sm transition-all hover:bg-white hover:text-[#2c1810]"
+          title="Open Admin Portal"
+          className="absolute left-0 top-0 transition-transform hover:scale-105 active:scale-95 group"
         >
-          <Settings className="size-4" /> Admin Portal
+          <img
+            src="/logo.png"
+            alt="Shree Swaminarayan Gurukul Rajkot Logo"
+            className="size-16 md:size-20 rounded-2xl object-contain bg-white p-1.5 shadow-lg border border-amber-400/40 group-hover:border-[#8b2500]/60 transition-colors"
+          />
         </Link>
-        <img
-          src="/logo.png"
-          alt="Shree Swaminarayan Gurukul Rajkot Logo"
-          className="mx-auto size-20 md:size-24 rounded-3xl object-contain bg-white p-2 shadow-xl border border-amber-400/40"
-        />
-        <h1 className="text-3xl md:text-5xl font-serif font-bold tracking-tight text-[#4a1c14] drop-shadow-sm">
-          {title}
-        </h1>
-        <p className="text-sm md:text-base font-medium text-[#7c533f] tracking-wide">
-          {subtitle}
-        </p>
+
+        {/* Top Center Title & Subtitle */}
+        <div className="max-w-4xl mx-auto px-16">
+          <h1 className="text-3xl md:text-5xl font-serif font-bold tracking-tight text-[#4a1c14] drop-shadow-sm">
+            {title}
+          </h1>
+          <p className="text-sm md:text-base font-medium text-[#7c533f] tracking-wide mt-1">
+            {subtitle}
+          </p>
+        </div>
 
         {/* 3-Step Flow Indicator */}
         <div className="flex items-center justify-center gap-2 pt-4">
