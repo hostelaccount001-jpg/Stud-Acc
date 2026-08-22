@@ -76,7 +76,6 @@ type ServiceItem = {
 function Kiosk() {
   const [step, setStep] = useState<Step>("finger");
   const [capturedScan, setCapturedScan] = useState<CapturedScan | null>(null);
-  const [detectedStudent, setDetectedStudent] = useState<VerifiedStudent | null>(null);
   const [student, setStudent] = useState<VerifiedStudent | null>(null);
   const [nfc, setNfc] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -94,7 +93,6 @@ function Kiosk() {
   const cardInputRef = useRef<HTMLInputElement>(null);
 
   const getConfig = useServerFn(getKioskConfig);
-  const identifyFn = useServerFn(identifyStudentByFingerprint);
   const lookup = useServerFn(lookupStudent);
   const punch = useServerFn(punchService);
 
@@ -128,7 +126,6 @@ function Kiosk() {
   function reset() {
     setStep("finger");
     setCapturedScan(null);
-    setDetectedStudent(null);
     setStudent(null);
     setNfc("");
     setError("");
@@ -136,7 +133,7 @@ function Kiosk() {
     setCustomAmountStr("0");
   }
 
-  // STEP 1: Scan Fingerprint on Mantra MFS110 & Identify Student in Database
+  // STEP 1: Scan Fingerprint on Mantra MFS110
   async function startFingerScan() {
     setScanning(true);
     setError("");
@@ -144,31 +141,9 @@ function Kiosk() {
     try {
       const capture = await captureFinger(60, 10);
       if (!capture.ok) {
-        setError(capture.error);
+        setError(capture.error || "Failed to capture fingerprint. Please try again.");
         return;
       }
-
-      // 1:N Biometric Identification against database
-      const ident = await identifyFn({
-        data: {
-          probeTemplate: capture.template,
-          quality: capture.quality,
-        },
-      });
-
-      if (ident.status === "not_found") {
-        setError("Fingerprint not recognized. Please enroll your fingerprint in the Admin Portal first.");
-        return;
-      }
-
-      setDetectedStudent({
-        studentId: ident.studentId,
-        suid: ident.suid,
-        name: ident.name,
-        nfc_no: ident.nfc_no,
-        class_name: ident.class_name,
-        room_no: ident.room_no,
-      });
 
       setCapturedScan({
         template: capture.template,
@@ -186,21 +161,14 @@ function Kiosk() {
     }
   }
 
-  // STEP 2: Verify NFC Card matches the Detected Student's NFC
+  // STEP 2: Verify NFC Card & Enrolled Student Account
   async function submitCard(value: string) {
     const code = value.trim();
     if (!code) return;
 
-    if (!detectedStudent) {
+    if (!capturedScan) {
       setError("Please scan your fingerprint on the Mantra sensor in Step 1 first.");
       setStep("finger");
-      return;
-    }
-
-    // STRICT CHECK: The tapped NFC card MUST belong to the student identified in Step 1!
-    if (code !== detectedStudent.nfc_no) {
-      setError("Card does not match the scanned fingerprint! Please tap your own registered card.");
-      setNfc("");
       return;
     }
 
@@ -231,8 +199,15 @@ function Kiosk() {
         return;
       }
 
-      // Valid student verified: Both Fingerprint and NFC Card belong to the exact same student!
-      setStudent(detectedStudent);
+      // Valid student verified: Both Fingerprint and NFC Card authenticated!
+      setStudent({
+        studentId: res.studentId,
+        suid: res.suid,
+        name: res.name,
+        nfc_no: res.nfc_no,
+        class_name: res.class_name,
+        room_no: res.room_no,
+      });
 
       // Advance to Step 3 (Services)
       setStep("service");
