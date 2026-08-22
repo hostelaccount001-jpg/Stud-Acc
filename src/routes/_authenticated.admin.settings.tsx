@@ -223,11 +223,11 @@ function SettingsPage() {
               </div>
               <div className="flex justify-between">
                 <span>SUID:</span>
-                <span className="font-bold text-[#8b2500]">250392</span>
+                <span className="font-bold text-[#8b2500]">GR-1001</span>
               </div>
               <div className="flex justify-between">
                 <span>Name:</span>
-                <span>ZALODIYA DEEP</span>
+                <span>STUDENT NAME</span>
               </div>
               <div className="text-center text-zinc-300">--------------------------------</div>
               <div className="flex justify-between font-bold text-sm text-[#4a1c14]">

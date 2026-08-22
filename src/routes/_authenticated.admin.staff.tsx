@@ -481,7 +481,7 @@ function StaffPage() {
                 <Label htmlFor="create-name">Full Name</Label>
                 <Input
                   id="create-name"
-                  placeholder="e.g. Ramesh Patel"
+                  placeholder="Enter Full Name"
                   value={createForm.fullName}
                   onChange={(e) => setCreateForm({ ...createForm, fullName: e.target.value })}
                 />
@@ -492,7 +492,7 @@ function StaffPage() {
                 <Input
                   id="create-email"
                   type="email"
-                  placeholder="e.g. ramesh@gurukul.org"
+                  placeholder="Enter Email Address"
                   value={createForm.email}
                   onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
                 />

@@ -247,8 +247,8 @@ function StudentsPage() {
 
   function downloadSample() {
     const ws = XLSX.utils.json_to_sheet([
-      { SUID: "250392", NAME: "ZALODIYA DEEP SURESHBHAI", NFCNO: "3667085316", CLASS: "GM 10 (Hostel)", ROOM: "309" },
-      { SUID: "250623", NAME: "TARAPARA ANSH PARESHBHAI", NFCNO: "3664528900", CLASS: "GM 10 (Hostel)", ROOM: "406" },
+      { SUID: "GR1001", NAME: "STUDENT NAME 1", NFCNO: "CARD1001", CLASS: "Class 10", ROOM: "101" },
+      { SUID: "GR1002", NAME: "STUDENT NAME 2", NFCNO: "CARD1002", CLASS: "Class 10", ROOM: "102" },
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Students");
@@ -481,7 +481,7 @@ function StudentsPage() {
               <Input
                 id="suid"
                 required
-                placeholder="e.g. 250392"
+                placeholder="Enter SUID / GR No"
                 value={form.suid}
                 onChange={(e) => setForm({ ...form, suid: e.target.value })}
                 className="input-luxury h-10 px-3 font-mono text-sm font-semibold"
@@ -493,7 +493,7 @@ function StudentsPage() {
               <Input
                 id="name"
                 required
-                placeholder="e.g. ZALODIYA DEEP SURESHBHAI"
+                placeholder="Enter Full Student Name"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="input-luxury h-10 px-3 text-sm font-semibold uppercase"
@@ -505,7 +505,7 @@ function StudentsPage() {
               <Input
                 id="nfc_no"
                 required
-                placeholder="e.g. 3667085316"
+                placeholder="Scan / Enter NFC UID"
                 value={form.nfc_no}
                 onChange={(e) => setForm({ ...form, nfc_no: e.target.value })}
                 className="input-luxury h-10 px-3 font-mono text-sm font-semibold"
@@ -516,7 +516,7 @@ function StudentsPage() {
               <Label htmlFor="class_name" className="text-xs font-bold text-[#7c533f]">Class / Std</Label>
               <Input
                 id="class_name"
-                placeholder="e.g. GM 10 (Hostel)"
+                placeholder="Enter Class / Standard"
                 value={form.class_name}
                 onChange={(e) => setForm({ ...form, class_name: e.target.value })}
                 className="input-luxury h-10 px-3 text-sm"
