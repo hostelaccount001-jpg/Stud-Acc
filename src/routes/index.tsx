@@ -350,17 +350,43 @@ function Kiosk() {
       )}
 
       {/* Top Header & Branding */}
-      <header className="text-center space-y-2 pt-2">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#ebdcc8] text-[#8b2500] text-xs font-semibold tracking-wider uppercase shadow-inner border border-[#d8c5af]">
-          <Sparkles className="size-3.5 text-amber-600" />
-          <span>Shree Swaminarayan Gurukul • Campus Kiosk</span>
+      <header className="relative text-center space-y-2 py-4">
+        {/* Top Left Logo (Click opens Admin Portal) */}
+        <Link
+          to="/admin"
+          title="Open Admin Portal"
+          className="absolute left-0 top-0 transition-transform hover:scale-105 active:scale-95 group z-10"
+        >
+          <img
+            src="/logo.png"
+            alt="Shree Swaminarayan Gurukul Rajkot Logo"
+            className="size-16 md:size-20 rounded-2xl object-contain bg-white p-1.5 shadow-lg border border-amber-400/40 group-hover:border-[#8b2500]/60 transition-colors"
+          />
+        </Link>
+
+        {/* Top Right Admin Portal Button */}
+        <Link
+          to="/admin"
+          title="Open Admin Panel"
+          className="absolute right-0 top-2 hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/80 hover:bg-white text-[#4a1c14] hover:text-[#8b2500] text-xs font-bold border border-[#d8c5af] shadow-md transition-all active:scale-95 z-10"
+        >
+          <Settings className="size-4 text-[#8b2500]" />
+          <span>Admin Portal</span>
+        </Link>
+
+        {/* Center Title & Subtitle */}
+        <div className="max-w-4xl mx-auto px-16 sm:px-24">
+          <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-[#ebdcc8] text-[#8b2500] text-xs font-semibold tracking-wider uppercase shadow-inner border border-[#d8c5af] mb-1">
+            <Sparkles className="size-3.5 text-amber-600" />
+            <span>Shree Swaminarayan Gurukul • Campus Kiosk</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-[42px] font-serif font-bold tracking-tight text-[#4a1c14] drop-shadow-sm whitespace-nowrap">
+            {title}
+          </h1>
+          <p className="text-sm md:text-base font-medium text-[#7c533f] tracking-wide mt-1">
+            {subtitle}
+          </p>
         </div>
-        <h1 className="text-3xl md:text-5xl font-serif font-black tracking-tight text-[#4a1c14] drop-shadow-sm">
-          {title}
-        </h1>
-        <p className="text-sm md:text-base font-medium text-[#7c533f]">
-          {subtitle}
-        </p>
 
         {/* 3-Step Flow Indicator */}
         <div className="flex items-center gap-2 md:gap-3 justify-center pt-4">
@@ -413,9 +439,9 @@ function Kiosk() {
         {/* STEP 1: Scan Fingerprint on Mantra MFS110 */}
         {step === "finger" && (
           <Card className="w-full max-w-xl p-8 md:p-12 text-center bg-white/90 backdrop-blur-sm border-[#e5d8c5] shadow-2xl rounded-3xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            <div className="relative mx-auto size-32 rounded-full bg-[#fdf8f0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner">
+            <div className="relative mx-auto size-36 rounded-full bg-[#fdf8f0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner">
               <Fingerprint
-                className={`size-16 text-[#8b2500] transition-all duration-300 ${
+                className={`size-20 text-[#8b2500] transition-all duration-300 ${
                   scanning ? "animate-pulse scale-110 text-rose-600" : ""
                 }`}
               />
@@ -446,16 +472,16 @@ function Kiosk() {
               size="lg"
               onClick={() => void startFingerScan()}
               disabled={scanning}
-              className="w-full h-14 text-base font-semibold bg-[#4a1c14] hover:bg-[#6b2c1a] text-white rounded-2xl shadow-lg transition-transform active:scale-[0.98]"
+              className="w-full h-16 text-lg font-semibold bg-[#4a1c14] hover:bg-[#6b2c1a] text-white rounded-2xl shadow-lg transition-transform active:scale-[0.98]"
             >
               {scanning ? (
                 <>
-                  <Loader2 className="size-5 animate-spin mr-2" />
+                  <Loader2 className="size-6 animate-spin mr-2" />
                   Scanning Finger on Mantra MFS110...
                 </>
               ) : (
                 <>
-                  <Fingerprint className="size-5 mr-2" />
+                  <Fingerprint className="size-6 mr-2" />
                   Touch to Scan Fingerprint
                 </>
               )}
