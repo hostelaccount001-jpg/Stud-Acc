@@ -114,6 +114,17 @@ function Kiosk() {
     return undefined;
   }, [step]);
 
+  // Instant Auto-submit NFC card when scanned by card reader (any length digits/chars)
+  useEffect(() => {
+    if (step === "card" && nfc.trim().length > 0 && !busy) {
+      const timer = setTimeout(() => {
+        void submitCard(nfc);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [nfc, step, busy]);
+
   // Auto-dismiss success notification
   useEffect(() => {
     if (successBanner) {
@@ -475,7 +486,7 @@ function Kiosk() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                submitCard(nfc);
+                if (nfc.trim()) void submitCard(nfc);
               }}
               className="space-y-4"
             >
@@ -486,10 +497,12 @@ function Kiosk() {
                 disabled={busy}
                 placeholder="Tap card on reader or enter card no..."
                 value={nfc}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setNfc(val);
-                  if (val.trim().length >= 8) submitCard(val);
+                onChange={(e) => setNfc(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && nfc.trim()) {
+                    e.preventDefault();
+                    void submitCard(nfc);
+                  }
                 }}
                 className="h-14 text-center font-mono text-lg font-bold bg-[#fdfbf7] border-[#d8c5af] rounded-2xl focus-visible:ring-[#8b2500]"
               />
