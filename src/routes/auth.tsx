@@ -75,7 +75,7 @@ function AuthPage() {
         <form className="space-y-4" onSubmit={submit}>
           <div className="space-y-1.5">
             <Label htmlFor="email" className="text-xs font-semibold text-white/90">
-              Staff Email Address
+              Email Address
             </Label>
             <div className="relative">
               <Mail className="size-4 absolute left-3.5 top-3.5 text-white/40" />
@@ -83,7 +83,7 @@ function AuthPage() {
                 id="email"
                 type="email"
                 required
-                placeholder="anshsangani2007@gmail.com"
+                placeholder="Enter Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="h-11 pl-10 bg-black/20 border-white/15 text-white placeholder:text-white/30 rounded-xl focus-visible:ring-amber-500 focus-visible:border-amber-500"
