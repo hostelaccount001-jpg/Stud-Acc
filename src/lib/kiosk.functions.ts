@@ -207,7 +207,7 @@ export const identifyStudentByFingerprint = createServerFn({ method: "POST" })
       // fallback
     }
 
-    if (bestStudent) {
+    if (bestStudent && bestScore >= 0.85) {
       return {
         status: "identified",
         studentId: bestStudent.id,
@@ -216,20 +216,6 @@ export const identifyStudentByFingerprint = createServerFn({ method: "POST" })
         nfc_no: bestStudent.nfc_no,
         class_name: bestStudent.class_name,
         room_no: bestStudent.room_no,
-      };
-    }
-
-    // Default fallback to first active enrolled student if available
-    const fallback = enrolled[0];
-    if (fallback) {
-      return {
-        status: "identified",
-        studentId: fallback.id,
-        suid: fallback.suid,
-        name: fallback.name,
-        nfc_no: fallback.nfc_no,
-        class_name: fallback.class_name,
-        room_no: fallback.room_no,
       };
     }
 
