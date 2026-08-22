@@ -1,0 +1,319 @@
+@import "tailwindcss";
+
+/* Custom Sleek Minimalist Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d8c5af;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8b2500;
+}
+
+@layer base {
+  :root {
+    --background: oklch(0.98 0.01 75);
+    --foreground: oklch(0.25 0.04 45);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.25 0.04 45);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.25 0.04 45);
+    --primary: oklch(0.48 0.16 35);
+    --primary-foreground: oklch(0.98 0.01 75);
+    --secondary: oklch(0.94 0.02 75);
+    --secondary-foreground: oklch(0.3 0.04 45);
+    --muted: oklch(0.94 0.02 75);
+    --muted-foreground: oklch(0.5 0.04 45);
+    --accent: oklch(0.92 0.03 75);
+    --accent-foreground: oklch(0.25 0.04 45);
+    --destructive: oklch(0.55 0.22 27);
+    --destructive-foreground: oklch(0.98 0.01 75);
+    --border: oklch(0.88 0.03 75);
+    --input: oklch(0.88 0.03 75);
+    --ring: oklch(0.48 0.16 35);
+    --radius: 1rem;
+
+    --saffron: oklch(0.68 0.19 55);
+    --saffron-foreground: oklch(0.98 0.01 75);
+    --success: oklch(0.6 0.15 145);
+    --success-foreground: oklch(0.98 0.01 75);
+    --warning: oklch(0.75 0.16 75);
+    --warning-foreground: oklch(0.25 0.04 45);
+
+    --font-sans: "Outfit", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-display: "Cinzel", "Playfair Display", Georgia, serif;
+    --font-mono: "JetBrains Mono", "Courier New", monospace;
+  }
+
+  .dark {
+    --background: oklch(0.18 0.03 45);
+    --foreground: oklch(0.95 0.01 75);
+    --card: oklch(0.22 0.03 45);
+    --card-foreground: oklch(0.95 0.01 75);
+    --popover: oklch(0.22 0.03 45);
+    --popover-foreground: oklch(0.95 0.01 75);
+    --primary: oklch(0.7 0.18 55);
+    --primary-foreground: oklch(0.18 0.03 45);
+    --secondary: oklch(0.28 0.03 45);
+    --secondary-foreground: oklch(0.95 0.01 75);
+    --muted: oklch(0.28 0.03 45);
+    --muted-foreground: oklch(0.7 0.02 75);
+    --accent: oklch(0.3 0.04 45);
+    --accent-foreground: oklch(0.95 0.01 75);
+    --destructive: oklch(0.55 0.22 27);
+    --destructive-foreground: oklch(0.95 0.01 75);
+    --border: oklch(0.32 0.03 45);
+    --input: oklch(0.32 0.03 45);
+    --ring: oklch(0.7 0.18 55);
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+  }
+}
+
+/* ========================================================================= */
+/* CRISP & VIBRANT ANIMATED SWITCH TOGGLE (ON / OFF) */
+/* ========================================================================= */
+
+button[role="switch"] {
+  background-color: #cbd5e1 !important;
+  border: 2px solid #94a3b8 !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.12) !important;
+  position: relative !important;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  cursor: pointer !important;
+  width: 44px !important;
+  height: 24px !important;
+  border-radius: 9999px !important;
+  padding: 0 !important;
+}
+
+button[role="switch"]:hover {
+  border-color: #64748b !important;
+}
+
+button[role="switch"][data-state="checked"] {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;
+  border-color: #047857 !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.45), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+}
+
+button[role="switch"] > span {
+  display: block !important;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 9999px !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25) !important;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  margin: 1px !important;
+}
+
+button[role="switch"][data-state="checked"] > span {
+  transform: translateX(20px) !important;
+}
+
+button[role="switch"][data-state="unchecked"] > span {
+  transform: translateX(0px) !important;
+}
+
+/* ========================================================================= */
+/* LUXURY ANIMATIONS & COMPONENT CLASSES */
+/* ========================================================================= */
+
+.card-luxury {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1.5px solid #e5d8c5;
+  box-shadow: 0 10px 30px -10px rgba(74, 28, 20, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+  border-radius: 1.5rem;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card-luxury:hover {
+  border-color: rgba(139, 37, 0, 0.3);
+  box-shadow: 0 20px 40px -15px rgba(74, 28, 20, 0.12), 0 0 0 1px rgba(139, 37, 0, 0.05);
+}
+
+/* Luxury Interactive Buttons */
+.btn-luxury-primary {
+  background: linear-gradient(135deg, #4a1c14 0%, #702616 50%, #8b2500 100%);
+  color: #ffffff;
+  font-weight: 700;
+  border-radius: 0.875rem;
+  box-shadow: 0 4px 14px rgba(74, 28, 20, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-luxury-primary:hover {
+  background: linear-gradient(135deg, #5c2319 0%, #832d1b 50%, #a32c00 100%);
+  box-shadow: 0 6px 20px rgba(74, 28, 20, 0.38);
+  transform: translateY(-1.5px);
+}
+.btn-luxury-primary:active {
+  transform: translateY(0.5px) scale(0.98);
+  box-shadow: 0 2px 8px rgba(74, 28, 20, 0.2);
+}
+
+.btn-luxury-secondary {
+  background: #ffffff;
+  color: #4a1c14;
+  font-weight: 600;
+  border-radius: 0.875rem;
+  border: 1.5px solid #d8c5af;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-luxury-secondary:hover {
+  background: #fbf7f0;
+  border-color: #8b2500;
+  color: #8b2500;
+  box-shadow: 0 4px 12px rgba(139, 37, 0, 0.12);
+  transform: translateY(-1.5px);
+}
+.btn-luxury-secondary:active {
+  transform: translateY(0.5px) scale(0.98);
+}
+
+.btn-luxury-danger {
+  background: linear-gradient(135deg, #991b1b 0%, #dc2626 100%);
+  color: #ffffff;
+  font-weight: 700;
+  border-radius: 0.875rem;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-luxury-danger:hover {
+  background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%);
+  box-shadow: 0 6px 20px rgba(220, 38, 38, 0.35);
+  transform: translateY(-1.5px);
+}
+.btn-luxury-danger:active {
+  transform: translateY(0.5px) scale(0.98);
+}
+
+.btn-luxury-success {
+  background: linear-gradient(135deg, #065f46 0%, #059669 100%);
+  color: #ffffff;
+  font-weight: 700;
+  border-radius: 0.875rem;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-luxury-success:hover {
+  background: linear-gradient(135deg, #047857 0%, #10b981 100%);
+  box-shadow: 0 6px 20px rgba(5, 150, 105, 0.35);
+  transform: translateY(-1.5px);
+}
+.btn-luxury-success:active {
+  transform: translateY(0.5px) scale(0.98);
+}
+
+/* Luxury Input Field */
+.input-luxury {
+  background: #ffffff;
+  border: 1.5px solid #d8c5af;
+  border-radius: 0.875rem;
+  color: #2c1810;
+  transition: all 0.2s ease;
+}
+.input-luxury:focus {
+  border-color: #8b2500;
+  box-shadow: 0 0 0 3px rgba(139, 37, 0, 0.12);
+  outline: none;
+}
+
+/* Animated Table Row */
+.table-row-luxury {
+  transition: all 0.18s ease;
+}
+.table-row-luxury:hover {
+  background-color: #faf4eb;
+  transform: scale(1.002);
+}
+
+/* ========================================================================= */
+/* HIGH-PRECISION PRINTING (ESC/POS Thermal Slips & A4 Full Reports) */
+/* ========================================================================= */
+@media print {
+  @page {
+    margin: 5mm !important;
+  }
+
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    width: 100% !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #print-receipt,
+  #print-receipt *,
+  #print-report,
+  #print-report * {
+    visibility: visible !important;
+  }
+
+  #print-receipt {
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 72mm !important;
+    max-width: 72mm !important;
+    padding: 3mm 2mm !important;
+    margin: 0 auto !important;
+    color: #000000 !important;
+    background: #ffffff !important;
+    font-family: "Courier New", Courier, monospace !important;
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+    letter-spacing: -0.2px !important;
+  }
+
+  #print-report {
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    color: #000000 !important;
+    background: #ffffff !important;
+    font-family: system-ui, -apple-system, sans-serif !important;
+  }
+}
