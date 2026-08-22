@@ -337,7 +337,11 @@ function Kiosk() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col justify-between bg-gradient-to-br from-[#f8f5ee] via-[#f4ecdf] to-[#ede3d1] text-[#2c1810] p-4 md:p-8 select-none">
+    <div className="min-h-screen flex flex-col justify-between bg-gradient-to-br from-[#f8f5ee] via-[#f4ecdf] to-[#ede3d1] text-[#2c1810] p-4 md:p-8 select-none relative overflow-hidden">
+      {/* Ambient Animated Luxury Glow Spots */}
+      <div className="absolute -top-32 -left-32 size-96 rounded-full bg-gradient-to-br from-amber-400/15 to-transparent blur-3xl pointer-events-none animate-float" />
+      <div className="absolute -bottom-32 -right-32 size-96 rounded-full bg-gradient-to-tl from-rose-500/10 to-transparent blur-3xl pointer-events-none animate-float" style={{ animationDelay: "2s" }} />
+
       {/* Background Thermal Slip for Instant Window Print */}
       {activeReceipt && (
         <div id="receipt-print-area" className="hidden print:block">
@@ -351,36 +355,29 @@ function Kiosk() {
 
       {/* Top Header & Branding */}
       <header className="relative text-center space-y-2 py-4">
-        {/* Top Left Logo (Click opens Admin Portal) */}
+        {/* Top Left Logo (Click opens Admin Login Portal) */}
         <Link
-          to="/admin"
-          title="Open Admin Portal"
-          className="absolute left-0 top-0 transition-transform hover:scale-105 active:scale-95 group z-10"
+          to="/auth"
+          title="Click to Open Admin Login Portal"
+          className="absolute left-0 top-0 transition-all duration-300 hover:scale-110 active:scale-95 group z-20 cursor-pointer"
         >
-          <img
-            src="/logo.png"
-            alt="Shree Swaminarayan Gurukul Rajkot Logo"
-            className="size-16 md:size-20 rounded-2xl object-contain bg-white p-1.5 shadow-lg border border-amber-400/40 group-hover:border-[#8b2500]/60 transition-colors"
-          />
-        </Link>
-
-        {/* Top Right Admin Portal Button */}
-        <Link
-          to="/admin"
-          title="Open Admin Panel"
-          className="absolute right-0 top-2 hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/80 hover:bg-white text-[#4a1c14] hover:text-[#8b2500] text-xs font-bold border border-[#d8c5af] shadow-md transition-all active:scale-95 z-10"
-        >
-          <Settings className="size-4 text-[#8b2500]" />
-          <span>Admin Portal</span>
+          <div className="relative">
+            <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-amber-400 to-[#8b2500] opacity-40 blur-sm group-hover:opacity-100 transition duration-300" />
+            <img
+              src="/logo.png"
+              alt="Shree Swaminarayan Gurukul Rajkot Logo"
+              className="relative size-16 md:size-20 rounded-2xl object-contain bg-white p-1.5 shadow-xl border border-amber-400/50 group-hover:border-[#8b2500] transition-colors"
+            />
+          </div>
         </Link>
 
         {/* Center Title & Subtitle */}
         <div className="max-w-4xl mx-auto px-16 sm:px-24">
-          <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-[#ebdcc8] text-[#8b2500] text-xs font-semibold tracking-wider uppercase shadow-inner border border-[#d8c5af] mb-1">
-            <Sparkles className="size-3.5 text-amber-600" />
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#ebdcc8]/90 backdrop-blur-xs text-[#8b2500] text-xs font-bold tracking-wider uppercase shadow-inner border border-[#d8c5af]/80 mb-1.5 animate-in fade-in slide-in-from-top-2 duration-500">
+            <Sparkles className="size-3.5 text-amber-600 animate-spin" style={{ animationDuration: "6s" }} />
             <span>Shree Swaminarayan Gurukul • Campus Kiosk</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-[42px] font-serif font-bold tracking-tight text-[#4a1c14] drop-shadow-sm whitespace-nowrap">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-[44px] font-serif font-black tracking-tight text-[#4a1c14] drop-shadow-sm whitespace-nowrap">
             {title}
           </h1>
           <p className="text-sm md:text-base font-medium text-[#7c533f] tracking-wide mt-1">
@@ -391,33 +388,33 @@ function Kiosk() {
         {/* 3-Step Flow Indicator */}
         <div className="flex items-center gap-2 md:gap-3 justify-center pt-4">
           <span
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
               step === "finger"
-                ? "bg-[#4a1c14] text-white shadow-md scale-105"
+                ? "bg-[#4a1c14] text-white shadow-lg scale-105 ring-2 ring-amber-500/40"
                 : capturedScan
-                  ? "bg-emerald-600/15 text-emerald-800 border border-emerald-500/30"
+                  ? "bg-emerald-600/20 text-emerald-900 border border-emerald-500/40"
                   : "bg-[#ebdcc8] text-[#7c533f]"
             }`}
           >
-            {capturedScan ? <CheckCircle2 className="size-3.5" /> : null} 1. Fingerprint
+            {capturedScan ? <CheckCircle2 className="size-3.5 text-emerald-600" /> : null} 1. Fingerprint
           </span>
-          <span className="text-[#c5a880]">——</span>
+          <span className="text-[#c5a880] font-bold">——</span>
           <span
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
               step === "card"
-                ? "bg-[#4a1c14] text-white shadow-md scale-105"
+                ? "bg-[#4a1c14] text-white shadow-lg scale-105 ring-2 ring-amber-500/40"
                 : student
-                  ? "bg-emerald-600/15 text-emerald-800 border border-emerald-500/30"
+                  ? "bg-emerald-600/20 text-emerald-900 border border-emerald-500/40"
                   : "bg-[#ebdcc8] text-[#7c533f]"
             }`}
           >
-            {student ? <CheckCircle2 className="size-3.5" /> : null} 2. NFC Card
+            {student ? <CheckCircle2 className="size-3.5 text-emerald-600" /> : null} 2. NFC Card
           </span>
-          <span className="text-[#c5a880]">——</span>
+          <span className="text-[#c5a880] font-bold">——</span>
           <span
-            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
+            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
               step === "service"
-                ? "bg-[#4a1c14] text-white shadow-md scale-105"
+                ? "bg-[#4a1c14] text-white shadow-lg scale-105 ring-2 ring-amber-500/40"
                 : "bg-[#ebdcc8] text-[#7c533f]"
             }`}
           >
@@ -428,25 +425,31 @@ function Kiosk() {
 
       {/* Instant Success Flash Notification */}
       {successBanner && (
-        <div className="max-w-xl mx-auto w-full p-4 rounded-2xl bg-emerald-600 text-white shadow-2xl flex items-center justify-center gap-3 text-center text-sm md:text-base font-bold animate-in fade-in slide-in-from-top-4 duration-300">
-          <CheckCircle2 className="size-6 shrink-0" />
+        <div className="max-w-xl mx-auto w-full p-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-2xl flex items-center justify-center gap-3 text-center text-sm md:text-base font-bold animate-in fade-in slide-in-from-top-4 duration-300 z-30">
+          <CheckCircle2 className="size-6 shrink-0 text-emerald-200" />
           <span>{successBanner}</span>
         </div>
       )}
 
       {/* Main Terminal Stage */}
-      <main className="flex-1 flex items-center justify-center my-4">
-        {/* STEP 1: Scan Fingerprint on Mantra MFS110 */}
+      <main className="flex-1 flex items-center justify-center my-4 relative z-10">
+        {/* STEP 1: Live Animated Mantra Fingerprint Scanner */}
         {step === "finger" && (
-          <Card className="w-full max-w-xl p-8 md:p-12 text-center bg-white/90 backdrop-blur-sm border-[#e5d8c5] shadow-2xl rounded-3xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            <div className="relative mx-auto size-36 rounded-full bg-[#fdf8f0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner">
+          <Card className="w-full max-w-xl p-8 md:p-12 text-center bg-white/95 backdrop-blur-md border-2 border-[#e5d8c5] shadow-[0_20px_60px_-15px_rgba(74,28,20,0.15)] rounded-3xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
+            {/* Live Biometric Scanner Circle with Laser Beam & Pulse Rings */}
+            <div className="relative mx-auto size-40 rounded-full bg-gradient-to-b from-[#fdfbf7] to-[#f4ebe0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner animate-pulse-ring overflow-hidden group">
+              {/* Animated Laser Scanning Beam */}
+              <div className="absolute inset-x-2 h-1 bg-gradient-to-r from-transparent via-rose-500 to-transparent rounded-full shadow-[0_0_14px_#f43f5e] animate-laser z-10" />
+
+              {/* Central Glowing Biometric Icon */}
               <Fingerprint
-                className={`size-20 text-[#8b2500] transition-all duration-300 ${
-                  scanning ? "animate-pulse scale-110 text-rose-600" : ""
+                className={`size-24 text-[#8b2500] transition-all duration-300 drop-shadow-md ${
+                  scanning ? "scale-110 text-rose-600 animate-pulse" : "group-hover:scale-105"
                 }`}
               />
+
               {scanning && (
-                <span className="absolute inset-0 rounded-full border-4 border-rose-500 animate-ping opacity-30" />
+                <span className="absolute inset-0 rounded-full border-4 border-rose-500 animate-ping opacity-40" />
               )}
             </div>
 
@@ -462,7 +465,7 @@ function Kiosk() {
             </div>
 
             {error && (
-              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium flex items-center gap-3 text-left">
+              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium flex items-center gap-3 text-left animate-in fade-in duration-200">
                 <AlertCircle className="size-5 shrink-0 text-rose-600" />
                 <span>{error}</span>
               </div>
@@ -472,7 +475,7 @@ function Kiosk() {
               size="lg"
               onClick={() => void startFingerScan()}
               disabled={scanning}
-              className="w-full h-16 text-lg font-semibold bg-[#4a1c14] hover:bg-[#6b2c1a] text-white rounded-2xl shadow-lg transition-transform active:scale-[0.98]"
+              className="w-full h-16 text-lg font-bold text-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(139,37,0,0.4)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shimmer-btn cursor-pointer"
             >
               {scanning ? (
                 <>
@@ -489,11 +492,12 @@ function Kiosk() {
           </Card>
         )}
 
-        {/* STEP 2: Tap NFC Card on ID TECH Reader */}
+        {/* STEP 2: Live Animated NFC Smart Card Tap */}
         {step === "card" && (
-          <Card className="w-full max-w-xl p-8 md:p-12 text-center bg-white/90 backdrop-blur-sm border-[#e5d8c5] shadow-2xl rounded-3xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            <div className="mx-auto size-28 rounded-full bg-[#fdf8f0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner">
-              <CreditCard className="size-14 text-[#8b2500] animate-bounce" />
+          <Card className="w-full max-w-xl p-8 md:p-12 text-center bg-white/95 backdrop-blur-md border-2 border-[#e5d8c5] shadow-[0_20px_60px_-15px_rgba(74,28,20,0.15)] rounded-3xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
+            {/* Live RFID Radar Circle */}
+            <div className="relative mx-auto size-36 rounded-full bg-gradient-to-b from-[#fdfbf7] to-[#f4ebe0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner animate-pulse-ring">
+              <CreditCard className="size-16 text-[#8b2500] animate-bounce" />
             </div>
 
             <div className="space-y-2">
@@ -506,7 +510,7 @@ function Kiosk() {
             </div>
 
             {error && (
-              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium flex items-center gap-3 text-left">
+              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium flex items-center gap-3 text-left animate-in fade-in duration-200">
                 <AlertCircle className="size-5 shrink-0 text-rose-600" />
                 <span>{error}</span>
               </div>
@@ -533,7 +537,7 @@ function Kiosk() {
                     void submitCard(nfc);
                   }
                 }}
-                className="h-14 text-center font-mono text-lg font-bold bg-[#fdfbf7] border-[#d8c5af] rounded-2xl focus-visible:ring-[#8b2500]"
+                className="h-16 text-center font-mono text-xl font-bold bg-[#fdfbf7] border-2 border-[#d8c5af] rounded-2xl focus-visible:ring-2 focus-visible:ring-[#8b2500] shadow-inner"
               />
 
               <div className="flex gap-3">
@@ -541,16 +545,16 @@ function Kiosk() {
                   type="button"
                   variant="outline"
                   onClick={reset}
-                  className="flex-1 h-12 rounded-xl border-[#d8c5af] text-[#6b4a3a]"
+                  className="flex-1 h-14 rounded-2xl border-2 border-[#d8c5af] text-[#6b4a3a] font-bold text-base hover:bg-[#ebdcc8]/40"
                 >
                   <RefreshCw className="size-4 mr-2" /> Start Over
                 </Button>
                 <Button
                   type="submit"
                   disabled={busy || !nfc.trim()}
-                  className="flex-1 h-12 font-semibold bg-[#4a1c14] hover:bg-[#6b2c1a] text-white rounded-xl"
+                  className="flex-1 h-14 font-bold text-base bg-[#4a1c14] hover:bg-[#6b2c1a] text-white rounded-2xl shadow-lg transition-transform active:scale-95"
                 >
-                  {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : "Verify Card"}
+                  {busy ? <Loader2 className="size-5 animate-spin mr-2" /> : "Verify Card"}
                 </Button>
               </div>
             </form>
