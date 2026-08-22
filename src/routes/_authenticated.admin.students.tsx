@@ -760,27 +760,19 @@ function FingerprintEnroller({
   nfcNo?: string;
   suid?: string;
 }) {
-  type FingerOption = (typeof FINGER_OPTIONS)[number];
-  const [showAdd, setShowAdd] = useState(false);
-  const [selectedFinger, setSelectedFinger] = useState<FingerOption>("Right index");
   const [scanning, setScanning] = useState(false);
   const { device, checking, isConnected } = useMantraDevice(3000);
   const full = fingers.length >= MAX_FINGERS;
-
-  const availableFingers = FINGER_OPTIONS.filter((o) => !fingers.some((f) => f.finger === o));
-
-  useEffect(() => {
-    if (availableFingers.length > 0 && !availableFingers.includes(selectedFinger)) {
-      setSelectedFinger(availableFingers[0]!);
-    }
-  }, [fingers, availableFingers, selectedFinger]);
 
   async function handleStartScan() {
     if (!isConnected) {
       toast.error("Mantra MFS110 scanner is not connected. Please connect USB cable.");
       return;
     }
-    if (full || fingers.some((f) => f.finger === selectedFinger)) return;
+    if (full) {
+      toast.error(`Maximum limit of ${MAX_FINGERS} fingerprints reached.`);
+      return;
+    }
     setScanning(true);
     try {
       const res = await captureFinger(60, 10);
@@ -789,13 +781,14 @@ function FingerprintEnroller({
         return;
       }
       if (fingers.some((f) => f.template === res.template)) {
-        toast.error("This finger is already enrolled for this student.");
+        toast.error("This fingerprint is already enrolled for this student.");
         return;
       }
+      const fingerLabel = `Finger ${fingers.length + 1}`;
       onChange([
         ...fingers,
         {
-          finger: selectedFinger,
+          finger: fingerLabel,
           template: res.template,
           quality: res.quality,
           serial: res.serial,
@@ -804,8 +797,7 @@ function FingerprintEnroller({
           enrolled_at: new Date().toISOString(),
         },
       ]);
-      toast.success(`${selectedFinger} captured successfully (Quality: ${res.quality}%)`);
-      setShowAdd(false);
+      toast.success(`${fingerLabel} captured successfully (Quality: ${res.quality}%)`);
     } finally {
       setScanning(false);
     }
@@ -840,20 +832,20 @@ function FingerprintEnroller({
         </div>
       </div>
 
-      {/* Enrolled Finger Chips */}
-      <div className="flex flex-wrap items-center gap-2 pt-1">
-        {fingers.map((f) => (
+      {/* Enrolled Finger Chips and 1-Click Scan Button */}
+      <div className="flex flex-wrap items-center gap-2.5 pt-1">
+        {fingers.map((f, idx) => (
           <span
-            key={f.finger}
-            className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-[#8b2500] shadow-sm"
+            key={idx}
+            className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold text-[#8b2500] shadow-sm"
           >
-            <Fingerprint className="size-3.5 text-[#8b2500] shrink-0" />
-            <span>{f.finger}</span>
+            <Fingerprint className="size-4 text-[#8b2500] shrink-0" />
+            <span>{f.finger || `Finger ${idx + 1}`}</span>
             {f.quality > 0 && <span className="text-[10px] opacity-75 font-mono">Q:{f.quality}%</span>}
             <button
               type="button"
               aria-label={`Remove ${f.finger}`}
-              onClick={() => onChange(fingers.filter((x) => x.finger !== f.finger))}
+              onClick={() => onChange(fingers.filter((_, i) => i !== idx))}
               className="ml-1 text-[#8b2500]/60 transition-colors hover:text-rose-600 hover:scale-125"
             >
               <X className="size-3.5" />
@@ -861,82 +853,34 @@ function FingerprintEnroller({
           </span>
         ))}
 
-        {!full && !showAdd && (
+        {!full && (
           <button
             type="button"
-            onClick={() => setShowAdd(true)}
-            className="btn-luxury-secondary px-3 py-1 text-xs gap-1 border-dashed border-[#8b2500]/40 text-[#8b2500]"
+            onClick={handleStartScan}
+            disabled={scanning || !isConnected}
+            className="btn-luxury-primary px-4 py-2 text-xs gap-2 shadow-sm"
           >
-            <Plus className="size-3.5" /> Add Finger
+            {scanning ? (
+              <>
+                <Loader2 className="size-4 animate-spin text-amber-300" />
+                <span>Place Finger on Mantra Scanner...</span>
+              </>
+            ) : (
+              <>
+                <Plus className="size-4" />
+                <Fingerprint className="size-4" />
+                <span>Add Finger</span>
+              </>
+            )}
           </button>
         )}
 
-        {fingers.length === 0 && !showAdd && (
-          <p className="text-xs text-[#7c533f] italic py-1">No fingerprints captured yet. Click &quot;+ Add Finger&quot; to scan.</p>
+        {fingers.length === 0 && !scanning && (
+          <p className="text-xs text-[#7c533f] italic py-1 pl-1">
+            Click &quot;+ Add Finger&quot; to scan and enrol student fingerprint.
+          </p>
         )}
       </div>
-
-      {/* + Add Finger Interactive Scanner Panel */}
-      {showAdd && !full && (
-        <div className="rounded-2xl border-2 border-[#8b2500]/30 bg-white p-4 shadow-lg space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#4a1c14] flex items-center gap-1.5">
-              <Plus className="size-3.5 text-[#8b2500]" /> Select Finger to Capture:
-            </span>
-            <button
-              type="button"
-              className="p-1 rounded-lg text-[#7c533f] hover:text-[#4a1c14]"
-              onClick={() => {
-                setShowAdd(false);
-                setScanning(false);
-              }}
-              disabled={scanning}
-            >
-              <X className="size-4" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-            {availableFingers.map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => setSelectedFinger(opt)}
-                disabled={scanning}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all text-left ${
-                  selectedFinger === opt
-                    ? "bg-[#4a1c14] text-white shadow-md"
-                    : "bg-[#faf6ef] text-[#6b4a3a] hover:bg-[#f7ece0] border border-[#d8c5af]"
-                }`}
-              >
-                {opt}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center justify-between pt-2 border-t border-[#e5d8c5]">
-            <p className="text-xs text-[#7c533f]">
-              Selected: <strong className="text-[#8b2500]">{selectedFinger}</strong>
-            </p>
-            <button
-              type="button"
-              onClick={handleStartScan}
-              disabled={scanning || !isConnected}
-              className="btn-luxury-primary px-5 py-2 text-xs gap-2"
-            >
-              {scanning ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" /> Place Finger on Mantra...
-                </>
-              ) : (
-                <>
-                  <Fingerprint className="size-4" /> Start Scan
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
