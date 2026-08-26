@@ -26,12 +26,9 @@ import {
   Calculator,
   Delete,
   Sparkles,
-  Search,
-  ArrowLeft,
 } from "lucide-react";
 import {
   getKioskConfig,
-  lookupStudentBySuid,
   lookupStudent,
   punchService,
 } from "@/lib/kiosk.functions";
@@ -80,9 +77,6 @@ function Kiosk() {
   const [step, setStep] = useState<Step>("finger");
   const [capturedScan, setCapturedScan] = useState<CapturedScan | null>(null);
   const [detectedStudent, setDetectedStudent] = useState<VerifiedStudent | null>(null);
-  const [pendingStudent, setPendingStudent] = useState<VerifiedStudent | null>(null);
-  const [suidInput, setSuidInput] = useState("");
-  const [studentSearch, setStudentSearch] = useState("");
   const [student, setStudent] = useState<VerifiedStudent | null>(null);
   const [nfc, setNfc] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -100,7 +94,6 @@ function Kiosk() {
   const cardInputRef = useRef<HTMLInputElement>(null);
 
   const getConfig = useServerFn(getKioskConfig);
-  const lookupBySuid = useServerFn(lookupStudentBySuid);
   const lookup = useServerFn(lookupStudent);
   const punch = useServerFn(punchService);
 
@@ -146,67 +139,15 @@ function Kiosk() {
     setStep("finger");
     setCapturedScan(null);
     setDetectedStudent(null);
-    setPendingStudent(null);
     setStudent(null);
     setNfc("");
-    setSuidInput("");
-    setStudentSearch("");
     setError("");
     setCustomService(null);
     setCustomAmountStr("0");
   }
 
-  // STEP 1a: Select Student by SUID
-  async function handleSuidSubmit() {
-    const trimmed = suidInput.trim();
-    if (!trimmed) return;
-    setBusy(true);
-    setError("");
-    try {
-      const result = await lookupBySuid({ data: { suid: trimmed } });
-      if (result.status === "not_found") {
-        setError("❌ Student not found in database. Please check your SUID and try again.");
-        return;
-      }
-      if (result.status === "blocked") {
-        setError(`❌ Account Blocked: ${result.message}`);
-        return;
-      }
-      if (result.status === "no_fingerprint") {
-        setError("❌ Biometrics Not Enrolled: Admin has not added fingerprints for this student. Please register in Admin Portal first.");
-        return;
-      }
-      // Student found with enrolled fingerprints
-      setPendingStudent({
-        studentId: result.studentId,
-        suid: result.suid,
-        name: result.name,
-        nfc_no: result.nfc_no,
-        class_name: result.class_name,
-        room_no: result.room_no,
-      });
-    } catch {
-      setError("Error looking up student. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // STEP 1a: Select Student from enrolled list
-  function handleStudentSelect(s: { id: string; suid: string; name: string; class_name?: string | null; nfc_no: string }) {
-    setError("");
-    setPendingStudent({
-      studentId: s.id,
-      suid: s.suid,
-      name: s.name,
-      nfc_no: s.nfc_no,
-      class_name: s.class_name,
-    });
-  }
-
-  // STEP 1b: Scan Fingerprint on Mantra MFS110 (verification for selected student)
+  // STEP 1: Capture Fingerprint on Mantra MFS110 (live biometric presence)
   async function startFingerScan() {
-    if (!pendingStudent) return;
     setScanning(true);
     setError("");
     setSuccessBanner(null);
@@ -224,8 +165,7 @@ function Kiosk() {
         at: new Date().toISOString(),
       });
 
-      // Fingerprint captured successfully — student identity verified via live biometric touch
-      setDetectedStudent(pendingStudent);
+      // Fingerprint captured — advance to Step 2 (NFC Card identification)
       setStep("card");
     } catch {
       setError("Biometric communication error. Please place your finger firmly on the Mantra sensor and try again.");
@@ -234,29 +174,47 @@ function Kiosk() {
     }
   }
 
-  // STEP 2: Verify NFC Card matches the Detected Student from Step 1
+  // STEP 2: Identify Student by NFC Card + Verify Fingerprint Enrollment
   async function submitCard(value: string) {
     const code = value.trim();
     if (!code) return;
 
-    if (!detectedStudent) {
-      setError("Please scan your fingerprint in Step 1 first.");
-      setStep("finger");
-      return;
-    }
-
-    // STRICT CROSS-CHECK: The tapped card MUST belong to the EXACT student identified in Step 1!
-    if (code !== detectedStudent.nfc_no) {
-      setError(`🚨 FAILED: Card Mismatch! This card does NOT belong to ${detectedStudent.name}. Only ${detectedStudent.name}'s registered card can be scanned.`);
-      setNfc("");
-      return;
-    }
-
     setBusy(true);
     setError("");
     try {
-      // Both Fingerprint AND NFC Card match the EXACT same student!
-      setStudent(detectedStudent);
+      const result = await lookup({ data: { nfc: code, probeTemplate: capturedScan?.template } });
+      if (result.status === "not_found") {
+        setError("❌ Card not recognized. This NFC card is not registered in the system.");
+        setNfc("");
+        return;
+      }
+      if (result.status === "blocked") {
+        setError(`❌ Account Blocked: ${result.message}`);
+        setNfc("");
+        return;
+      }
+      if (result.status === "no_fingerprint") {
+        setError("❌ Biometrics Not Enrolled: Admin has not added fingerprints for this student. Contact Admin.");
+        setNfc("");
+        return;
+      }
+      if (result.status === "fingerprint_mismatch") {
+        setError(`❌ Mismatch: ${result.message}`);
+        setNfc("");
+        return;
+      }
+
+      // Student identified via NFC + has enrolled fingerprints + live finger captured in Step 1
+      const verified: VerifiedStudent = {
+        studentId: result.studentId,
+        suid: result.suid,
+        name: result.name,
+        nfc_no: result.nfc_no,
+        class_name: result.class_name,
+        room_no: result.room_no,
+      };
+      setDetectedStudent(verified);
+      setStudent(verified);
 
       // Advance to Step 3 (Services)
       setStep("service");
@@ -373,15 +331,6 @@ function Kiosk() {
     void executePunch(sId, amt);
   }
 
-  // Compute filtered enrolled students list for Step 1 selector
-  const enrolledList = config.data?.enrolledStudents ?? [];
-  const filteredStudents = studentSearch.trim()
-    ? enrolledList.filter(s =>
-        s.name.toLowerCase().includes(studentSearch.toLowerCase()) ||
-        s.suid.toLowerCase().includes(studentSearch.toLowerCase())
-      )
-    : enrolledList;
-
   return (
     <div className="min-h-screen flex flex-col justify-between bg-gradient-to-br from-[#f8f5ee] via-[#f4ecdf] to-[#ede3d1] text-[#2c1810] p-4 md:p-8 select-none relative overflow-hidden">
       {/* Ambient Animated Luxury Glow Spots */}
@@ -479,114 +428,9 @@ function Kiosk() {
 
       {/* Main Terminal Stage */}
       <main className="flex-1 flex items-center justify-center my-4 relative z-10">
-        {/* STEP 1a: Student Selection — Enter SUID or Click Name */}
-        {step === "finger" && !pendingStudent && (
-          <Card className="w-full max-w-xl p-8 md:p-12 text-center bg-white/95 backdrop-blur-md border-2 border-[#e5d8c5] shadow-[0_20px_60px_-15px_rgba(74,28,20,0.15)] rounded-3xl space-y-5 animate-in fade-in zoom-in-95 duration-300">
-            <div className="space-y-2">
-              <h2 className="text-2xl md:text-3xl font-serif font-bold text-[#4a1c14]">
-                Step 1: Identify Yourself
-              </h2>
-              <p className="text-sm md:text-base text-[#7c533f]">
-                Enter your SUID or select your name below
-              </p>
-            </div>
-
-            {/* SUID Entry */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                void handleSuidSubmit();
-              }}
-              className="flex gap-2"
-            >
-              <Input
-                type="text"
-                placeholder="Enter SUID..."
-                value={suidInput}
-                onChange={(e) => setSuidInput(e.target.value)}
-                className="flex-1 h-14 text-center font-mono text-lg font-bold bg-[#fdfbf7] border-2 border-[#d8c5af] rounded-2xl focus-visible:ring-2 focus-visible:ring-[#8b2500] shadow-inner"
-              />
-              <Button
-                type="submit"
-                disabled={busy || !suidInput.trim()}
-                className="h-14 px-6 font-bold text-base bg-[#4a1c14] hover:bg-[#6b2c1a] text-white rounded-2xl shadow-lg"
-              >
-                {busy ? <Loader2 className="size-5 animate-spin" /> : "Go"}
-              </Button>
-            </form>
-
-            {/* Divider */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-[#d8c5af]" />
-              <span className="text-xs font-bold text-[#8f6853] uppercase tracking-wider">Or Select Your Name</span>
-              <div className="flex-1 h-px bg-[#d8c5af]" />
-            </div>
-
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-[#8f6853]" />
-              <Input
-                type="text"
-                placeholder="Search by name or SUID..."
-                value={studentSearch}
-                onChange={(e) => setStudentSearch(e.target.value)}
-                className="pl-10 h-12 bg-[#fdfbf7] border-2 border-[#d8c5af] rounded-xl text-sm focus-visible:ring-2 focus-visible:ring-[#8b2500]"
-              />
-            </div>
-
-            {/* Enrolled Students Scrollable List */}
-            <div className="max-h-52 overflow-y-auto space-y-1.5 rounded-2xl border border-[#e5d8c5] bg-[#fdfbf7] p-2">
-              {filteredStudents.length === 0 ? (
-                <p className="text-sm text-[#8f6853] py-4">No students found.</p>
-              ) : (
-                filteredStudents.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => handleStudentSelect(s)}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left hover:bg-[#f0e6d6] active:scale-[0.98] transition-all border border-transparent hover:border-[#d8c5af] group"
-                  >
-                    <div className="size-10 rounded-full bg-[#4a1c14]/10 border border-[#d8c5af] flex items-center justify-center text-sm font-serif font-bold text-[#4a1c14] group-hover:bg-[#4a1c14] group-hover:text-white transition-colors">
-                      {s.name[0]?.toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-[#4a1c14] truncate">{s.name}</div>
-                      <div className="text-xs text-[#7c533f] font-mono">
-                        SUID: {s.suid}{s.class_name ? ` • ${s.class_name}` : ""}
-                      </div>
-                    </div>
-                    <Fingerprint className="size-4 text-[#b87333] opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </button>
-                ))
-              )}
-            </div>
-
-            {error && (
-              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium flex items-center gap-3 text-left animate-in fade-in duration-200">
-                <AlertCircle className="size-5 shrink-0 text-rose-600" />
-                <span>{error}</span>
-              </div>
-            )}
-          </Card>
-        )}
-
-        {/* STEP 1b: Fingerprint Verification for Selected Student */}
-        {step === "finger" && pendingStudent && (
+        {/* STEP 1: Live Animated Mantra Fingerprint Scanner */}
+        {step === "finger" && (
           <Card className="w-full max-w-xl p-8 md:p-12 text-center bg-white/95 backdrop-blur-md border-2 border-[#e5d8c5] shadow-[0_20px_60px_-15px_rgba(74,28,20,0.15)] rounded-3xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            {/* Selected Student Banner */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-[#8b2500]/10 via-amber-500/15 to-[#8b2500]/10 border border-amber-500/30 text-center space-y-1 shadow-sm">
-              <div className="text-[11px] uppercase font-bold tracking-wider text-[#8b2500] flex items-center justify-center gap-1.5">
-                <ShieldCheck className="size-4 text-[#8b2500]" /> Selected Student
-              </div>
-              <div className="text-xl md:text-2xl font-serif font-bold text-[#4a1c14]">
-                {pendingStudent.name}
-              </div>
-              <div className="text-xs font-mono text-[#7c533f]">
-                SUID: <span className="font-bold text-[#4a1c14]">{pendingStudent.suid}</span>
-                {pendingStudent.class_name ? ` • Class: ${pendingStudent.class_name}` : ""}
-              </div>
-            </div>
-
             {/* Live Biometric Scanner Circle with Laser Beam & Pulse Rings */}
             <div className="relative mx-auto size-40 rounded-full bg-gradient-to-b from-[#fdfbf7] to-[#f4ebe0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner animate-pulse-ring overflow-hidden group">
               {/* Animated Laser Scanning Beam */}
@@ -606,12 +450,12 @@ function Kiosk() {
 
             <div className="space-y-2">
               <h2 className="text-2xl md:text-3xl font-serif font-bold text-[#4a1c14]">
-                Verify Your Fingerprint
+                Step 1: Scan Your Fingerprint
               </h2>
               <p className="text-sm md:text-base text-[#7c533f]">
                 {scanning
                   ? "Please place your finger firmly on the Mantra scanner now..."
-                  : `Place your registered finger on the Mantra sensor to verify as ${pendingStudent.name}.`}
+                  : "Touch the Mantra sensor with your registered finger to begin."}
               </p>
             </div>
 
@@ -640,31 +484,16 @@ function Kiosk() {
                 </>
               )}
             </Button>
-
-            <Button
-              variant="outline"
-              onClick={() => { setPendingStudent(null); setError(""); }}
-              className="w-full h-12 rounded-2xl border-2 border-[#d8c5af] text-[#6b4a3a] font-bold text-base hover:bg-[#ebdcc8]/40"
-            >
-              <ArrowLeft className="size-4 mr-2" /> Back to Student Selection
-            </Button>
           </Card>
         )}
 
-        {/* STEP 2: Live Animated NFC Smart Card Tap */}
-        {step === "card" && detectedStudent && (
+        {/* STEP 2: NFC Smart Card Tap — Identifies Student */}
+        {step === "card" && (
           <Card className="w-full max-w-xl p-8 md:p-12 text-center bg-white/95 backdrop-blur-md border-2 border-[#e5d8c5] shadow-[0_20px_60px_-15px_rgba(74,28,20,0.15)] rounded-3xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            {/* Student Identified Banner */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-[#8b2500]/10 via-amber-500/15 to-[#8b2500]/10 border border-amber-500/30 text-center space-y-1 shadow-sm">
-              <div className="text-[11px] uppercase font-bold tracking-wider text-[#8b2500] flex items-center justify-center gap-1.5">
-                <ShieldCheck className="size-4 text-[#8b2500]" /> Student Identified by Fingerprint
-              </div>
-              <div className="text-xl md:text-2xl font-serif font-bold text-[#4a1c14]">
-                {detectedStudent.name}
-              </div>
-              <div className="text-xs font-mono text-[#7c533f]">
-                SUID: <span className="font-bold text-[#4a1c14]">{detectedStudent.suid}</span>
-                {detectedStudent.class_name ? ` • Class: ${detectedStudent.class_name}` : ""}
+            {/* Fingerprint Verified Banner */}
+            <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-300 text-center shadow-sm">
+              <div className="text-[11px] uppercase font-bold tracking-wider text-emerald-700 flex items-center justify-center gap-1.5">
+                <CheckCircle2 className="size-4 text-emerald-600" /> Fingerprint Captured Successfully
               </div>
             </div>
 
@@ -678,7 +507,7 @@ function Kiosk() {
                 Step 2: Tap Your NFC Card
               </h2>
               <p className="text-sm md:text-base text-[#7c533f]">
-                Please tap the registered Smart Card for <strong className="text-[#4a1c14] font-bold">{detectedStudent.name}</strong> on the <strong>ID TECH</strong> reader.
+                Please tap your registered Smart Card on the <strong>ID TECH</strong> reader.
               </p>
             </div>
 
