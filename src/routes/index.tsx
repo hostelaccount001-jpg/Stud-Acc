@@ -31,6 +31,7 @@ import {
   getKioskConfig,
   lookupStudent,
   punchService,
+  identifyStudentByFingerprint
 } from "@/lib/kiosk.functions";
 import { captureFinger } from "@/lib/mantra";
 import { ReceiptSlip, type ReceiptData } from "@/components/ReceiptSlip";
@@ -96,6 +97,7 @@ function Kiosk() {
   const getConfig = useServerFn(getKioskConfig);
   const lookup = useServerFn(lookupStudent);
   const punch = useServerFn(punchService);
+  const identify = useServerFn(identifyStudentByFingerprint);
 
   const config = useQuery({
     queryKey: ["kiosk-config"],
@@ -158,6 +160,14 @@ function Kiosk() {
         return;
       }
 
+      // Identify the student using the captured template
+      const identityResult = await identify({ data: { probeTemplate: capture.template, quality: capture.quality } });
+      
+      if (identityResult.status === "not_found") {
+        setError("❌ Fingerprint not recognized. Only students added by Admin can proceed.");
+        return;
+      }
+
       setCapturedScan({
         template: capture.template,
         quality: capture.quality,
@@ -165,7 +175,7 @@ function Kiosk() {
         at: new Date().toISOString(),
       });
 
-      // Fingerprint captured — advance to Step 2 (NFC Card identification)
+      // Fingerprint captured and verified — advance to Step 2 (NFC Card identification)
       setStep("card");
     } catch {
       setError("Biometric communication error. Please place your finger firmly on the Mantra sensor and try again.");
