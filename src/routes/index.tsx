@@ -178,6 +178,16 @@ function Kiosk() {
         at: new Date().toISOString(),
       });
 
+      // Save the identified student so we can match it against the NFC card later
+      setDetectedStudent({
+        studentId: matchedStudent.id,
+        suid: matchedStudent.suid,
+        name: matchedStudent.name,
+        nfc_no: matchedStudent.nfc_no,
+        class_name: matchedStudent.class_name,
+        room_no: matchedStudent.room_no,
+      });
+
       // Fingerprint captured and verified — advance to Step 2 (NFC Card identification)
       setStep("card");
     } catch {
@@ -192,10 +202,18 @@ function Kiosk() {
     const code = value.trim();
     if (!code) return;
 
+    if (!detectedStudent) {
+      setError("Please scan your fingerprint first.");
+      setStep("finger");
+      return;
+    }
+
     setBusy(true);
     setError("");
     try {
-      const result = await lookup({ data: { nfc: code, probeTemplate: capturedScan?.template } });
+      // Look up the card without sending probeTemplate, since we already matched the fingerprint locally!
+      const result = await lookup({ data: { nfc: code } });
+      
       if (result.status === "not_found") {
         setError("❌ Card not recognized. This NFC card is not registered in the system.");
         setNfc("");
@@ -206,18 +224,15 @@ function Kiosk() {
         setNfc("");
         return;
       }
-      if (result.status === "no_fingerprint") {
-        setError("❌ Biometrics Not Enrolled: Admin has not added fingerprints for this student. Contact Admin.");
-        setNfc("");
-        return;
-      }
-      if (result.status === "fingerprint_mismatch") {
-        setError(`❌ Mismatch: ${result.message}`);
+      
+      // CRITICAL STEP: Verify that the tapped NFC card belongs to the same student whose fingerprint was just scanned!
+      if (result.studentId !== detectedStudent.studentId) {
+        setError("❌ Mismatch: This NFC card does not belong to the student whose fingerprint was scanned!");
         setNfc("");
         return;
       }
 
-      // Student identified via NFC + has enrolled fingerprints + live finger captured in Step 1
+      // Student identified via NFC + fingerprint matched locally
       const verified: VerifiedStudent = {
         studentId: result.studentId,
         suid: result.suid,
@@ -226,7 +241,6 @@ function Kiosk() {
         class_name: result.class_name,
         room_no: result.room_no,
       };
-      setDetectedStudent(verified);
       setStudent(verified);
 
       // Advance to Step 3 (Services)
