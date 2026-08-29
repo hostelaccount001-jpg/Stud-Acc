@@ -154,6 +154,15 @@ function StudentsPage() {
     mutationFn: async () => {
       if (!editId) return;
       const parsed = studentSchema.parse(editForm);
+
+      // Check if any finger was captured via RDSERVICE instead of CLIENT
+      for (const f of editFingers) {
+        if (f.template.includes("<?xml") || f.template.includes("PidData")) {
+          toast.error("❌ Mantra Client Service missing! Please install/run MFS100 Client Service to register fingerprints. RD Service is not allowed here.");
+          return;
+        }
+      }
+
       try {
         await updateStudentFn({
           data: {

@@ -160,6 +160,12 @@ function Kiosk() {
         return;
       }
 
+      // Check if we captured using RDSERVICE instead of CLIENT
+      if (capture.template.includes("<?xml") || capture.template.includes("PidData")) {
+        setError("❌ Mantra Client Service is missing! Please install 'MFS100 Client Service'. RD Service alone cannot match fingerprints.");
+        return;
+      }
+
       // Fetch the gallery of enrolled fingerprints from the server
       const gallery = await getGallery();
       
