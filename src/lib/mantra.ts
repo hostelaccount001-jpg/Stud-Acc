@@ -84,7 +84,8 @@ function parseXmlTag(xml: string, tag: string): string | null {
 
 /** Check if Mantra RD Service is available on a port */
 async function probeRDService(port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
-  const base = `http://127.0.0.1:${port}`;
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
+  const base = `${protocol}://127.0.0.1:${port}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -115,7 +116,8 @@ async function probeRDService(port: number, timeoutMs = 800): Promise<Discovered
 
 /** Check if Mantra Client JSON service is available on a port */
 async function probeClientService(port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
-  const base = `http://127.0.0.1:${port}`;
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
+  const base = `${protocol}://127.0.0.1:${port}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
