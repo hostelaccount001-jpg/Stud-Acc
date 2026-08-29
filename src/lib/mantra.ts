@@ -167,7 +167,8 @@ export async function findDevice(): Promise<DiscoveredDevice | null> {
   const rdPromises = RD_PORTS.map((port) => probeRDService(port, 800));
   const clientPromises = CLIENT_PORTS.map((port) => probeClientService(port, 800));
 
-  const results = await Promise.all([...rdPromises, ...clientPromises]);
+  // Prioritize CLIENT service because it supports local ISO template matching
+  const results = await Promise.all([...clientPromises, ...rdPromises]);
   const found = results.find((dev): dev is DiscoveredDevice => dev !== null) ?? null;
 
   if (found) {
