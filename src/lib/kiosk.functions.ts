@@ -150,9 +150,8 @@ export const lookupStudentBySuid = createServerFn({ method: "POST" })
     };
   });
 
-export const identifyStudentByFingerprint = createServerFn({ method: "POST" })
-  .validator((input: unknown) => identifySchema.parse(input))
-  .handler(async ({ data }): Promise<IdentifyResult> => {
+export const getStudentGallery = createServerFn({ method: "POST" })
+  .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: students } = await supabaseAdmin
       .from("students")
@@ -163,65 +162,21 @@ export const identifyStudentByFingerprint = createServerFn({ method: "POST" })
       (s) => Array.isArray(s.fingerprints) && s.fingerprints.length > 0,
     );
 
-    if (enrolled.length === 0) return { status: "not_found" };
-
-    // 1. Check direct exact match
-    for (const s of enrolled) {
+    return enrolled.map(s => {
+      const templates: string[] = [];
       for (const f of s.fingerprints as { template?: string }[]) {
-        if (f.template && f.template === data.probeTemplate) {
-          return {
-            status: "identified",
-            studentId: s.id,
-            suid: s.suid,
-            name: s.name,
-            nfc_no: s.nfc_no,
-            class_name: s.class_name,
-            room_no: s.room_no,
-          };
-        }
+        if (f.template) templates.push(f.template);
       }
-    }
-
-    // 2. Identify against enrolled gallery
-    let bestStudent: (typeof enrolled)[0] | null = null;
-    let bestScore = -1;
-
-    try {
-      const probeBuf = Buffer.from(data.probeTemplate, "base64");
-      for (const s of enrolled) {
-        for (const f of s.fingerprints as { template?: string }[]) {
-          if (!f.template) continue;
-          const galBuf = Buffer.from(f.template, "base64");
-          const len = Math.min(probeBuf.length, galBuf.length);
-          if (len === 0) continue;
-          let matches = 0;
-          for (let i = 0; i < len; i++) {
-            if (probeBuf[i] === galBuf[i]) matches++;
-          }
-          const score = matches / len;
-          if (score > bestScore) {
-            bestScore = score;
-            bestStudent = s;
-          }
-        }
-      }
-    } catch {
-      // fallback
-    }
-
-    if (bestStudent && bestScore >= 0.85) {
       return {
-        status: "identified",
-        studentId: bestStudent.id,
-        suid: bestStudent.suid,
-        name: bestStudent.name,
-        nfc_no: bestStudent.nfc_no,
-        class_name: bestStudent.class_name,
-        room_no: bestStudent.room_no,
+        id: s.id,
+        suid: s.suid,
+        name: s.name,
+        nfc_no: s.nfc_no,
+        class_name: s.class_name,
+        room_no: s.room_no,
+        templates
       };
-    }
-
-    return { status: "not_found" };
+    });
   });
 
 export const lookupStudent = createServerFn({ method: "POST" })

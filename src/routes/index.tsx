@@ -31,9 +31,9 @@ import {
   getKioskConfig,
   lookupStudent,
   punchService,
-  identifyStudentByFingerprint
+  getStudentGallery
 } from "@/lib/kiosk.functions";
-import { captureFinger } from "@/lib/mantra";
+import { captureFinger, identify } from "@/lib/mantra";
 import { ReceiptSlip, type ReceiptData } from "@/components/ReceiptSlip";
 
 export const Route = createFileRoute("/")({
@@ -97,7 +97,7 @@ function Kiosk() {
   const getConfig = useServerFn(getKioskConfig);
   const lookup = useServerFn(lookupStudent);
   const punch = useServerFn(punchService);
-  const identify = useServerFn(identifyStudentByFingerprint);
+  const getGallery = useServerFn(getStudentGallery);
 
   const config = useQuery({
     queryKey: ["kiosk-config"],
@@ -160,10 +160,13 @@ function Kiosk() {
         return;
       }
 
-      // Identify the student using the captured template
-      const identityResult = await identify({ data: { probeTemplate: capture.template, quality: capture.quality } });
+      // Fetch the gallery of enrolled fingerprints from the server
+      const gallery = await getGallery();
       
-      if (identityResult.status === "not_found") {
+      // Identify the student using the captured template via the LOCAL MFS100 Client algorithm
+      const matchedStudent = await identify(capture.template, gallery);
+      
+      if (!matchedStudent) {
         setError("❌ Fingerprint not recognized. Only students added by Admin can proceed.");
         return;
       }
