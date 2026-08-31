@@ -221,6 +221,29 @@ function Kiosk() {
         at: new Date().toISOString(),
       });
 
+      setBusy(true);
+      const verifyRes = await lookup({
+        data: {
+          nfc: detectedStudent.nfc_no,
+          probeTemplate: capture.template,
+        },
+      });
+
+      if (verifyRes.status === "fingerprint_mismatch") {
+        setError(`❌ આ આંગળી ${detectedStudent.name} ની નથી! એડમિનમાં રજીસ્ટર કરેલ આંગળી જ મૂકો. (Fingerprint Mismatch)`);
+        return;
+      }
+
+      if (verifyRes.status === "no_fingerprint") {
+        setError(`❌ ${detectedStudent.name} ની ફિંગરપ્રિન્ટ એડમિન પોર્ટલમાં રજીસ્ટર કરેલી નથી. પહેલા એડમિનમાંથી ફિંગર ઉમેરો.`);
+        return;
+      }
+
+      if (verifyRes.status !== "ok") {
+        setError(verifyRes.status === "blocked" ? verifyRes.message : "Verification failed. Please try again.");
+        return;
+      }
+
       // Both NFC Card + Biometric presence successfully verified for this student!
       setStudent(detectedStudent);
       setSuccessBanner(`Biometric Verified: Welcome, ${detectedStudent.name}!`);
@@ -231,6 +254,7 @@ function Kiosk() {
       setError("Biometric communication error. Please place your finger firmly on the Mantra sensor and try again.");
     } finally {
       setScanning(false);
+      setBusy(false);
     }
   }
 
