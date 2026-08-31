@@ -161,7 +161,7 @@ function Kiosk() {
       }
 
       // Check if we captured using RDSERVICE instead of CLIENT
-      if (capture.template.includes("<?xml") || capture.template.includes("PidData")) {
+      if (capture.driverType === "RDSERVICE" || capture.template.includes("<?xml") || capture.template.includes("PidData")) {
         setError("❌ Mantra Client Service is missing! Please install 'MFS100 Client Service'. RD Service alone cannot match fingerprints.");
         return;
       }
@@ -390,11 +390,11 @@ function Kiosk() {
           className="absolute left-0 top-0 transition-all duration-300 hover:scale-110 active:scale-95 group z-20 cursor-pointer"
         >
           <div className="relative">
-            <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-amber-400 to-[#8b2500] opacity-40 blur-sm group-hover:opacity-100 transition duration-300" />
+            <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-amber-400 to-[#8b2500] opacity-40 blur-sm group-hover:opacity-100 transition duration-300" />
             <img
               src="/logo.png"
               alt="Shree Swaminarayan Gurukul Rajkot Logo"
-              className="relative size-16 md:size-20 rounded-2xl object-contain bg-white p-1.5 shadow-xl border border-amber-400/50 group-hover:border-[#8b2500] transition-colors"
+              className="relative size-16 md:size-20 rounded-full object-contain bg-white p-1.5 shadow-xl border border-amber-400/50 group-hover:border-[#8b2500] transition-colors"
             />
           </div>
         </Link>
@@ -467,7 +467,10 @@ function Kiosk() {
             {/* Live Biometric Scanner Circle with Laser Beam & Pulse Rings */}
             <div className="relative mx-auto size-40 rounded-full bg-gradient-to-b from-[#fdfbf7] to-[#f4ebe0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner animate-pulse-ring overflow-hidden group">
               {/* Animated Laser Scanning Beam */}
-              <div className="absolute inset-x-2 h-1 bg-gradient-to-r from-transparent via-rose-500 to-transparent rounded-full shadow-[0_0_14px_#f43f5e] animate-laser z-10" />
+              <div className="absolute inset-x-0 top-0 z-10 pointer-events-none animate-laser">
+                <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-rose-500 to-transparent shadow-[0_0_15px_rgba(244,63,94,0.8)]" />
+                <div className="h-12 w-full bg-gradient-to-b from-rose-500/20 to-transparent blur-sm" />
+              </div>
 
               {/* Central Glowing Biometric Icon */}
               <Fingerprint

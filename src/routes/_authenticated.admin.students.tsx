@@ -846,6 +846,10 @@ function FingerprintEnroller({
         toast.error(res.error);
         return;
       }
+      if (res.driverType === "RDSERVICE" || res.template.includes("<?xml") || res.template.includes("PidData")) {
+        toast.error("❌ MFS100 Client Service missing! You cannot enrol using RD Service because it creates encrypted one-time scans. Please install Mantra MFS100 Client Service.");
+        return;
+      }
       if (fingers.some((f) => f.template === res.template)) {
         toast.error("This fingerprint is already enrolled for this student.");
         return;

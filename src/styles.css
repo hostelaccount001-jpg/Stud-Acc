@@ -324,16 +324,18 @@ button[role="switch"][data-state="unchecked"] > span {
 
 @keyframes laser-sweep {
   0% {
-    top: 8%;
-    opacity: 0.3;
+    transform: translateY(-10px);
+    opacity: 0;
   }
-  50% {
-    top: 82%;
-    opacity: 0.95;
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
   }
   100% {
-    top: 8%;
-    opacity: 0.3;
+    transform: translateY(160px);
+    opacity: 0;
   }
 }
 
@@ -344,7 +346,7 @@ button[role="switch"][data-state="unchecked"] > span {
   }
   70% {
     transform: scale(1.04);
-    box-shadow: 0 0 0 18px rgba(139, 37, 0, 0);
+    box-shadow: 0 0 0 24px rgba(139, 37, 0, 0);
   }
   100% {
     transform: scale(0.96);

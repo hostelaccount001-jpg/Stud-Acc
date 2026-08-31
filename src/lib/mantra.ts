@@ -32,7 +32,7 @@ export type FingerRecord = {
 };
 
 export type CaptureOutcome =
-  | { ok: true; template: string; quality: number; serial?: string | undefined; model?: string | undefined }
+  | { ok: true; template: string; quality: number; serial?: string; model?: string; driverType?: string }
   | { ok: false; error: string };
 
 export type DeviceInfo = {
@@ -283,6 +283,7 @@ export async function captureFinger(
         quality: qScore > 0 ? qScore : quality,
         serial: dev.serial,
         model: dev.model,
+        driverType: "RDSERVICE",
       };
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") {
@@ -319,6 +320,7 @@ export async function captureFinger(
         quality: Number(data["Quality"] ?? 0),
         serial: dev.serial,
         model: dev.model,
+        driverType: "CLIENT",
       };
     } catch {
       return { ok: false, error: "Mantra scanner did not respond. Check cable." };
@@ -339,13 +341,17 @@ export async function matchTemplate(probe: string, gallery: string): Promise<boo
       const res = await fetch(`${dev.base}/mfs100/match`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ProbTemplate: probe, GalleryTemplate: gallery }),
+        body: JSON.stringify({ ProbTemplate: probe, GalleryTemplate: gallery, GallaryTemplate: gallery }),
       });
       if (res.ok) {
         const data = (await res.json()) as Record<string, unknown>;
+        console.log("Mantra Match Result:", data);
         return data["Status"] === true || data["Status"] === "true";
+      } else {
+        console.error("Mantra Match HTTP Error:", res.status, await res.text());
       }
-    } catch {
+    } catch (e) {
+      console.error("Mantra Match Exception:", e);
       // fallback to direct comparison
     }
   }
