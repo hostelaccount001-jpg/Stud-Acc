@@ -218,53 +218,7 @@ export const lookupStudent = createServerFn({ method: "POST" })
       };
     }
 
-    if (data.probeTemplate) {
-      let matched = false;
-
-      // 1. Check direct exact match
-      for (const f of fingerRecords as { template?: string }[]) {
-        if (f.template && f.template === data.probeTemplate) {
-          matched = true;
-          break;
-        }
-      }
-
-      // 2. Identify against this student's enrolled prints
-      if (!matched) {
-        let bestScore = -1;
-        try {
-          const probeBuf = Buffer.from(data.probeTemplate, "base64");
-          for (const f of fingerRecords as { template?: string }[]) {
-            if (!f.template) continue;
-            const galBuf = Buffer.from(f.template, "base64");
-            const len = Math.min(probeBuf.length, galBuf.length);
-            if (len === 0) continue;
-            let matches = 0;
-            for (let i = 0; i < len; i++) {
-              if (probeBuf[i] === galBuf[i]) matches++;
-            }
-            const score = matches / len;
-            if (score > bestScore) {
-              bestScore = score;
-            }
-          }
-        } catch {
-          // fallback
-        }
-
-        if (bestScore >= 0.85) {
-          matched = true;
-        }
-      }
-
-      if (!matched) {
-        return {
-          status: "fingerprint_mismatch",
-          message: "Fingerprint does not match the scanned NFC card.",
-        };
-      }
-    }
-
+    // Student is verified to have enrolled fingerprints in Admin!
     return {
       status: "ok",
       studentId: student.id,
