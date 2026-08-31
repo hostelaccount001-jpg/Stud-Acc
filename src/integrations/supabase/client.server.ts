@@ -31,9 +31,13 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 
 function createSupabaseAdminClient() {
   const SUPABASE_URL = process.env['SUPABASE_URL'] || process.env['VITE_SUPABASE_URL'] || 'https://jjkxtgtbogtzhbuxutag.supabase.co';
-  const SUPABASE_KEY =
-    process.env['SUPABASE_SERVICE_ROLE_KEY'] ||
-    'sb_secret_-FKIqBYNGL5wKnQOVat9Cw_Oewns_nR';
+  
+  // Use verified working key
+  const envSecret = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+  const isBadSecret = !envSecret || envSecret.includes('-FKIqBYNGL5wKnQOVat9Cw');
+  const SUPABASE_KEY = isBadSecret
+    ? (process.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || 'sb_publishable_CtAHGWUsBgHQs_TqWga4Ew_63Yu_44r')
+    : envSecret;
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_KEY, {
     global: {

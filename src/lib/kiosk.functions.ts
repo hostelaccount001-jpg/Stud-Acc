@@ -183,11 +183,21 @@ export const lookupStudent = createServerFn({ method: "POST" })
   .validator((input: unknown) => nfcSchema.parse(input))
   .handler(async ({ data }): Promise<LookupResult> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: student } = await supabaseAdmin
+    const cleanCode = data.nfc.trim();
+    let { data: student } = await supabaseAdmin
       .from("students")
       .select("id, suid, name, nfc_no, class_name, room_no, blocked, fingerprints")
-      .eq("nfc_no", data.nfc)
+      .eq("nfc_no", cleanCode)
       .maybeSingle();
+
+    if (!student) {
+      const { data: bySuid } = await supabaseAdmin
+        .from("students")
+        .select("id, suid, name, nfc_no, class_name, room_no, blocked, fingerprints")
+        .ilike("suid", cleanCode)
+        .maybeSingle();
+      student = bySuid;
+    }
 
     if (!student) return { status: "not_found" };
 
