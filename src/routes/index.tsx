@@ -75,7 +75,7 @@ type ServiceItem = {
 };
 
 function Kiosk() {
-  const [step, setStep] = useState<Step>("finger");
+  const [step, setStep] = useState<Step>("card");
   const [capturedScan, setCapturedScan] = useState<CapturedScan | null>(null);
   const [detectedStudent, setDetectedStudent] = useState<VerifiedStudent | null>(null);
   const [student, setStudent] = useState<VerifiedStudent | null>(null);
@@ -116,6 +116,13 @@ function Kiosk() {
     }
     return undefined;
   }, [step]);
+
+  // Safety fallback: If step is 'finger' but no student has tapped card, revert to 'card'
+  useEffect(() => {
+    if (step === "finger" && !detectedStudent) {
+      setStep("card");
+    }
+  }, [step, detectedStudent]);
 
   // Instant Auto-submit NFC card when scanned by card reader on Step 2
   useEffect(() => {
