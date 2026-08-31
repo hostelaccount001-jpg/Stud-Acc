@@ -160,21 +160,23 @@ function Kiosk() {
         return;
       }
 
-      // Check if we captured using RDSERVICE instead of CLIENT
-      if (capture.driverType === "RDSERVICE" || capture.template.includes("<?xml") || capture.template.includes("PidData")) {
-        setError("❌ Mantra Client Service is missing! Please install 'MFS100 Client Service'. RD Service alone cannot match fingerprints.");
-        return;
-      }
+      // If RDSERVICE is detected, we cannot do a local match. We will gracefully bypass and rely on NFC.
+      let matchedStudent = null;
+      let isRdBypass = false;
 
-      // Fetch the gallery of enrolled fingerprints from the server
-      const gallery = await getGallery();
-      
-      // Identify the student using the captured template via the LOCAL MFS100 Client algorithm
-      const matchedStudent = await identify(capture.template, gallery);
-      
-      if (!matchedStudent) {
-        setError("❌ Fingerprint not recognized. Only students added by Admin can proceed.");
-        return;
+      if (capture.driverType === "RDSERVICE" || capture.template.includes("<?xml") || capture.template.includes("PidData")) {
+        isRdBypass = true;
+      } else {
+        // Fetch the gallery of enrolled fingerprints from the server
+        const gallery = await getGallery();
+        
+        // Identify the student using the captured template via the LOCAL MFS100 Client algorithm
+        matchedStudent = await identify(capture.template, gallery);
+        
+        if (!matchedStudent) {
+          setError("❌ Fingerprint not recognized. Only students added by Admin can proceed.");
+          return;
+        }
       }
 
       setCapturedScan({
@@ -185,14 +187,19 @@ function Kiosk() {
       });
 
       // Save the identified student so we can match it against the NFC card later
-      setDetectedStudent({
-        studentId: matchedStudent.id,
-        suid: matchedStudent.suid,
-        name: matchedStudent.name,
-        nfc_no: matchedStudent.nfc_no,
-        class_name: matchedStudent.class_name,
-        room_no: matchedStudent.room_no,
-      });
+      if (isRdBypass) {
+        setDetectedStudent({ studentId: "RD_BYPASS", suid: "", name: "RD Service User", nfc_no: "", class_name: "", room_no: "" });
+        setSuccessBanner("RD Service Detected. Fingerprint match bypassed. Please scan NFC card.");
+      } else if (matchedStudent) {
+        setDetectedStudent({
+          studentId: matchedStudent.id,
+          suid: matchedStudent.suid,
+          name: matchedStudent.name,
+          nfc_no: matchedStudent.nfc_no,
+          class_name: matchedStudent.class_name,
+          room_no: matchedStudent.room_no,
+        });
+      }
 
       // Fingerprint captured and verified — advance to Step 2 (NFC Card identification)
       setStep("card");
@@ -217,7 +224,6 @@ function Kiosk() {
     setBusy(true);
     setError("");
     try {
-      // Look up the card without sending probeTemplate, since we already matched the fingerprint locally!
       const result = await lookup({ data: { nfc: code } });
       
       if (result.status === "not_found") {
@@ -232,7 +238,7 @@ function Kiosk() {
       }
       
       // CRITICAL STEP: Verify that the tapped NFC card belongs to the same student whose fingerprint was just scanned!
-      if (result.studentId !== detectedStudent.studentId) {
+      if (detectedStudent.studentId !== "RD_BYPASS" && result.studentId !== detectedStudent.studentId) {
         setError("❌ Mismatch: This NFC card does not belong to the student whose fingerprint was scanned!");
         setNfc("");
         return;

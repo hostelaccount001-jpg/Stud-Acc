@@ -846,11 +846,17 @@ function FingerprintEnroller({
         toast.error(res.error);
         return;
       }
-      if (res.driverType === "RDSERVICE" || res.template.includes("<?xml") || res.template.includes("PidData")) {
-        toast.error("❌ MFS100 Client Service missing! You cannot enrol using RD Service because it creates encrypted one-time scans. Please install Mantra MFS100 Client Service.");
-        return;
+      
+      let templateData = "";
+      if (res.driverType === "RDSERVICE") {
+        toast.error("WARNING: You are using Aadhaar RD Service. The fingerprint is encrypted and WILL NOT MATCH at the Kiosk. Please install MFS100 Client Service for Kiosk matching.", { duration: 10000 });
+        templateData = res.template || "";
+      } else {
+        templateData = res.template || "";
+        toast.success("Fingerprint captured successfully!");
       }
-      if (fingers.some((f) => f.template === res.template)) {
+
+      if (fingers.some((f) => f.template === templateData)) {
         toast.error("This fingerprint is already enrolled for this student.");
         return;
       }

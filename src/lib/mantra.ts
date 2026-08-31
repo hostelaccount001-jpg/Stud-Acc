@@ -146,16 +146,46 @@ async function probeClientService(port: number, timeoutMs = 800): Promise<Discov
   }
 }
 
+// Python Bridge Ports (custom script)
+const PYTHON_PORTS = [8005];
+
+/** Check if custom Python bridge is available */
+async function probePythonBridge(port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
+  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
+  const base = `${protocol}://127.0.0.1:${port}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${base}/health`, {
+      method: "GET",
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    return {
+      base,
+      type: "PYTHON_BRIDGE",
+      model: "Python Custom Bridge",
+      serial: "N/A",
+      port,
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Finds the active Mantra scanner device with fast parallel probing */
 export async function findDevice(): Promise<DiscoveredDevice | null> {
   if (typeof window === "undefined") return null;
 
   // 1. Check cached device first if still responsive
   if (cachedDevice) {
-    const live =
-      cachedDevice.type === "RDSERVICE"
-        ? await probeRDService(cachedDevice.port, 600)
-        : await probeClientService(cachedDevice.port, 600);
+    let live = null;
+    if (cachedDevice.type === "PYTHON_BRIDGE") live = await probePythonBridge(cachedDevice.port, 600);
+    else if (cachedDevice.type === "RDSERVICE") live = await probeRDService(cachedDevice.port, 600);
+    else live = await probeClientService(cachedDevice.port, 600);
+
     if (live) {
       cachedDevice = live;
       return live;
@@ -163,12 +193,13 @@ export async function findDevice(): Promise<DiscoveredDevice | null> {
     cachedDevice = null;
   }
 
-  // 2. Parallel probe all RD Service ports and Client ports
-  const rdPromises = RD_PORTS.map((port) => probeRDService(port, 800));
+  // 2. Parallel probe Python Bridge, Client ports, and RD Service ports
+  const pythonPromises = PYTHON_PORTS.map((port) => probePythonBridge(port, 800));
   const clientPromises = CLIENT_PORTS.map((port) => probeClientService(port, 800));
+  const rdPromises = RD_PORTS.map((port) => probeRDService(port, 800));
 
-  // Prioritize CLIENT service because it supports local ISO template matching
-  const results = await Promise.all([...clientPromises, ...rdPromises]);
+  // Prioritize Python Bridge, then CLIENT, then RD
+  const results = await Promise.all([...pythonPromises, ...clientPromises, ...rdPromises]);
   const found = results.find((dev): dev is DiscoveredDevice => dev !== null) ?? null;
 
   if (found) {
