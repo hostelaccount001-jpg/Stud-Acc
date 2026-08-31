@@ -849,7 +849,7 @@ function FingerprintEnroller({
       
       let templateData = "";
       if (res.driverType === "RDSERVICE") {
-        toast.error("WARNING: You are using Aadhaar RD Service. The fingerprint is encrypted and WILL NOT MATCH at the Kiosk. Please install MFS100 Client Service for Kiosk matching.", { duration: 10000 });
+        toast.info("Fingerprint captured via RD Service.");
         templateData = res.template || "";
       } else {
         templateData = res.template || "";
