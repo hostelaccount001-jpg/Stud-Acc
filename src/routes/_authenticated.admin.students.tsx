@@ -847,14 +847,8 @@ function FingerprintEnroller({
         return;
       }
       
-      let templateData = "";
-      if (res.driverType === "RDSERVICE") {
-        toast.info("Fingerprint captured via RD Service.");
-        templateData = res.template || "";
-      } else {
-        templateData = res.template || "";
-        toast.success("Fingerprint captured successfully!");
-      }
+      const templateData = res.template || "";
+      toast.success(`Fingerprint captured successfully! (Quality: ${res.quality}%)`);
 
       if (fingers.some((f) => f.template === templateData)) {
         toast.error("This fingerprint is already enrolled for this student.");
