@@ -175,6 +175,11 @@ function Kiosk() {
         setNfc("");
         return;
       }
+      if (result.status !== "ok") {
+        setError(`❌ ${result.message}`);
+        setNfc("");
+        return;
+      }
 
       const identified: VerifiedStudent = {
         studentId: result.studentId,

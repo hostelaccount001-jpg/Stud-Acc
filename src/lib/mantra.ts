@@ -32,7 +32,7 @@ export type FingerRecord = {
 };
 
 export type CaptureOutcome =
-  | { ok: true; template: string; quality: number; serial?: string; model?: string; driverType?: string }
+  | { ok: true; template: string; quality: number; serial?: string | undefined; model?: string | undefined; driverType?: string | undefined }
   | { ok: false; error: string };
 
 export type DeviceInfo = {
@@ -82,10 +82,7 @@ function parseXmlTag(xml: string, tag: string): string | null {
   return match && match[1] ? match[1].trim() : null;
 }
 
-/** Check if Mantra RD Service is available on a port */
-async function probeRDService(port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
-  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
-  const base = `${protocol}://127.0.0.1:${port}`;
+async function probeRDServiceUrl(base: string, port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -114,10 +111,18 @@ async function probeRDService(port: number, timeoutMs = 800): Promise<Discovered
   }
 }
 
-/** Check if Mantra Client JSON service is available on a port */
-async function probeClientService(port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
-  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
-  const base = `${protocol}://127.0.0.1:${port}`;
+/** Check if Mantra RD Service is available on a port (supports HTTPS and HTTP fallback) */
+async function probeRDService(port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
+  const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+  if (isHttps) {
+    const httpsDev = await probeRDServiceUrl(`https://127.0.0.1:${port}`, port, timeoutMs);
+    if (httpsDev) return httpsDev;
+    return await probeRDServiceUrl(`http://127.0.0.1:${port}`, port, timeoutMs);
+  }
+  return await probeRDServiceUrl(`http://127.0.0.1:${port}`, port, timeoutMs);
+}
+
+async function probeClientServiceUrl(base: string, port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -146,33 +151,15 @@ async function probeClientService(port: number, timeoutMs = 800): Promise<Discov
   }
 }
 
-// Python Bridge Ports (custom script)
-const PYTHON_PORTS = [8005];
-
-/** Check if custom Python bridge is available */
-async function probePythonBridge(port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
-  const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
-  const base = `${protocol}://127.0.0.1:${port}`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const res = await fetch(`${base}/health`, {
-      method: "GET",
-      signal: controller.signal,
-    });
-    if (!res.ok) return null;
-    return {
-      base,
-      type: "PYTHON_BRIDGE",
-      model: "Python Custom Bridge",
-      serial: "N/A",
-      port,
-    };
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
+/** Check if Mantra Client JSON service is available on a port (supports HTTPS and HTTP fallback) */
+async function probeClientService(port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
+  const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+  if (isHttps) {
+    const httpsDev = await probeClientServiceUrl(`https://127.0.0.1:${port}`, port, timeoutMs);
+    if (httpsDev) return httpsDev;
+    return await probeClientServiceUrl(`http://127.0.0.1:${port}`, port, timeoutMs);
   }
+  return await probeClientServiceUrl(`http://127.0.0.1:${port}`, port, timeoutMs);
 }
 
 /** Finds the active Mantra scanner device with fast parallel probing */
@@ -182,8 +169,7 @@ export async function findDevice(): Promise<DiscoveredDevice | null> {
   // 1. Check cached device first if still responsive
   if (cachedDevice) {
     let live = null;
-    if (cachedDevice.type === "PYTHON_BRIDGE") live = await probePythonBridge(cachedDevice.port, 600);
-    else if (cachedDevice.type === "RDSERVICE") live = await probeRDService(cachedDevice.port, 600);
+    if (cachedDevice.type === "RDSERVICE") live = await probeRDService(cachedDevice.port, 600);
     else live = await probeClientService(cachedDevice.port, 600);
 
     if (live) {
@@ -193,13 +179,11 @@ export async function findDevice(): Promise<DiscoveredDevice | null> {
     cachedDevice = null;
   }
 
-  // 2. Parallel probe Python Bridge, Client ports, and RD Service ports
-  const pythonPromises = PYTHON_PORTS.map((port) => probePythonBridge(port, 800));
+  // 2. Parallel probe Client ports and RD Service ports
   const clientPromises = CLIENT_PORTS.map((port) => probeClientService(port, 800));
   const rdPromises = RD_PORTS.map((port) => probeRDService(port, 800));
 
-  // Prioritize Python Bridge, then CLIENT, then RD
-  const results = await Promise.all([...pythonPromises, ...clientPromises, ...rdPromises]);
+  const results = await Promise.all([...clientPromises, ...rdPromises]);
   const found = results.find((dev): dev is DiscoveredDevice => dev !== null) ?? null;
 
   if (found) {
