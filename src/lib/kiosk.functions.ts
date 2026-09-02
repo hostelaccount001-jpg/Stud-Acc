@@ -49,6 +49,7 @@ export type LookupResult =
       class_name?: string | null;
       room_no?: string | null;
       fingerprintsCount: number;
+      templates: string[];
     };
 
 export type PunchResult =
@@ -131,7 +132,14 @@ export const lookupStudentBySuid = createServerFn({ method: "POST" })
     }
 
     const fingerRecords = Array.isArray(student.fingerprints) ? student.fingerprints : [];
-    if (fingerRecords.length === 0) {
+    const templates: string[] = [];
+    for (const f of fingerRecords as { template?: string }[]) {
+      if (f && typeof f.template === "string" && f.template.trim().length > 0) {
+        templates.push(f.template.trim());
+      }
+    }
+
+    if (templates.length === 0) {
       return {
         status: "no_fingerprint",
         message: "No fingerprints enrolled for this student. Please add finger in Admin Portal first.",
@@ -146,7 +154,8 @@ export const lookupStudentBySuid = createServerFn({ method: "POST" })
       nfc_no: student.nfc_no,
       class_name: student.class_name,
       room_no: student.room_no,
-      fingerprintsCount: fingerRecords.length,
+      fingerprintsCount: templates.length,
+      templates,
     };
   });
 
@@ -211,14 +220,20 @@ export const lookupStudent = createServerFn({ method: "POST" })
     }
 
     const fingerRecords = Array.isArray(student.fingerprints) ? student.fingerprints : [];
-    if (fingerRecords.length === 0) {
+    const templates: string[] = [];
+    for (const f of fingerRecords as { template?: string }[]) {
+      if (f && typeof f.template === "string" && f.template.trim().length > 0) {
+        templates.push(f.template.trim());
+      }
+    }
+
+    if (templates.length === 0) {
       return {
         status: "no_fingerprint",
         message: "Fingerprint verification failed. Biometrics not enrolled for this card.",
       };
     }
 
-    // Student is verified to have enrolled fingerprints in Admin!
     return {
       status: "ok",
       studentId: student.id,
@@ -227,7 +242,8 @@ export const lookupStudent = createServerFn({ method: "POST" })
       nfc_no: student.nfc_no,
       class_name: student.class_name,
       room_no: student.room_no,
-      fingerprintsCount: fingerRecords.length,
+      fingerprintsCount: templates.length,
+      templates,
     };
   });
 

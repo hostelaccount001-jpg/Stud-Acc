@@ -350,27 +350,35 @@ export async function matchTemplate(probe: string, gallery: string): Promise<boo
   if (!probe || !gallery) return false;
   if (probe === gallery) return true;
 
-  const dev = await findDevice();
-  if (dev && dev.type === "CLIENT") {
+  // Try local Mantra Client Service matcher (ports 8004, 8005, 8003)
+  const portsToTry = [8004, 8005, 8003];
+  for (const p of portsToTry) {
     try {
-      const res = await fetch(`${dev.base}/mfs100/match`, {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch(`http://127.0.0.1:${p}/mfs100/match`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ProbTemplate: probe, GalleryTemplate: gallery, GallaryTemplate: gallery }),
+        signal: controller.signal,
       });
+      clearTimeout(timer);
+
       if (res.ok) {
         const data = (await res.json()) as Record<string, unknown>;
-        console.log("Mantra Match Result:", data);
-        return data["Status"] === true || data["Status"] === "true";
-      } else {
-        console.error("Mantra Match HTTP Error:", res.status, await res.text());
+        console.log(`Mantra Match Result (port ${p}):`, data);
+        if (data["Status"] === true || data["Status"] === "true") {
+          return true;
+        }
+        // If the service returned a response and Status is false, then this finger definitely does not match
+        return false;
       }
-    } catch (e) {
-      console.error("Mantra Match Exception:", e);
-      // fallback to direct comparison
+    } catch {
+      // Port not answering or timed out, try next
     }
   }
 
+  // Exact template comparison fallback
   return probe === gallery;
 }
 

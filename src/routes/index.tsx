@@ -33,7 +33,7 @@ import {
   punchService,
   getStudentGallery
 } from "@/lib/kiosk.functions";
-import { captureFinger, identify } from "@/lib/mantra";
+import { captureFinger, matchTemplate, identify } from "@/lib/mantra";
 import { ReceiptSlip, type ReceiptData } from "@/components/ReceiptSlip";
 
 export const Route = createFileRoute("/")({
@@ -58,6 +58,7 @@ type VerifiedStudent = {
   nfc_no: string;
   class_name?: string | null | undefined;
   room_no?: string | null | undefined;
+  templates: string[];
 };
 
 type CapturedScan = {
@@ -188,6 +189,7 @@ function Kiosk() {
         nfc_no: result.nfc_no,
         class_name: result.class_name,
         room_no: result.room_no,
+        templates: result.templates || [],
       };
 
       setDetectedStudent(identified);
@@ -226,30 +228,33 @@ function Kiosk() {
         at: new Date().toISOString(),
       });
 
-      setBusy(true);
-      const verifyRes = await lookup({
-        data: {
-          nfc: detectedStudent.nfc_no,
-          probeTemplate: capture.template,
-        },
-      });
-
-      if (verifyRes.status === "fingerprint_mismatch") {
-        setError(`❌ આ આંગળી ${detectedStudent.name} ની નથી! એડમિનમાં રજીસ્ટર કરેલ આંગળી જ મૂકો. (Fingerprint Mismatch)`);
-        return;
-      }
-
-      if (verifyRes.status === "no_fingerprint") {
+      // Check that this student has registered biometric templates from Step 1
+      const studentTemplates = detectedStudent.templates || [];
+      if (studentTemplates.length === 0) {
         setError(`❌ ${detectedStudent.name} ની ફિંગરપ્રિન્ટ એડમિન પોર્ટલમાં રજીસ્ટર કરેલી નથી. પહેલા એડમિનમાંથી ફિંગર ઉમેરો.`);
         return;
       }
 
-      if (verifyRes.status !== "ok") {
-        setError(verifyRes.status === "blocked" ? verifyRes.message : "Verification failed. Please try again.");
+      setBusy(true);
+
+      // Strictly match incoming fingerprint template against the biometric record of the NFC cardholder verified in Step 1
+      let isMatched = false;
+      for (const registeredTemplate of studentTemplates) {
+        const matches = await matchTemplate(capture.template, registeredTemplate);
+        if (matches) {
+          isMatched = true;
+          break;
+        }
+      }
+
+      // If the fingerprint does not match that specific student's registered template,
+      // reject the scan, display error message, and prevent proceeding to Step 3.
+      if (!isMatched) {
+        setError("Fingerprint does not match the scanned NFC card.");
         return;
       }
 
-      // Both NFC Card + Biometric presence successfully verified for this student!
+      // Biometric verification succeeded specifically for that registered student!
       setStudent(detectedStudent);
       setSuccessBanner(`Biometric Verified: Welcome, ${detectedStudent.name}!`);
 
