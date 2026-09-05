@@ -19,36 +19,41 @@ PORT = 8005
 
 def compute_vector_similarity(vec1, vec2):
     """
-    Computes cosine similarity and Euclidean distance between two face descriptors.
+    Computes strict Zero-Mean Pearson correlation and structural distance between two face descriptors.
     Returns normalized similarity percentage (0.0 to 100.0).
+    Same person: >= 70.0%
+    Different person / blank / background: < 35.0%
     """
     if not vec1 or not vec2:
         return 0.0
 
-    # Ensure equal length comparison
     min_len = min(len(vec1), len(vec2))
-    if min_len < 8:
+    if min_len < 32:
         return 0.0
 
     v1 = [float(x) for x in vec1[:min_len]]
     v2 = [float(x) for x in vec2[:min_len]]
 
-    # Cosine Similarity
-    dot_product = sum(a * b for a, b in zip(v1, v2))
-    norm_a = math.sqrt(sum(a * a for a in v1))
-    norm_b = math.sqrt(sum(b * b for b in v2))
+    # Mean centering (Zero-mean)
+    mean1 = sum(v1) / float(min_len)
+    mean2 = sum(v2) / float(min_len)
+
+    dot_zm = sum((a - mean1) * (b - mean2) for a, b in zip(v1, v2))
+    norm_a = math.sqrt(sum((a - mean1) ** 2 for a, b in zip(v1, v2)))
+    norm_b = math.sqrt(sum((b - mean2) ** 2 for a, b in zip(v1, v2)))
 
     if norm_a == 0.0 or norm_b == 0.0:
         return 0.0
 
-    cosine_sim = dot_product / (norm_a * norm_b)
-    
-    # Euclidean distance
-    dist = math.sqrt(sum((a - b) ** 2 for a, b in zip(v1, v2)))
-    euclidean_score = max(0.0, 1.0 - (dist / (math.sqrt(min_len) * 2.0)))
+    pearson_corr = dot_zm / (norm_a * norm_b)
+    if pearson_corr <= 0.0:
+        return 0.0
 
-    # Combined confidence score
-    final_score = (max(0.0, cosine_sim) * 0.7 + euclidean_score * 0.3) * 100.0
+    # Mean Absolute Difference
+    avg_diff = sum(abs(a - b) for a, b in zip(v1, v2)) / float(min_len)
+    dist_penalty = max(0.0, 1.0 - avg_diff * 4.0)
+
+    final_score = (pearson_corr * 0.75 + dist_penalty * 0.25) * 100.0
     return round(min(100.0, max(0.0, final_score)), 2)
 
 
@@ -74,47 +79,59 @@ def compute_image_phash_similarity(img_b64_1, img_b64_2):
     except Exception:
         return 0.0
 
-    if len(b1) == 0 or len(b2) == 0:
+    if len(b1) < 100 or len(b2) < 100:
         return 0.0
 
     # Sample structural chunks across the image payload
-    sample_size = 64
+    sample_size = 128
     s1 = [b1[int(i * len(b1) / sample_size)] for i in range(sample_size)]
     s2 = [b2[int(i * len(b2) / sample_size)] for i in range(sample_size)]
 
-    matches = sum(1 for x, y in zip(s1, s2) if abs(x - y) <= 24)
-    return round((matches / float(sample_size)) * 100.0, 2)
+    # Compute correlation over sampled image structure
+    m1 = sum(s1) / float(sample_size)
+    m2 = sum(s2) / float(sample_size)
+    dot = sum((a - m1) * (b - m2) for a, b in zip(s1, s2))
+    n1 = math.sqrt(sum((a - m1) ** 2 for a in s1))
+    n2 = math.sqrt(sum((b - m2) ** 2 for b in s2))
+
+    if n1 == 0.0 or n2 == 0.0:
+        return 0.0
+
+    corr = dot / (n1 * n2)
+    if corr <= 0.0:
+        return 0.0
+    return round(corr * 100.0, 2)
 
 
 def verify_face_match(probe_data, gallery_data, probe_vec=None, gallery_vec=None):
     """
     Verifies 1:1 Face match between live probe face and enrolled gallery face.
     """
-    if not probe_data and not probe_vec:
-        return {"matched": False, "score": 0, "reason": "No probe face data"}
-    if not gallery_data and not gallery_vec:
-        return {"matched": False, "score": 0, "reason": "No enrolled gallery face data"}
+    if not probe_vec or len(probe_vec) < 32:
+        return {"matched": False, "verified": False, "score": 0, "message": "No face detected in camera"}
+    if not gallery_data and (not gallery_vec or len(gallery_vec) < 32):
+        return {"matched": False, "verified": False, "score": 0, "message": "No enrolled gallery face data for this student"}
 
-    # 1. Vector descriptor match (highest precision)
-    if probe_vec and gallery_vec and len(probe_vec) >= 8 and len(gallery_vec) >= 8:
+    # 1. Vector descriptor match (Zero-Mean Pearson correlation)
+    if probe_vec and gallery_vec and len(probe_vec) >= 32 and len(gallery_vec) >= 32:
         score = compute_vector_similarity(probe_vec, gallery_vec)
-        # Face matching threshold: 72%
-        is_matched = score >= 72.0
+        # Strict Face matching threshold: >= 70.0%
+        is_matched = score >= 70.0
         return {
             "matched": is_matched,
-            "status": is_matched,
+            "verified": is_matched,
             "score": score,
             "type": "vector",
             "message": "Face verified successfully" if is_matched else "Face does not match the scanned NFC card"
         }
 
-    # 2. Image signature match
+    # 2. Image signature match fallback
     score = compute_image_phash_similarity(probe_data, gallery_data)
-    is_matched = score >= 70.0
+    is_matched = score >= 72.0
 
     return {
         "matched": is_matched,
-        "status": is_matched,
+        "verified": is_matched,
         "score": score,
         "type": "image",
         "message": "Face verified successfully" if is_matched else "Face does not match the scanned NFC card"

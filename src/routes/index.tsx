@@ -319,6 +319,11 @@ function Kiosk() {
       const probePhoto = canvas.toDataURL("image/jpeg", 0.85);
       const probeVector = extractFaceVector(canvas);
 
+      if (!probeVector || probeVector.length < 32) {
+        setError("❌ No human face detected. Please position your face clearly in the camera frame with proper lighting.");
+        return;
+      }
+
       // 2. Perform 1:1 match against the cardholder's enrolled face photo/vector
       const result = await matchFace(
         probePhoto,
@@ -327,8 +332,9 @@ function Kiosk() {
         detectedStudent.faceDescriptor || []
       );
 
-      if (!result.verified && result.score < 70) {
-        setError(`❌ Face does not match the scanned NFC card (${Math.round(result.score)}% match). Please look directly into the camera.`);
+      // Strict enforcement: Must be verified AND score >= 70%
+      if (!result.verified || result.score < 70) {
+        setError(result.reason || `❌ Face does not match the scanned NFC card (${Math.round(result.score)}% match). Proxy / unauthorized user rejected.`);
         return;
       }
 
