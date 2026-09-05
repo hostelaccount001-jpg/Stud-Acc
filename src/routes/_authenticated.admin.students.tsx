@@ -925,6 +925,11 @@ function BiometricEnroller({
     const photoDataUrl = canvas.toDataURL("image/jpeg", 0.85);
     const descriptor = extractFaceVector(canvas);
 
+    if (!descriptor || descriptor.length < 32) {
+      toast.error("❌ ફેસ બરાબર કેપ્ચર થયો નથી. કૃપા કરીને ચહેરો કેમેરા સામે સીધો રાખો.");
+      return;
+    }
+
     stopCamera();
 
     const newFaceRecord = {
@@ -939,7 +944,7 @@ function BiometricEnroller({
     // Replace existing face record or append
     const otherRecords = records.filter((r) => !("type" in r) || (r as any).type !== "face");
     onChange([...otherRecords, newFaceRecord]);
-    toast.success("✅ Student Face Photo & AI Descriptor enrolled successfully!");
+    toast.success("✅ Student Face & Background-Free Descriptors enrolled successfully!");
   }
 
   function removeFace() {

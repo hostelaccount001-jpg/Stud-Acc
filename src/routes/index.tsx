@@ -124,6 +124,10 @@ function Kiosk() {
   const subtitle = config.data?.settings["kiosk_subtitle"] || "Cashless Service Kiosk";
   const footerText = config.data?.settings["receipt_footer"] || "Jay Swaminarayan";
 
+  const autoScanTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isVerifyingRef = useRef(false);
+  const [liveFaceStatus, setLiveFaceStatus] = useState<string>("Align your face inside the circle");
+
   // Camera Management Helpers
   async function startFaceCamera() {
     try {
@@ -140,6 +144,7 @@ function Kiosk() {
         await videoRef.current.play().catch(() => {});
       }
       setCameraActive(true);
+      setLiveFaceStatus("👀 Looking for face... Align with circle");
     } catch (err) {
       console.warn("Camera start failed:", err);
       setCameraActive(false);
@@ -148,6 +153,11 @@ function Kiosk() {
   }
 
   function stopFaceCamera() {
+    if (autoScanTimerRef.current) {
+      clearInterval(autoScanTimerRef.current);
+      autoScanTimerRef.current = null;
+    }
+    isVerifyingRef.current = false;
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
       mediaStreamRef.current = null;
@@ -174,14 +184,23 @@ function Kiosk() {
     }
   }, [step, detectedStudent]);
 
-  // Auto-start camera when entering biometric step in Face mode
+  // Continuous Automatic Real-Time Face Scanner Loop
   useEffect(() => {
     if (step === "finger" && bioMode === "face" && detectedStudent) {
-      const timer = setTimeout(() => {
-        void startFaceCamera();
-      }, 100);
+      void startFaceCamera();
+
+      // Launch automated face scanner: polls every 350ms
+      autoScanTimerRef.current = setInterval(() => {
+        if (!isVerifyingRef.current && videoRef.current && videoRef.current.videoWidth > 0) {
+          void verifyLiveFace(true);
+        }
+      }, 350);
+
       return () => {
-        clearTimeout(timer);
+        if (autoScanTimerRef.current) {
+          clearInterval(autoScanTimerRef.current);
+          autoScanTimerRef.current = null;
+        }
         stopFaceCamera();
       };
     } else {
@@ -217,6 +236,7 @@ function Kiosk() {
     setStudent(null);
     setNfc("");
     setError("");
+    setLiveFaceStatus("Align your face inside the circle");
     setCustomService(null);
     setCustomAmountStr("0");
     setMatchingFace(false);
@@ -284,11 +304,13 @@ function Kiosk() {
     }
   }
 
-  // STEP 2A: Verify Live Face against Cardholder Enrolled Face
-  async function verifyLiveFace() {
+  // STEP 2A: Continuous Automatic 1:1 Live Face Verification against Enrolled Student
+  async function verifyLiveFace(isAutoScan = false) {
     if (!detectedStudent) {
-      setError("Please tap your NFC card first.");
-      setStep("card");
+      if (!isAutoScan) {
+        setError("Please tap your NFC card first.");
+        setStep("card");
+      }
       return;
     }
 
@@ -298,12 +320,15 @@ function Kiosk() {
     }
 
     if (!videoRef.current || videoRef.current.videoWidth === 0) {
-      setError("Camera is loading. Please position your face and try again.");
+      if (!isAutoScan) {
+        setError("Camera is loading. Please position your face and try again.");
+      }
       return;
     }
 
-    setMatchingFace(true);
-    setError("");
+    if (isVerifyingRef.current) return;
+    isVerifyingRef.current = true;
+    if (!isAutoScan) setMatchingFace(true);
 
     try {
       // 1. Capture live frame to hidden canvas
@@ -320,11 +345,16 @@ function Kiosk() {
       const probeVector = extractFaceVector(canvas);
 
       if (!probeVector || probeVector.length < 32) {
-        setError("❌ No human face detected. Please position your face clearly in the camera frame with proper lighting.");
+        setLiveFaceStatus("🔍 Looking for face... Center your face in the oval");
+        if (!isAutoScan) {
+          setError("❌ No human face detected. Please position your face clearly in the camera frame.");
+        }
         return;
       }
 
-      // 2. Perform 1:1 match against the cardholder's enrolled face photo/vector
+      setLiveFaceStatus("⚡ Analyzing face features...");
+
+      // 2. Perform background-invariant 1:1 match against the cardholder's enrolled face
       const result = await matchFace(
         probePhoto,
         detectedStudent.facePhoto || "",
@@ -332,21 +362,36 @@ function Kiosk() {
         detectedStudent.faceDescriptor || []
       );
 
-      // Strict enforcement: Must be verified AND score >= 70%
+      // Strict security: Must be verified AND score >= 70%
       if (!result.verified || result.score < 70) {
-        setError(result.reason || `❌ Face does not match the scanned NFC card (${Math.round(result.score)}% match). Proxy / unauthorized user rejected.`);
+        const scoreVal = Math.round(result.score);
+        if (scoreVal > 30) {
+          setLiveFaceStatus(`⚠️ Face mismatch (${scoreVal}%). Align strictly.`);
+        } else {
+          setLiveFaceStatus("👀 Align your face with the camera");
+        }
+        if (!isAutoScan) {
+          setError(result.reason || `❌ Face does not match the scanned NFC card (${scoreVal}% match). Proxy / unauthorized user rejected.`);
+        }
         return;
       }
 
-      // Face match succeeded!
+      // Face matched successfully!
+      if (autoScanTimerRef.current) {
+        clearInterval(autoScanTimerRef.current);
+        autoScanTimerRef.current = null;
+      }
       stopFaceCamera();
       setStudent(detectedStudent);
       setSuccessBanner(`✅ Face Verified: Welcome, ${detectedStudent.name}! (${Math.round(result.score)}% Match)`);
       setStep("service");
     } catch (err: any) {
-      setError(err?.message || "Facial recognition error. Please position your face clearly in the camera.");
+      if (!isAutoScan) {
+        setError(err?.message || "Facial recognition error. Please position your face clearly in the camera.");
+      }
     } finally {
-      setMatchingFace(false);
+      isVerifyingRef.current = false;
+      if (!isAutoScan) setMatchingFace(false);
     }
   }
 
@@ -788,12 +833,16 @@ function Kiosk() {
                   )}
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-1.5">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold animate-pulse">
+                    <Sparkles className="size-3.5 text-amber-600" />
+                    <span>{liveFaceStatus}</span>
+                  </div>
                   <h2 className="text-xl md:text-2xl font-serif font-bold text-[#4a1c14]">
                     Look Directly Into Camera
                   </h2>
                   <p className="text-xs md:text-sm text-[#7c533f]">
-                    Align your face within the circle to verify identity against NFC card.
+                    ⚡ <strong>Auto-Verifying:</strong> No button press needed. Just look into the camera!
                   </p>
                 </div>
 
@@ -807,7 +856,7 @@ function Kiosk() {
                 <div className="space-y-2.5">
                   <Button
                     size="lg"
-                    onClick={() => void verifyLiveFace()}
+                    onClick={() => void verifyLiveFace(false)}
                     disabled={matchingFace}
                     className="w-full h-14 text-base font-bold text-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(139,37,0,0.4)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shimmer-btn cursor-pointer bg-gradient-to-r from-[#4a1c14] to-[#8b2500]"
                   >
@@ -819,7 +868,7 @@ function Kiosk() {
                     ) : (
                       <>
                         <ScanFace className="size-5 mr-2 text-emerald-300" />
-                        📸 Verify Face Match
+                        📸 Auto-Scanning Active (Or Click to Force Match)
                       </>
                     )}
                   </Button>

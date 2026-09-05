@@ -13,7 +13,8 @@ export type FaceRecord = {
 };
 
 /**
- * Extracts a normalized 128-dimensional zero-mean facial structure and texture vector.
+ * Extracts a background-invariant, elliptical zero-mean facial gradient & texture vector.
+ * Background (corners/walls) is filtered out with an elliptical weighting window so only face features count.
  */
 export function extractFaceVector(canvas: HTMLCanvasElement): number[] {
   const ctx = canvas.getContext("2d");
@@ -34,57 +35,101 @@ export function extractFaceVector(canvas: HTMLCanvasElement): number[] {
 
   const imgData = tCtx.getImageData(0, 0, 32, 32).data;
   const lumaGrid: number[] = [];
+  const maskGrid: number[] = [];
 
-  // 1. Calculate global average luminance and variance (Face Presence Check)
-  let sumLuma = 0;
-  for (let i = 0; i < 32 * 32; i++) {
-    const r = imgData[i * 4] ?? 0;
-    const g = imgData[i * 4 + 1] ?? 0;
-    const b = imgData[i * 4 + 2] ?? 0;
-    const luma = 0.299 * r + 0.587 * g + 0.114 * b;
-    lumaGrid.push(luma);
-    sumLuma += luma;
-  }
-  const meanLuma = sumLuma / (32 * 32);
+  // Center coordinate of the 32x32 face area
+  const cx = 15.5;
+  const cy = 15.0;
+  const rx = 12.0; // horizontal radius (tight to face)
+  const ry = 14.0; // vertical radius (top of head to chin)
 
-  // Variance check: If screen is blank/solid/dark/washed out (std < 12), reject as non-face
-  let varSum = 0;
-  for (const l of lumaGrid) {
-    varSum += (l - meanLuma) * (l - meanLuma);
-  }
-  const stdLuma = Math.sqrt(varSum / (32 * 32));
-  if (stdLuma < 12) {
-    // Blank or non-face
-    return [];
-  }
+  let weightedLumaSum = 0;
+  let weightSum = 0;
 
-  // 2. 8x8 block zero-mean gradients (64 features) + 8x8 block local texture variance (64 features)
-  const rawVector: number[] = [];
-  for (let by = 0; by < 8; by++) {
-    for (let bx = 0; bx < 8; bx++) {
-      let blockSum = 0;
-      const blockVals: number[] = [];
-      for (let y = by * 4; y < (by + 1) * 4; y++) {
-        for (let x = bx * 4; x < (bx + 1) * 4; x++) {
-          const val = lumaGrid[y * 32 + x] ?? 0;
-          blockVals.push(val);
-          blockSum += val;
-        }
+  for (let y = 0; y < 32; y++) {
+    for (let x = 0; x < 32; x++) {
+      const idx = (y * 32 + x) * 4;
+      const r = imgData[idx] ?? 0;
+      const g = imgData[idx + 1] ?? 0;
+      const b = imgData[idx + 2] ?? 0;
+      const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+      lumaGrid.push(luma);
+
+      // Elliptical distance from center of face
+      const dx = (x - cx) / rx;
+      const dy = (y - cy) / ry;
+      const distSq = dx * dx + dy * dy;
+
+      // Elliptical mask: Inside face = 1..smooth falloff; outside = 0 (Background eliminated!)
+      let w = 0;
+      if (distSq <= 1.0) {
+        w = Math.cos((Math.PI / 2) * Math.sqrt(distSq));
       }
-      const blockMean = blockSum / 16;
-      // Feature 1: Zero-mean spatial block gradient
-      rawVector.push(blockMean - meanLuma);
-
-      // Feature 2: Local texture variance
-      let bVar = 0;
-      for (const v of blockVals) {
-        bVar += (v - blockMean) * (v - blockMean);
-      }
-      rawVector.push(Math.sqrt(bVar / 16));
+      maskGrid.push(w);
+      weightedLumaSum += luma * w;
+      weightSum += w;
     }
   }
 
-  // 3. Normalize vector to unit length
+  if (weightSum === 0) return [];
+  const meanFaceLuma = weightedLumaSum / weightSum;
+
+  // Face Variance Check: If flat, dark, or blank, reject
+  let varSum = 0;
+  for (let i = 0; i < 32 * 32; i++) {
+    const l = lumaGrid[i] ?? 0;
+    const w = maskGrid[i] ?? 0;
+    varSum += w * (l - meanFaceLuma) * (l - meanFaceLuma);
+  }
+  const stdFaceLuma = Math.sqrt(varSum / weightSum);
+  if (stdFaceLuma < 10) {
+    // Blank, dark, or no facial contrast
+    return [];
+  }
+
+  // 8x8 block facial gradient + Sobel edge extraction (Background zeroed out)
+  const rawVector: number[] = [];
+  for (let by = 0; by < 8; by++) {
+    for (let bx = 0; bx < 8; bx++) {
+      let blockWeightedSum = 0;
+      let blockWeight = 0;
+      let gradXSum = 0;
+      let gradYSum = 0;
+
+      for (let y = by * 4; y < (by + 1) * 4; y++) {
+        for (let x = bx * 4; x < (bx + 1) * 4; x++) {
+          const idx = y * 32 + x;
+          const val = lumaGrid[idx] ?? 0;
+          const w = maskGrid[idx] ?? 0;
+
+          blockWeightedSum += val * w;
+          blockWeight += w;
+
+          // Local Sobel gradients for facial contours (eyes, nose, mouth)
+          if (x > 0 && x < 31 && y > 0 && y < 31) {
+            const gx = (lumaGrid[idx + 1] ?? 0) - (lumaGrid[idx - 1] ?? 0);
+            const gy = (lumaGrid[idx + 32] ?? 0) - (lumaGrid[idx - 32] ?? 0);
+            gradXSum += gx * w;
+            gradYSum += gy * w;
+          }
+        }
+      }
+
+      if (blockWeight > 0.05) {
+        const blockMean = blockWeightedSum / blockWeight;
+        rawVector.push(blockMean - meanFaceLuma); // Zero-mean relative luminance
+        rawVector.push(gradXSum / blockWeight);  // Horizontal facial gradient
+        rawVector.push(gradYSum / blockWeight);  // Vertical facial gradient
+      } else {
+        // Background block outside ellipse -> Zeroed out
+        rawVector.push(0);
+        rawVector.push(0);
+        rawVector.push(0);
+      }
+    }
+  }
+
+  // Normalize vector to unit length
   const norm = Math.sqrt(rawVector.reduce((acc, v) => acc + v * v, 0)) || 1;
   return rawVector.map((v) => Number((v / norm).toFixed(5)));
 }
