@@ -813,18 +813,16 @@ function StudentsPage() {
 
       {/* DELETE ALL STUDENTS CONFIRMATION */}
       <AlertDialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
-        <AlertDialogContent className="bg-white border border-[#e5d8c5] shadow-2xl rounded-3xl p-6">
+        <AlertDialogContent className="modal-luxury max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-serif font-bold text-rose-700 flex items-center gap-2">
-              <AlertTriangle className="size-6 text-rose-600" /> Format All Students?
+            <AlertDialogTitle className="font-serif text-xl text-rose-700 flex items-center gap-2">
+              <AlertTriangle className="size-6 text-rose-600" /> DANGER: Delete ALL Students?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-[#7c533f]">
-              This will permanently delete all ({studentList.length}) student records, smart cards and enrolled fingerprints.
-              <br /><br />
-              <strong className="text-rose-700 font-bold">Caution: This action cannot be reversed.</strong>
+            <AlertDialogDescription className="text-xs text-[#7c533f]">
+              This will permanently delete all {studentList.length} students, their NFC card mappings, and all enrolled biometrics from the system.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 pt-4">
+          <AlertDialogFooter className="gap-2 pt-4 border-t border-[#e5d8c5]">
             <AlertDialogCancel className="btn-luxury-secondary px-4 py-2 text-xs">Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="btn-luxury-danger px-4 py-2 text-xs"
@@ -872,27 +870,37 @@ function BiometricEnroller({
   // Start Camera Stream
   async function startCamera() {
     try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
         audio: false,
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
       setCameraOpen(true);
     } catch (err) {
-      toast.error("Unable to access webcam. Please check camera permissions.");
+      toast.error("Unable to access webcam. Please check camera permissions in browser.");
       console.error(err);
     }
   }
+
+  // Ensure stream attaches when cameraOpen mounts the video tag
+  useEffect(() => {
+    if (cameraOpen && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [cameraOpen]);
 
   // Stop Camera Stream
   function stopCamera() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
     }
     setCameraOpen(false);
   }
@@ -1058,13 +1066,19 @@ function BiometricEnroller({
             </div>
           ) : cameraOpen ? (
             <div className="space-y-3">
-              <div className="relative mx-auto size-56 rounded-2xl overflow-hidden border-2 border-[#8b2500] bg-black shadow-lg">
+              <div className="relative mx-auto size-56 sm:size-64 rounded-2xl overflow-hidden border-2 border-[#8b2500] bg-black shadow-lg">
                 <video
-                  ref={videoRef}
+                  ref={(el) => {
+                    videoRef.current = el;
+                    if (el && streamRef.current && el.srcObject !== streamRef.current) {
+                      el.srcObject = streamRef.current;
+                      el.play().catch(() => {});
+                    }
+                  }}
                   autoPlay
                   playsInline
                   muted
-                  className="size-full object-cover"
+                  className="size-full object-cover scale-x-[-1]"
                 />
                 <div className="absolute inset-0 border-2 border-dashed border-amber-400/70 rounded-full m-4 pointer-events-none" />
               </div>

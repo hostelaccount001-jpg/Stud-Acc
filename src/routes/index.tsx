@@ -743,11 +743,17 @@ function Kiosk() {
                 {/* Live Camera Scanner Box */}
                 <div className="relative mx-auto size-56 sm:size-64 rounded-3xl overflow-hidden border-3 border-[#8b2500] bg-black shadow-xl">
                   <video
-                    ref={videoRef}
+                    ref={(el) => {
+                      videoRef.current = el;
+                      if (el && mediaStreamRef.current && el.srcObject !== mediaStreamRef.current) {
+                        el.srcObject = mediaStreamRef.current;
+                        el.play().catch(() => {});
+                      }
+                    }}
                     autoPlay
                     playsInline
                     muted
-                    className="size-full object-cover"
+                    className="size-full object-cover scale-x-[-1]"
                   />
 
                   {/* Facial Scanner Target Reticle & Laser */}
