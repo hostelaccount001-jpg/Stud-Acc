@@ -23,8 +23,22 @@ if "%TARGET_URL%"=="" (
 
 echo Target URL: %TARGET_URL%
 echo.
+
+:: -------------------------------------------------------------------
+:: 2. Auto-Start Python Local Biometric Matcher (Port 8005)
+:: -------------------------------------------------------------------
+netstat -ano | findstr ":8005" >nul
+if errorlevel 1 (
+    echo Starting Gurukul Biometric Matching Engine (Port 8005)...
+    start "Gurukul Biometric Engine" /min python "%~dp0biometric_service.py"
+    timeout /t 1 /nobreak >nul
+) else (
+    echo Gurukul Biometric Engine is already active on Port 8005.
+)
+
+echo.
 echo Launching Google Chrome / Edge in Dedicated POS Kiosk-Printing Mode...
-echo (Silent direct printing + Mantra Biometric RD Bridge enabled)
+echo (Silent direct printing + Local 1:1 Biometric Engine enabled)
 echo.
 
 :: -------------------------------------------------------------------

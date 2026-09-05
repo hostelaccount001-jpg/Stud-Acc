@@ -345,40 +345,74 @@ export async function captureFinger(
   }
 }
 
-/** 1:1 verification of a probe template against stored template. */
+/** 1:1 verification of a probe template against stored template using Mantra Web SDK / local client matcher. */
 export async function matchTemplate(probe: string, gallery: string): Promise<boolean> {
   if (!probe || !gallery) return false;
   if (probe === gallery) return true;
 
-  // Try local Mantra Client Service matcher (ports 8004, 8005, 8003)
-  const portsToTry = [8004, 8005, 8003];
-  for (const p of portsToTry) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 1200);
-      const res = await fetch(`http://127.0.0.1:${p}/mfs100/match`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ProbTemplate: probe, GalleryTemplate: gallery, GallaryTemplate: gallery }),
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
+  const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+  const candidateBases: string[] = [];
 
-      if (res.ok) {
-        const data = (await res.json()) as Record<string, unknown>;
-        console.log(`Mantra Match Result (port ${p}):`, data);
-        if (data["Status"] === true || data["Status"] === "true") {
-          return true;
-        }
-        // If the service returned a response and Status is false, then this finger definitely does not match
-        return false;
-      }
-    } catch {
-      // Port not answering or timed out, try next
+  if (cachedDevice && cachedDevice.type === "CLIENT") {
+    candidateBases.push(cachedDevice.base);
+  }
+
+  for (const p of CLIENT_PORTS) {
+    if (isHttps) {
+      candidateBases.push(`https://127.0.0.1:${p}`);
+      candidateBases.push(`http://127.0.0.1:${p}`);
+    } else {
+      candidateBases.push(`http://127.0.0.1:${p}`);
     }
   }
 
-  // Exact template comparison fallback
+  const uniqueBases = Array.from(new Set(candidateBases));
+  const endpoints = ["/mfs100/match", "/mfs110/match", "/verify-biometric", "/match"];
+
+  for (const base of uniqueBases) {
+    for (const ep of endpoints) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 1200);
+
+        const payload = {
+          ProbTemplate: probe,
+          ProbeTemplate: probe,
+          GalleryTemplate: gallery,
+          GallaryTemplate: gallery,
+        };
+
+        const res = await fetch(`${base}${ep}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+
+        if (res.ok) {
+          const data = (await res.json()) as Record<string, unknown>;
+          console.log(`[Mantra Match] Endpoint ${base}${ep} returned:`, data);
+
+          const status = data["Status"];
+          const score = Number(data["Score"] ?? data["MatchingScore"] ?? 0);
+          const errCode = Number(data["ErrorCode"] ?? -1);
+
+          // Success if Status is explicitly true OR score meets positive matching threshold
+          if (status === true || status === "true" || score >= 100 || (errCode === 0 && score > 0)) {
+            return true;
+          }
+
+          // Service is alive and explicitly reported no match
+          return false;
+        }
+      } catch {
+        // Port or endpoint not responding, continue checking next candidate
+      }
+    }
+  }
+
+  // Fallback direct string comparison if local matching engine is not yet available
   return probe === gallery;
 }
 

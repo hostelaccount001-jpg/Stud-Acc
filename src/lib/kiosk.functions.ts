@@ -88,18 +88,14 @@ export const getKioskConfig = createServerFn({ method: "GET" }).handler(
       supabaseAdmin.from("settings").select("key, value"),
       supabaseAdmin
         .from("students")
-        .select("id, suid, name, class_name, nfc_no, fingerprints, blocked")
+        .select("id, suid, name, class_name, nfc_no")
         .eq("blocked", false),
     ]);
-
-    const enrolled = (students ?? []).filter(
-      (s) => Array.isArray(s.fingerprints) && s.fingerprints.length > 0,
-    );
 
     return {
       services: (services ?? []).map((s) => ({ ...s, price: Number(s.price) })),
       settings: Object.fromEntries((settings ?? []).map((s) => [s.key, s.value])),
-      enrolledStudents: enrolled.map((s) => ({
+      enrolledStudents: (students ?? []).map((s) => ({
         id: s.id,
         suid: s.suid,
         name: s.name,
