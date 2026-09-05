@@ -49,7 +49,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { z } from "zod";
-import { extractFaceVector } from "@/lib/face";
+import { extractFaceVector, toBiometricRecords } from "@/lib/face";
 import {
   captureFinger,
   useMantraDevice,
@@ -71,7 +71,7 @@ export const Route = createFileRoute("/_authenticated/admin/students")({
   head: () => ({
     meta: [
       { title: "Students & Biometrics — Gurukul Kiosk ERP" },
-      { name: "description", content: "Add, edit, or delete students, enrol up to 6 fingerprints on Mantra MFS110, and manage NFC cards." },
+      { name: "description", content: "Add, edit, or delete students, enrol AI face recognition and fingerprints on Mantra MFS110, and manage NFC cards." },
     ],
   }),
   component: StudentsPage,
@@ -98,10 +98,10 @@ function StudentsPage() {
 
   const [search, setSearch] = useState("");
   const [form, setForm] = useState(emptyForm);
-  const [newFingers, setNewFingers] = useState<FingerRecord[]>([]);
+  const [newFingers, setNewFingers] = useState<any[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState(emptyForm);
-  const [editFingers, setEditFingers] = useState<FingerRecord[]>([]);
+  const [editFingers, setEditFingers] = useState<any[]>([]);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -160,7 +160,7 @@ function StudentsPage() {
 
       // Check if any finger was captured via RDSERVICE instead of CLIENT
       for (const f of editFingers) {
-        if (f.template.includes("<?xml") || f.template.includes("PidData")) {
+        if (typeof f?.template === "string" && (f.template.includes("<?xml") || f.template.includes("PidData"))) {
           toast.error("❌ Mantra Client Service missing! Please install/run MFS100 Client Service to register fingerprints. RD Service is not allowed here.");
           return;
         }
@@ -402,7 +402,7 @@ function StudentsPage() {
       class_name: s.class_name ?? "",
       room_no: s.room_no ?? "",
     });
-    setEditFingers(toFingerRecords(s.fingerprints));
+    setEditFingers(toBiometricRecords(s.fingerprints));
   }
 
   const studentList = students.data ?? [];
@@ -664,7 +664,7 @@ function StudentsPage() {
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
-                          onClick={() => handleEditClick(s)}
+                          onClick={() => openEdit(s)}
                           className="p-1.5 rounded-lg text-[#7c533f] hover:text-[#8b2500] hover:bg-[#faf4eb] transition-colors"
                           title="Edit Student Profile & Biometrics"
                         >
@@ -760,8 +760,8 @@ function StudentsPage() {
               </div>
             </div>
 
-            <FingerprintEnroller
-              fingers={editFingers}
+            <BiometricEnroller
+              records={editFingers}
               onChange={setEditFingers}
               nfcNo={editForm.nfc_no}
               suid={editForm.suid}
