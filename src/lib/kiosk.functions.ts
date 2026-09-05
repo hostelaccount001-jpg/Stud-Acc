@@ -50,6 +50,10 @@ export type LookupResult =
       room_no?: string | null;
       fingerprintsCount: number;
       templates: string[];
+      facePhoto?: string | null;
+      faceDescriptor?: number[] | null;
+      hasFace: boolean;
+      hasFingerprint: boolean;
     };
 
 export type PunchResult =
@@ -129,16 +133,25 @@ export const lookupStudentBySuid = createServerFn({ method: "POST" })
 
     const fingerRecords = Array.isArray(student.fingerprints) ? student.fingerprints : [];
     const templates: string[] = [];
-    for (const f of fingerRecords as { template?: string }[]) {
-      if (f && typeof f.template === "string" && f.template.trim().length > 0) {
+    let facePhoto: string | null = null;
+    let faceDescriptor: number[] | null = null;
+
+    for (const f of fingerRecords as { type?: string; photo?: string; descriptor?: number[]; template?: string }[]) {
+      if (f && f.type === "face" && typeof f.photo === "string") {
+        facePhoto = f.photo;
+        if (Array.isArray(f.descriptor)) faceDescriptor = f.descriptor;
+      } else if (f && typeof f.template === "string" && f.template.trim().length > 0) {
         templates.push(f.template.trim());
       }
     }
 
-    if (templates.length === 0) {
+    const hasFace = Boolean(facePhoto);
+    const hasFingerprint = templates.length > 0;
+
+    if (!hasFace && !hasFingerprint) {
       return {
         status: "no_fingerprint",
-        message: "No fingerprints enrolled for this student. Please add finger in Admin Portal first.",
+        message: "No Face or Fingerprint enrolled for this student. Please add biometrics in Admin Portal first.",
       };
     }
 
@@ -152,15 +165,19 @@ export const lookupStudentBySuid = createServerFn({ method: "POST" })
       room_no: student.room_no,
       fingerprintsCount: templates.length,
       templates,
+      facePhoto,
+      faceDescriptor,
+      hasFace,
+      hasFingerprint,
     };
   });
 
-export const getStudentGallery = createServerFn({ method: "POST" })
+export const getStudentGallery = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: students } = await supabaseAdmin
       .from("students")
-      .select("id, suid, name, nfc_no, class_name, room_no, blocked, fingerprints")
+      .select("id, suid, name, class_name, room_no, nfc_no, fingerprints")
       .eq("blocked", false);
 
     const enrolled = (students ?? []).filter(
@@ -217,16 +234,25 @@ export const lookupStudent = createServerFn({ method: "POST" })
 
     const fingerRecords = Array.isArray(student.fingerprints) ? student.fingerprints : [];
     const templates: string[] = [];
-    for (const f of fingerRecords as { template?: string }[]) {
-      if (f && typeof f.template === "string" && f.template.trim().length > 0) {
+    let facePhoto: string | null = null;
+    let faceDescriptor: number[] | null = null;
+
+    for (const f of fingerRecords as { type?: string; photo?: string; descriptor?: number[]; template?: string }[]) {
+      if (f && f.type === "face" && typeof f.photo === "string") {
+        facePhoto = f.photo;
+        if (Array.isArray(f.descriptor)) faceDescriptor = f.descriptor;
+      } else if (f && typeof f.template === "string" && f.template.trim().length > 0) {
         templates.push(f.template.trim());
       }
     }
 
-    if (templates.length === 0) {
+    const hasFace = Boolean(facePhoto);
+    const hasFingerprint = templates.length > 0;
+
+    if (!hasFace && !hasFingerprint) {
       return {
         status: "no_fingerprint",
-        message: "Fingerprint verification failed. Biometrics not enrolled for this card.",
+        message: "Biometrics not enrolled. Please add Face or Fingerprint in Admin first.",
       };
     }
 
@@ -240,6 +266,10 @@ export const lookupStudent = createServerFn({ method: "POST" })
       room_no: student.room_no,
       fingerprintsCount: templates.length,
       templates,
+      facePhoto,
+      faceDescriptor,
+      hasFace,
+      hasFingerprint,
     };
   });
 

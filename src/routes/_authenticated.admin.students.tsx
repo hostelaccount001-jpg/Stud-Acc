@@ -45,8 +45,11 @@ import {
   GraduationCap,
   Sparkles,
   Users,
+  Camera,
+  CheckCircle2,
 } from "lucide-react";
 import { z } from "zod";
+import { extractFaceVector } from "@/lib/face";
 import {
   captureFinger,
   useMantraDevice,
@@ -533,9 +536,9 @@ function StudentsPage() {
             </div>
           </div>
 
-          {/* Mantra Fingerprints Enroller */}
-          <FingerprintEnroller
-            fingers={newFingers}
+          {/* Unified AI Face + Mantra Fingerprint Enroller */}
+          <BiometricEnroller
+            records={newFingers}
             onChange={setNewFingers}
             nfcNo={form.nfc_no}
             suid={form.suid}
@@ -579,7 +582,7 @@ function StudentsPage() {
             <thead>
               <tr className="border-b border-[#e5d8c5] text-left text-xs uppercase tracking-wider text-[#7c533f] font-bold">
                 <th className="py-3 pr-4">SUID</th>
-                <th className="py-3 pr-4">Student Name</th>
+                <th className="py-3 pr-4">Student</th>
                 <th className="py-3 pr-4">NFC Card</th>
                 <th className="py-3 pr-4">Class</th>
                 <th className="py-3 pr-4">Room</th>
@@ -590,7 +593,10 @@ function StudentsPage() {
             </thead>
             <tbody className="divide-y divide-[#e5d8c5]/60 text-xs font-mono">
               {studentList.map((s) => {
-                const fingerCount = toFingerRecords(s.fingerprints).length;
+                const bioRecords = toBiometricRecords(s.fingerprints);
+                const faceRec = bioRecords.find((b: any) => b.type === "face");
+                const fingerCount = bioRecords.filter((b: any) => b.type !== "face").length;
+
                 return (
                   <tr key={s.id} className="table-row-luxury hover:bg-[#faf4eb]">
                     <td className="py-3.5 pr-4 font-bold text-[#8b2500]">
@@ -599,7 +605,20 @@ function StudentsPage() {
                       </span>
                     </td>
                     <td className="py-3.5 pr-4 font-sans font-bold text-sm text-[#2c1810]">
-                      {s.name}
+                      <div className="flex items-center gap-2.5">
+                        {faceRec?.photo ? (
+                          <img
+                            src={faceRec.photo}
+                            alt={s.name}
+                            className="size-8 rounded-full object-cover border-2 border-emerald-500 shadow-sm shrink-0"
+                          />
+                        ) : (
+                          <span className="size-8 rounded-full bg-[#e5d8c5] flex items-center justify-center text-[#7c533f] font-bold shrink-0">
+                            {s.name.charAt(0)}
+                          </span>
+                        )}
+                        <span>{s.name}</span>
+                      </div>
                     </td>
                     <td className="py-3.5 pr-4 text-[#7c533f]">
                       {s.nfc_no}
@@ -611,16 +630,20 @@ function StudentsPage() {
                       {s.room_no ?? "—"}
                     </td>
                     <td className="py-3.5 pr-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${
-                          fingerCount > 0
-                            ? "bg-emerald-500/15 text-emerald-800 border border-emerald-500/30"
-                            : "bg-amber-500/15 text-amber-800 border border-amber-500/30"
-                        }`}
-                      >
-                        <Fingerprint className="size-3.5" />
-                        {fingerCount}/{MAX_FINGERS} Enrolled
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {faceRec && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-800 border border-emerald-500/30">
+                            <Camera className="size-3" /> Face
+                          </span>
+                        )}
+                        {fingerCount > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-800 border border-amber-500/30">
+                            <Fingerprint className="size-3" /> {fingerCount}F
+                          </span>
+                        ) : !faceRec ? (
+                          <span className="text-[10px] text-rose-600 italic">None</span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="py-3.5 pr-4">
                       <div className="flex items-center gap-2">
@@ -638,21 +661,22 @@ function StudentsPage() {
                       </div>
                     </td>
                     <td className="py-3.5 pr-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
-                          onClick={() => openEdit(s)}
-                          className="btn-luxury-secondary px-3 py-1.5 text-xs gap-1"
+                          onClick={() => handleEditClick(s)}
+                          className="p-1.5 rounded-lg text-[#7c533f] hover:text-[#8b2500] hover:bg-[#faf4eb] transition-colors"
+                          title="Edit Student Profile & Biometrics"
                         >
-                          <Pencil className="size-3.5 text-amber-700" /> Edit
+                          <Pencil className="size-4" />
                         </button>
                         <button
                           type="button"
                           onClick={() => setDeleteId(s.id)}
-                          disabled={deleteStudent.isPending}
-                          className="btn-luxury-danger px-3 py-1.5 text-xs gap-1"
+                          className="p-1.5 rounded-lg text-[#7c533f] hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Delete Student"
                         >
-                          <Trash2 className="size-3.5" />
+                          <Trash2 className="size-4" />
                         </button>
                       </div>
                     </td>
@@ -672,26 +696,26 @@ function StudentsPage() {
         </div>
       </Card>
 
-      {/* EDIT STUDENT MODAL DIALOG */}
-      <Dialog open={editId !== null} onOpenChange={(open) => !open && setEditId(null)}>
-        <DialogContent className="max-w-2xl bg-white border border-[#e5d8c5] shadow-2xl rounded-3xl p-6 md:p-8">
+      {/* EDIT STUDENT DIALOG */}
+      <Dialog open={Boolean(editId)} onOpenChange={(open) => !open && setEditId(null)}>
+        <DialogContent className="modal-luxury max-w-xl">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-serif font-bold text-[#4a1c14] flex items-center gap-2">
-              <Pencil className="size-6 text-[#8b2500]" /> Edit Student Record
+            <DialogTitle className="font-serif text-2xl text-[#4a1c14] flex items-center gap-2">
+              <Pencil className="size-5 text-[#8b2500]" /> Edit Student & Biometrics
             </DialogTitle>
             <DialogDescription className="text-xs text-[#7c533f]">
-              Update SUID, name, smart card mapping, and enrolled fingerprints.
+              Update SUID, name, smart card mapping, AI Face photo, and enrolled fingerprints.
             </DialogDescription>
           </DialogHeader>
 
           <form
-            className="space-y-5 py-3"
             onSubmit={(e) => {
               e.preventDefault();
               updateStudent.mutate();
             }}
+            className="space-y-4 pt-2"
           >
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="edit-suid" className="text-xs font-bold text-[#7c533f]">SUID *</Label>
                 <Input
@@ -815,142 +839,336 @@ function StudentsPage() {
   );
 }
 
-function FingerprintEnroller({
-  fingers,
+function BiometricEnroller({
+  records,
   onChange,
   nfcNo,
   suid,
 }: {
-  fingers: FingerRecord[];
-  onChange: (next: FingerRecord[]) => void;
+  records: Array<FingerRecord | { type: "face"; photo: string; descriptor: number[]; enrolled_at: string }>;
+  onChange: (next: any[]) => void;
   nfcNo?: string;
   suid?: string;
 }) {
-  const [scanning, setScanning] = useState(false);
-  const { device, checking, isConnected } = useMantraDevice(3000);
-  const full = fingers.length >= MAX_FINGERS;
+  const [activeTab, setActiveTab] = useState<"face" | "finger">("face");
+  const [scanningFinger, setScanningFinger] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
+  const { device, checking, isConnected } = useMantraDevice(3000);
+
+  // Separate face record and fingerprint records
+  const faceRecord = records.find((r) => "type" in r && r.type === "face") as
+    | { type: "face"; photo: string; descriptor: number[]; enrolled_at: string }
+    | undefined;
+
+  const fingers = records.filter(
+    (r): r is FingerRecord => !("type" in r) || (r as any).type !== "face"
+  );
+
+  const fullFingers = fingers.length >= MAX_FINGERS;
+
+  // Start Camera Stream
+  async function startCamera() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setCameraOpen(true);
+    } catch (err) {
+      toast.error("Unable to access webcam. Please check camera permissions.");
+      console.error(err);
+    }
+  }
+
+  // Stop Camera Stream
+  function stopCamera() {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setCameraOpen(false);
+  }
+
+  // Capture Face Photo & Extract AI Descriptor Vector
+  function captureFace() {
+    if (!videoRef.current) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = 480;
+    canvas.height = 480;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Crop center square
+    const vw = videoRef.current.videoWidth || 640;
+    const vh = videoRef.current.videoHeight || 480;
+    const size = Math.min(vw, vh);
+    const sx = (vw - size) / 2;
+    const sy = (vh - size) / 2;
+
+    ctx.drawImage(videoRef.current, sx, sy, size, size, 0, 0, 480, 480);
+    const photoDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    const descriptor = extractFaceVector(canvas);
+
+    stopCamera();
+
+    const newFaceRecord = {
+      type: "face" as const,
+      photo: photoDataUrl,
+      descriptor,
+      enrolled_at: new Date().toISOString(),
+      suid,
+      nfc_no: nfcNo,
+    };
+
+    // Replace existing face record or append
+    const otherRecords = records.filter((r) => !("type" in r) || (r as any).type !== "face");
+    onChange([...otherRecords, newFaceRecord]);
+    toast.success("✅ Student Face Photo & AI Descriptor enrolled successfully!");
+  }
+
+  function removeFace() {
+    onChange(records.filter((r) => !("type" in r) || (r as any).type !== "face"));
+    toast.info("Face record removed.");
+  }
+
+  // Mantra Fingerprint Scan
   async function handleStartScan() {
     if (!isConnected) {
-      toast.error("Mantra MFS110 scanner is not connected. Please connect USB cable.");
+      toast.error("Mantra scanner is not connected. Please connect USB cable.");
       return;
     }
-    if (full) {
+    if (fullFingers) {
       toast.error(`Maximum limit of ${MAX_FINGERS} fingerprints reached.`);
       return;
     }
-    setScanning(true);
+    setScanningFinger(true);
     try {
       const res = await captureFinger(60, 10);
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      
-      const templateData = res.template || "";
-      toast.success(`Fingerprint captured successfully! (Quality: ${res.quality}%)`);
 
+      const templateData = res.template || "";
       if (fingers.some((f) => f.template === templateData)) {
         toast.error("This fingerprint is already enrolled for this student.");
         return;
       }
       const fingerLabel = `Finger ${fingers.length + 1}`;
-      onChange([
-        ...fingers,
-        {
-          finger: fingerLabel,
-          template: res.template,
-          quality: res.quality,
-          serial: res.serial,
-          nfc_no: nfcNo,
-          suid: suid,
-          enrolled_at: new Date().toISOString(),
-        },
-      ]);
+      const newFingerRecord: FingerRecord = {
+        finger: fingerLabel,
+        template: res.template,
+        quality: res.quality,
+        serial: res.serial,
+        nfc_no: nfcNo,
+        suid: suid,
+        enrolled_at: new Date().toISOString(),
+      };
+
+      onChange([...records, newFingerRecord]);
       toast.success(`${fingerLabel} captured successfully (Quality: ${res.quality}%)`);
     } finally {
-      setScanning(false);
+      setScanningFinger(false);
     }
   }
 
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
   return (
-    <div className="rounded-2xl border-1.5 border-[#e5d8c5] bg-[#faf6ef] p-4 space-y-3">
-      {/* Header with Device Status */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-xs font-bold text-[#4a1c14]">
-          <Fingerprint className="size-4 text-[#8b2500]" /> Biometric Enrollment (Mantra MFS110)
-        </p>
-        <div className="flex items-center gap-3 text-xs">
-          {checking && device === null ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[#7c533f] font-medium border border-[#d8c5af]">
-              <Loader2 className="size-3 animate-spin" /> Checking scanner...
-            </span>
-          ) : isConnected ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 font-bold text-emerald-800 text-[11px]">
-              <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-              Connected (Mantra {device?.model ?? "MFS110"}{device?.serial ? ` · S/N: ${device.serial}` : ""})
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/15 px-2.5 py-1 font-bold text-rose-800 text-[11px]">
-              <span className="size-2 rounded-full bg-rose-500" />
-              Scanner Offline (Mantra MFS110)
-            </span>
-          )}
-          <span className="font-bold text-[#7c533f] text-xs">
-            {fingers.length} of {MAX_FINGERS} Enrolled
-          </span>
-        </div>
-      </div>
-
-      {/* Enrolled Finger Chips and 1-Click Scan Button */}
-      <div className="flex flex-wrap items-center gap-2.5 pt-1">
-        {fingers.map((f, idx) => (
-          <span
-            key={idx}
-            className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold text-[#8b2500] shadow-sm"
-          >
-            <Fingerprint className="size-4 text-[#8b2500] shrink-0" />
-            <span>{f.finger || `Finger ${idx + 1}`}</span>
-            {f.quality > 0 && <span className="text-[10px] opacity-75 font-mono">Q:{f.quality}%</span>}
-            <button
-              type="button"
-              aria-label={`Remove ${f.finger}`}
-              onClick={() => onChange(fingers.filter((_, i) => i !== idx))}
-              className="ml-1 text-[#8b2500]/60 transition-colors hover:text-rose-600 hover:scale-125"
-            >
-              <X className="size-3.5" />
-            </button>
-          </span>
-        ))}
-
-        {!full && (
+    <div className="rounded-2xl border-1.5 border-[#e5d8c5] bg-[#faf6ef] p-4 space-y-4 shadow-sm">
+      {/* Biometric Mode Tabs */}
+      <div className="flex items-center justify-between border-b border-[#e5d8c5] pb-2.5">
+        <div className="flex gap-2">
           <button
             type="button"
-            onClick={handleStartScan}
-            disabled={scanning || !isConnected}
-            className="btn-luxury-primary px-4 py-2 text-xs gap-2 shadow-sm"
+            onClick={() => {
+              stopCamera();
+              setActiveTab("face");
+            }}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "face"
+                ? "bg-[#8b2500] text-white shadow-md"
+                : "bg-white text-[#7c533f] border border-[#d8c5af] hover:bg-[#faf4eb]"
+            }`}
           >
-            {scanning ? (
-              <>
-                <Loader2 className="size-4 animate-spin text-amber-300" />
-                <span>Place Finger on Mantra Scanner...</span>
-              </>
-            ) : (
-              <>
-                <Plus className="size-4" />
-                <Fingerprint className="size-4" />
-                <span>Add Finger</span>
-              </>
-            )}
+            <Camera className="size-3.5" />
+            <span>AI Face Enrollment</span>
+            {faceRecord && <span className="size-2 rounded-full bg-emerald-400" />}
           </button>
-        )}
 
-        {fingers.length === 0 && !scanning && (
-          <p className="text-xs text-[#7c533f] italic py-1 pl-1">
-            Click &quot;+ Add Finger&quot; to scan and enrol student fingerprint.
-          </p>
-        )}
+          <button
+            type="button"
+            onClick={() => {
+              stopCamera();
+              setActiveTab("finger");
+            }}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "finger"
+                ? "bg-[#8b2500] text-white shadow-md"
+                : "bg-white text-[#7c533f] border border-[#d8c5af] hover:bg-[#faf4eb]"
+            }`}
+          >
+            <Fingerprint className="size-3.5" />
+            <span>Mantra Fingerprints ({fingers.length})</span>
+          </button>
+        </div>
+
+        <span className="text-[11px] font-bold text-[#7c533f]">
+          {faceRecord ? "✅ Face Registered" : fingers.length > 0 ? "✅ Fingers Registered" : "⚠️ Biometrics Missing"}
+        </span>
       </div>
+
+      {/* TAB 1: AI FACE ENROLLMENT */}
+      {activeTab === "face" && (
+        <div className="space-y-3">
+          {faceRecord ? (
+            <div className="flex items-center gap-4 p-3 rounded-xl bg-white border border-emerald-500/30 shadow-sm">
+              <img
+                src={faceRecord.photo}
+                alt="Student Face"
+                className="size-16 rounded-full object-cover border-2 border-emerald-500 shadow-md"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                  <CheckCircle2 className="size-4 text-emerald-600" /> Face Registered & AI Descriptors Active
+                </p>
+                <p className="text-[11px] text-[#7c533f] font-mono pt-0.5">
+                  Vector: {faceRecord.descriptor?.length || 64} features extracted
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={removeFace}
+                className="btn-luxury-danger px-3 py-1.5 text-xs gap-1"
+              >
+                <Trash2 className="size-3.5" /> Remove
+              </button>
+            </div>
+          ) : cameraOpen ? (
+            <div className="space-y-3">
+              <div className="relative mx-auto size-56 rounded-2xl overflow-hidden border-2 border-[#8b2500] bg-black shadow-lg">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="size-full object-cover"
+                />
+                <div className="absolute inset-0 border-2 border-dashed border-amber-400/70 rounded-full m-4 pointer-events-none" />
+              </div>
+              <div className="flex justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={captureFace}
+                  className="btn-luxury-primary px-5 py-2 text-xs gap-1.5 shadow-md"
+                >
+                  <Camera className="size-4" /> Capture Photo
+                </button>
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="btn-luxury-secondary px-4 py-2 text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-[#d8c5af] rounded-2xl bg-white text-center space-y-2">
+              <Camera className="size-8 text-[#8b2500]" />
+              <p className="text-xs font-bold text-[#4a1c14]">Enroll Student Face for Instant Kiosk Verification</p>
+              <p className="text-[11px] text-[#7c533f] max-w-sm">
+                Touchless facial verification allows students to authenticate at the kiosk in &lt;1 second without any hardware scanner.
+              </p>
+              <button
+                type="button"
+                onClick={startCamera}
+                className="btn-luxury-primary px-5 py-2 text-xs gap-2 mt-2 shadow-sm"
+              >
+                <Camera className="size-4" /> Open Camera & Capture Face
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: MANTRA FINGERPRINT ENROLLMENT */}
+      {activeTab === "finger" && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-bold text-[#4a1c14] flex items-center gap-1.5">
+              <Fingerprint className="size-4 text-[#8b2500]" /> Mantra Hardware Scanner
+            </p>
+            <div className="flex items-center gap-2 text-xs">
+              {isConnected ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 font-bold text-emerald-800 text-[11px]">
+                  <span className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Mantra {device?.model ?? "MFS110"} Ready
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/15 px-2.5 py-1 font-bold text-rose-800 text-[11px]">
+                  Scanner Offline
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 pt-1">
+            {fingers.map((f, idx) => (
+              <span
+                key={idx}
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold text-[#8b2500] shadow-sm"
+              >
+                <Fingerprint className="size-4 text-[#8b2500] shrink-0" />
+                <span>{f.finger || `Finger ${idx + 1}`}</span>
+                {f.quality > 0 && <span className="text-[10px] opacity-75 font-mono">Q:{f.quality}%</span>}
+                <button
+                  type="button"
+                  aria-label={`Remove ${f.finger}`}
+                  onClick={() => onChange(records.filter((r) => r !== f))}
+                  className="ml-1 text-[#8b2500]/60 transition-colors hover:text-rose-600 hover:scale-125"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </span>
+            ))}
+
+            {!fullFingers && (
+              <button
+                type="button"
+                onClick={handleStartScan}
+                disabled={scanningFinger || !isConnected}
+                className="btn-luxury-primary px-4 py-2 text-xs gap-2 shadow-sm"
+              >
+                {scanningFinger ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin text-amber-300" />
+                    <span>Place Finger on Mantra Scanner...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="size-4" />
+                    <Fingerprint className="size-4" />
+                    <span>Add Finger</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
