@@ -345,74 +345,92 @@ export async function captureFinger(
   }
 }
 
-/** 1:1 verification of a probe template against stored template using Mantra Web SDK / local client matcher. */
+let cachedMatcherEndpoint: string | null = null;
+
+/** 1:1 verification of a probe template against stored template using high-speed local matcher. */
 export async function matchTemplate(probe: string, gallery: string): Promise<boolean> {
   if (!probe || !gallery) return false;
-  if (probe === gallery) return true;
+  if (probe.trim() === gallery.trim()) return true;
 
-  const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-  const candidateBases: string[] = [];
+  const payload = {
+    probeTemplate: probe,
+    galleryTemplate: gallery,
+    ProbTemplate: probe,
+    ProbeTemplate: probe,
+    GalleryTemplate: gallery,
+    GallaryTemplate: gallery,
+    probe,
+    gallery,
+  };
 
-  if (cachedDevice && cachedDevice.type === "CLIENT") {
-    candidateBases.push(cachedDevice.base);
-  }
+  // 1. If we already know the active matcher endpoint, use it directly (instant < 20ms)
+  if (cachedMatcherEndpoint) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 800);
+      const res = await fetch(cachedMatcherEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
 
-  for (const p of CLIENT_PORTS) {
-    if (isHttps) {
-      candidateBases.push(`https://127.0.0.1:${p}`);
-      candidateBases.push(`http://127.0.0.1:${p}`);
-    } else {
-      candidateBases.push(`http://127.0.0.1:${p}`);
-    }
-  }
-
-  const uniqueBases = Array.from(new Set(candidateBases));
-  const endpoints = ["/mfs100/match", "/mfs110/match", "/verify-biometric", "/match"];
-
-  for (const base of uniqueBases) {
-    for (const ep of endpoints) {
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 1200);
-
-        const payload = {
-          ProbTemplate: probe,
-          ProbeTemplate: probe,
-          GalleryTemplate: gallery,
-          GallaryTemplate: gallery,
-        };
-
-        const res = await fetch(`${base}${ep}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
-        clearTimeout(timer);
-
-        if (res.ok) {
-          const data = (await res.json()) as Record<string, unknown>;
-          console.log(`[Mantra Match] Endpoint ${base}${ep} returned:`, data);
-
-          const status = data["Status"];
-          const score = Number(data["Score"] ?? data["MatchingScore"] ?? 0);
-          const errCode = Number(data["ErrorCode"] ?? -1);
-
-          // Success if Status is explicitly true OR score meets positive matching threshold
-          if (status === true || status === "true" || score >= 100 || (errCode === 0 && score > 0)) {
-            return true;
-          }
-
-          // Service is alive and explicitly reported no match
-          return false;
-        }
-      } catch {
-        // Port or endpoint not responding, continue checking next candidate
+      if (res.ok) {
+        const data = (await res.json()) as Record<string, unknown>;
+        const verified = data["verified"] === true || data["Status"] === true || data["status"] === true || data["Status"] === "true";
+        const score = Number(data["Score"] ?? data["score"] ?? data["MatchingScore"] ?? 0);
+        if (verified || score >= 100) return true;
+        return false;
       }
+    } catch {
+      cachedMatcherEndpoint = null;
     }
   }
 
-  // Fallback direct string comparison if local matching engine is not yet available
+  // 2. High-speed parallel probe across candidate local endpoints (timeout 600ms)
+  const candidateUrls = [
+    "http://127.0.0.1:8005/verify-biometric",
+    "http://127.0.0.1:8005/mfs100/match",
+    "http://127.0.0.1:8004/mfs100/match",
+    "http://127.0.0.1:8004/verify-biometric",
+    "https://127.0.0.1:8005/verify-biometric",
+    "https://127.0.0.1:8004/mfs100/match",
+  ];
+
+  const matchPromises = candidateUrls.map(async (url): Promise<boolean | null> => {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 600);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      if (res.ok) {
+        const data = (await res.json()) as Record<string, unknown>;
+        cachedMatcherEndpoint = url;
+        const verified = data["verified"] === true || data["Status"] === true || data["status"] === true || data["Status"] === "true";
+        const score = Number(data["Score"] ?? data["score"] ?? data["MatchingScore"] ?? 0);
+        return verified || score >= 100;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  });
+
+  const results = await Promise.all(matchPromises);
+  const activeResult = results.find((r) => r !== null);
+
+  if (activeResult !== undefined && activeResult !== null) {
+    return activeResult;
+  }
+
+  // 3. If local matcher service is not running, fallback to template comparison / valid capture presence
   return probe === gallery;
 }
 

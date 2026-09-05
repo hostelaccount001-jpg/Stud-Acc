@@ -238,14 +238,10 @@ function Kiosk() {
       setBusy(true);
 
       // Strictly match incoming fingerprint template against the biometric record of the NFC cardholder verified in Step 1
-      let isMatched = false;
-      for (const registeredTemplate of studentTemplates) {
-        const matches = await matchTemplate(capture.template, registeredTemplate);
-        if (matches) {
-          isMatched = true;
-          break;
-        }
-      }
+      const matchResults = await Promise.all(
+        studentTemplates.map((registeredTemplate) => matchTemplate(capture.template, registeredTemplate))
+      );
+      const isMatched = matchResults.some(Boolean);
 
       // If the fingerprint does not match that specific student's registered template,
       // reject the scan, display error message, and prevent proceeding to Step 3.
