@@ -38,7 +38,6 @@ import {
   getStudentGallery
 } from "@/lib/kiosk.functions";
 import { captureFinger, matchTemplate, identify } from "@/lib/mantra";
-import { matchFace, extractFaceVector } from "@/lib/face";
 import { ReceiptSlip, type ReceiptData } from "@/components/ReceiptSlip";
 
 export const Route = createFileRoute("/")({
@@ -47,7 +46,7 @@ export const Route = createFileRoute("/")({
       { title: "Gurukul Kiosk — Tap & Print Terminal" },
       {
         name: "description",
-        content: "Self-service cashless payment terminal with AI Face Recognition, Mantra fingerprint, NFC card and touch keypad amount entry.",
+        content: "Self-service cashless payment terminal with Mantra fingerprint, NFC card and touch keypad amount entry.",
       },
     ],
   }),
@@ -64,9 +63,6 @@ type VerifiedStudent = {
   class_name?: string | null | undefined;
   room_no?: string | null | undefined;
   templates: string[];
-  facePhoto?: string | null | undefined;
-  faceDescriptor?: number[] | null | undefined;
-  hasFace: boolean;
   hasFingerprint: boolean;
 };
 
@@ -86,14 +82,11 @@ type ServiceItem = {
 
 function Kiosk() {
   const [step, setStep] = useState<Step>("card");
-  const [bioMode, setBioMode] = useState<"face" | "finger">("face");
   const [capturedScan, setCapturedScan] = useState<CapturedScan | null>(null);
   const [detectedStudent, setDetectedStudent] = useState<VerifiedStudent | null>(null);
   const [student, setStudent] = useState<VerifiedStudent | null>(null);
   const [nfc, setNfc] = useState("");
   const [scanning, setScanning] = useState(false);
-  const [matchingFace, setMatchingFace] = useState(false);
-  const [cameraActive, setCameraActive] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>("");
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
@@ -106,8 +99,6 @@ function Kiosk() {
   const [customAmountStr, setCustomAmountStr] = useState<string>("0");
 
   const cardInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
 
   const getConfig = useServerFn(getKioskConfig);
   const lookup = useServerFn(lookupStudent);
@@ -124,50 +115,6 @@ function Kiosk() {
   const subtitle = config.data?.settings["kiosk_subtitle"] || "Cashless Service Kiosk";
   const footerText = config.data?.settings["receipt_footer"] || "Jay Swaminarayan";
 
-  const autoScanTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const isVerifyingRef = useRef(false);
-  const [liveFaceStatus, setLiveFaceStatus] = useState<string>("Align your face inside the circle");
-
-  // Camera Management Helpers
-  async function startFaceCamera() {
-    try {
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((t) => t.stop());
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: false,
-      });
-      mediaStreamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
-      }
-      setCameraActive(true);
-      setLiveFaceStatus("👀 Looking for face... Align with circle");
-    } catch (err) {
-      console.warn("Camera start failed:", err);
-      setCameraActive(false);
-      setError("Webcam access failed. Please enable camera permission or switch to Mantra Fingerprint.");
-    }
-  }
-
-  function stopFaceCamera() {
-    if (autoScanTimerRef.current) {
-      clearInterval(autoScanTimerRef.current);
-      autoScanTimerRef.current = null;
-    }
-    isVerifyingRef.current = false;
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
-      mediaStreamRef.current = null;
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setCameraActive(false);
-  }
-
   useEffect(() => {
     if (step === "card") {
       const t = setTimeout(() => cardInputRef.current?.focus(), 150);
@@ -179,34 +126,9 @@ function Kiosk() {
   // Safety fallback: If step is 'finger' but no student has tapped card, revert to 'card'
   useEffect(() => {
     if (step === "finger" && !detectedStudent) {
-      stopFaceCamera();
       setStep("card");
     }
   }, [step, detectedStudent]);
-
-  // Continuous Automatic Real-Time Face Scanner Loop
-  useEffect(() => {
-    if (step === "finger" && bioMode === "face" && detectedStudent) {
-      void startFaceCamera();
-
-      // Launch automated face scanner: polls every 350ms
-      autoScanTimerRef.current = setInterval(() => {
-        if (!isVerifyingRef.current && videoRef.current && videoRef.current.videoWidth > 0) {
-          void verifyLiveFace(true);
-        }
-      }, 350);
-
-      return () => {
-        if (autoScanTimerRef.current) {
-          clearInterval(autoScanTimerRef.current);
-          autoScanTimerRef.current = null;
-        }
-        stopFaceCamera();
-      };
-    } else {
-      stopFaceCamera();
-    }
-  }, [step, bioMode, detectedStudent]);
 
   // Instant Auto-submit NFC card when scanned by card reader on Step 1
   useEffect(() => {
@@ -229,17 +151,14 @@ function Kiosk() {
   }, [successBanner]);
 
   function reset() {
-    stopFaceCamera();
     setStep("card");
     setCapturedScan(null);
     setDetectedStudent(null);
     setStudent(null);
     setNfc("");
     setError("");
-    setLiveFaceStatus("Align your face inside the circle");
     setCustomService(null);
     setCustomAmountStr("0");
-    setMatchingFace(false);
     setScanning(false);
   }
 
@@ -277,121 +196,18 @@ function Kiosk() {
         class_name: result.class_name,
         room_no: result.room_no,
         templates: result.templates || [],
-        facePhoto: result.facePhoto,
-        faceDescriptor: result.faceDescriptor,
-        hasFace: result.hasFace,
         hasFingerprint: result.hasFingerprint,
       };
 
       setDetectedStudent(identified);
       setSuccessBanner(`Card Identified: ${identified.name} (${identified.suid})`);
       
-      // Auto-choose primary biometric: If Face is enrolled, default to Face; else Fingerprint
-      if (identified.hasFace) {
-        setBioMode("face");
-      } else if (identified.hasFingerprint) {
-        setBioMode("finger");
-      } else {
-        setBioMode("face");
-      }
-
       // Advance to Step 2: Biometric Verification
       setStep("finger");
     } catch {
       setError("Error connecting to server. Please tap your card again.");
     } finally {
       setBusy(false);
-    }
-  }
-
-  // STEP 2A: Continuous Automatic 1:1 Live Face Verification against Enrolled Student
-  async function verifyLiveFace(isAutoScan = false) {
-    if (!detectedStudent) {
-      if (!isAutoScan) {
-        setError("Please tap your NFC card first.");
-        setStep("card");
-      }
-      return;
-    }
-
-    if (!detectedStudent.hasFace && !detectedStudent.facePhoto) {
-      setError(`❌ ${detectedStudent.name} નો ફેસ એડમિન પોર્ટલમાં રજીસ્ટર નથી. પહેલા એડમિનમાંથી ફેસ ઉમેરો અથવા નીચેથી ફિંગરપ્રિન્ટ પસંદ કરો.`);
-      return;
-    }
-
-    if (!videoRef.current || videoRef.current.videoWidth === 0) {
-      if (!isAutoScan) {
-        setError("Camera is loading. Please position your face and try again.");
-      }
-      return;
-    }
-
-    if (isVerifyingRef.current) return;
-    isVerifyingRef.current = true;
-    if (!isAutoScan) setMatchingFace(true);
-
-    try {
-      // 1. Capture live frame to hidden canvas
-      const video = videoRef.current;
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth || 320;
-      canvas.height = video.videoHeight || 240;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        throw new Error("Could not process camera image.");
-      }
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const probePhoto = canvas.toDataURL("image/jpeg", 0.85);
-      const probeVector = extractFaceVector(canvas);
-
-      if (!probeVector || probeVector.length < 32) {
-        setLiveFaceStatus("🔍 Looking for face... Center your face in the oval");
-        if (!isAutoScan) {
-          setError("❌ No human face detected. Please position your face clearly in the camera frame.");
-        }
-        return;
-      }
-
-      setLiveFaceStatus("⚡ Analyzing face features...");
-
-      // 2. Perform background-invariant 1:1 match against the cardholder's enrolled face
-      const result = await matchFace(
-        probePhoto,
-        detectedStudent.facePhoto || "",
-        probeVector,
-        detectedStudent.faceDescriptor || []
-      );
-
-      // Strict security: Must be verified AND score >= 70%
-      if (!result.verified || result.score < 70) {
-        const scoreVal = Math.round(result.score);
-        if (scoreVal > 30) {
-          setLiveFaceStatus(`⚠️ Face mismatch (${scoreVal}%). Align strictly.`);
-        } else {
-          setLiveFaceStatus("👀 Align your face with the camera");
-        }
-        if (!isAutoScan) {
-          setError(result.reason || `❌ Face does not match the scanned NFC card (${scoreVal}% match). Proxy / unauthorized user rejected.`);
-        }
-        return;
-      }
-
-      // Face matched successfully!
-      if (autoScanTimerRef.current) {
-        clearInterval(autoScanTimerRef.current);
-        autoScanTimerRef.current = null;
-      }
-      stopFaceCamera();
-      setStudent(detectedStudent);
-      setSuccessBanner(`✅ Face Verified: Welcome, ${detectedStudent.name}! (${Math.round(result.score)}% Match)`);
-      setStep("service");
-    } catch (err: any) {
-      if (!isAutoScan) {
-        setError(err?.message || "Facial recognition error. Please position your face clearly in the camera.");
-      }
-    } finally {
-      isVerifyingRef.current = false;
-      if (!isAutoScan) setMatchingFace(false);
     }
   }
 
@@ -719,23 +535,15 @@ function Kiosk() {
           </Card>
         )}
 
-        {/* STEP 2: Dual Biometric Verification Stage (AI Face Camera & Mantra Fingerprint) */}
+        {/* STEP 2: Biometric Verification Stage (Mantra Fingerprint Sensor) */}
         {step === "finger" && detectedStudent && (
-          <Card className="w-full max-w-xl p-6 md:p-10 text-center bg-white/95 backdrop-blur-md border-2 border-[#e5d8c5] shadow-[0_20px_60px_-15px_rgba(74,28,20,0.15)] rounded-3xl space-y-5 animate-in fade-in zoom-in-95 duration-300">
+          <Card className="w-full max-w-xl p-6 md:p-10 text-center bg-white/95 backdrop-blur-md border-2 border-[#e5d8c5] shadow-[0_20px_60px_-15px_rgba(74,28,20,0.15)] rounded-3xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
             {/* Student Verified Info Banner */}
             <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-300 text-center shadow-sm flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 text-left">
-                {detectedStudent.facePhoto ? (
-                  <img
-                    src={detectedStudent.facePhoto}
-                    alt={detectedStudent.name}
-                    className="size-11 rounded-full object-cover border-2 border-emerald-600 shadow-sm"
-                  />
-                ) : (
-                  <div className="size-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm">
-                    {detectedStudent.name[0]?.toUpperCase()}
-                  </div>
-                )}
+                <div className="size-10 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-sm">
+                  {detectedStudent.name[0]?.toUpperCase()}
+                </div>
                 <div>
                   <div className="text-sm font-bold text-emerald-950">{detectedStudent.name}</div>
                   <div className="text-[11px] text-emerald-700 font-mono">{detectedStudent.suid} • {detectedStudent.class_name || "Gurukul"}</div>
@@ -746,238 +554,76 @@ function Kiosk() {
               </span>
             </div>
 
-            {/* Biometric Method Selector Tabs */}
-            <div className="flex items-center justify-center gap-2 p-1.5 bg-[#f4ece0] rounded-2xl border border-[#e5d8c5]">
-              <button
-                type="button"
-                onClick={() => {
-                  setBioMode("face");
-                  setError("");
-                }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  bioMode === "face"
-                    ? "bg-[#4a1c14] text-white shadow-md"
-                    : "text-[#7c533f] hover:text-[#4a1c14]"
-                }`}
-              >
-                <Camera className="size-4" />
-                <span>AI Face Camera</span>
-                {detectedStudent.hasFace && (
-                  <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-                )}
-              </button>
+            <div className="space-y-4">
+              {/* Live Biometric Scanner Circle with Laser Beam & Pulse Rings */}
+              <div className="relative mx-auto size-36 md:size-40 rounded-full bg-gradient-to-b from-[#fdfbf7] to-[#f4ebe0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner animate-pulse-ring overflow-hidden group">
+                {/* Animated Laser Scanning Beam */}
+                <div className="absolute inset-x-0 top-0 z-10 pointer-events-none animate-laser">
+                  <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-rose-500 to-transparent shadow-[0_0_15px_rgba(244,63,94,0.8)]" />
+                  <div className="h-12 w-full bg-gradient-to-b from-rose-500/20 to-transparent blur-sm" />
+                </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  stopFaceCamera();
-                  setBioMode("finger");
-                  setError("");
-                }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  bioMode === "finger"
-                    ? "bg-[#4a1c14] text-white shadow-md"
-                    : "text-[#7c533f] hover:text-[#4a1c14]"
-                }`}
-              >
-                <Fingerprint className="size-4" />
-                <span>Mantra Fingerprint</span>
-                {detectedStudent.hasFingerprint && (
-                  <span className="size-2 rounded-full bg-emerald-400" />
+                {/* Central Glowing Biometric Icon */}
+                <Fingerprint
+                  className={`size-20 md:size-24 text-[#8b2500] transition-all duration-300 drop-shadow-md ${
+                    scanning ? "scale-110 text-rose-600 animate-pulse" : "group-hover:scale-105"
+                  }`}
+                />
+
+                {scanning && (
+                  <span className="absolute inset-0 rounded-full border-4 border-rose-500 animate-ping opacity-40" />
                 )}
-              </button>
+              </div>
+
+              <div className="space-y-1">
+                <h2 className="text-xl md:text-2xl font-serif font-bold text-[#4a1c14]">
+                  Place Finger on Mantra Sensor
+                </h2>
+                <p className="text-xs md:text-sm text-[#7c533f]">
+                  {scanning
+                    ? "Scanning finger on Mantra sensor now..."
+                    : `Touch the Mantra sensor with your registered finger to confirm presence.`}
+                </p>
+              </div>
+
+              {error && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-center gap-2 text-left animate-in fade-in duration-200">
+                  <AlertCircle className="size-4 shrink-0 text-rose-600" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <div className="space-y-2.5">
+                <Button
+                  size="lg"
+                  onClick={() => void startFingerScan()}
+                  disabled={scanning}
+                  className="w-full h-14 text-base font-bold text-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(139,37,0,0.4)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shimmer-btn cursor-pointer bg-gradient-to-r from-[#4a1c14] to-[#8b2500]"
+                >
+                  {scanning ? (
+                    <>
+                      <Loader2 className="size-5 animate-spin mr-2" />
+                      Scanning Mantra Fingerprint...
+                    </>
+                  ) : (
+                    <>
+                      <Fingerprint className="size-5 mr-2" />
+                      Touch to Scan Fingerprint
+                    </>
+                  )}
+                </Button>
+
+                <div className="flex items-center justify-center px-1">
+                  <button
+                    type="button"
+                    onClick={reset}
+                    className="text-xs text-[#7c533f] hover:text-[#4a1c14] font-medium"
+                  >
+                    Cancel / New Card
+                  </button>
+                </div>
+              </div>
             </div>
-
-            {/* OPTION A: AI Face Camera Live Scan Mode */}
-            {bioMode === "face" && (
-              <div className="space-y-4">
-                {/* Live Camera Scanner Box */}
-                <div className="relative mx-auto size-56 sm:size-64 rounded-3xl overflow-hidden border-3 border-[#8b2500] bg-black shadow-xl">
-                  <video
-                    ref={(el) => {
-                      videoRef.current = el;
-                      if (el && mediaStreamRef.current && el.srcObject !== mediaStreamRef.current) {
-                        el.srcObject = mediaStreamRef.current;
-                        el.play().catch(() => {});
-                      }
-                    }}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="size-full object-cover scale-x-[-1]"
-                  />
-
-                  {/* Facial Scanner Target Reticle & Laser */}
-                  <div className="absolute inset-0 pointer-events-none">
-                    {/* Animated Scanning Laser */}
-                    <div className="absolute inset-x-0 top-0 animate-laser">
-                      <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_rgba(52,211,153,0.9)]" />
-                      <div className="h-16 w-full bg-gradient-to-b from-emerald-500/20 to-transparent blur-sm" />
-                    </div>
-
-                    {/* Circular Face Reticle */}
-                    <div className="absolute inset-0 m-4 rounded-full border-2 border-dashed border-amber-400/80 animate-pulse" />
-                    
-                    {/* Corner Crosshairs */}
-                    <div className="absolute top-3 left-3 size-4 border-t-2 border-l-2 border-emerald-400" />
-                    <div className="absolute top-3 right-3 size-4 border-t-2 border-r-2 border-emerald-400" />
-                    <div className="absolute bottom-3 left-3 size-4 border-b-2 border-l-2 border-emerald-400" />
-                    <div className="absolute bottom-3 right-3 size-4 border-b-2 border-r-2 border-emerald-400" />
-                  </div>
-
-                  {matchingFace && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center text-white space-y-2 animate-in fade-in">
-                      <Loader2 className="size-8 animate-spin text-emerald-400" />
-                      <span className="text-xs font-bold tracking-wider uppercase">Matching Face with AI...</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold animate-pulse">
-                    <Sparkles className="size-3.5 text-amber-600" />
-                    <span>{liveFaceStatus}</span>
-                  </div>
-                  <h2 className="text-xl md:text-2xl font-serif font-bold text-[#4a1c14]">
-                    Look Directly Into Camera
-                  </h2>
-                  <p className="text-xs md:text-sm text-[#7c533f]">
-                    ⚡ <strong>Auto-Verifying:</strong> No button press needed. Just look into the camera!
-                  </p>
-                </div>
-
-                {error && (
-                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-center gap-2 text-left animate-in fade-in duration-200">
-                    <AlertCircle className="size-4 shrink-0 text-rose-600" />
-                    <span>{error}</span>
-                  </div>
-                )}
-
-                <div className="space-y-2.5">
-                  <Button
-                    size="lg"
-                    onClick={() => void verifyLiveFace(false)}
-                    disabled={matchingFace}
-                    className="w-full h-14 text-base font-bold text-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(139,37,0,0.4)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shimmer-btn cursor-pointer bg-gradient-to-r from-[#4a1c14] to-[#8b2500]"
-                  >
-                    {matchingFace ? (
-                      <>
-                        <Loader2 className="size-5 animate-spin mr-2" />
-                        Verifying Face...
-                      </>
-                    ) : (
-                      <>
-                        <ScanFace className="size-5 mr-2 text-emerald-300" />
-                        📸 Auto-Scanning Active (Or Click to Force Match)
-                      </>
-                    )}
-                  </Button>
-
-                  <div className="flex items-center justify-between px-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        stopFaceCamera();
-                        setBioMode("finger");
-                      }}
-                      className="text-xs text-[#8b2500] hover:underline font-bold inline-flex items-center gap-1"
-                    >
-                      <Fingerprint className="size-3.5" /> Use Mantra Fingerprint Instead
-                    </button>
-                    <button
-                      type="button"
-                      onClick={reset}
-                      className="text-xs text-[#7c533f] hover:text-[#4a1c14] font-medium"
-                    >
-                      Cancel / New Card
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* OPTION B: Mantra Fingerprint Scanner Mode */}
-            {bioMode === "finger" && (
-              <div className="space-y-4">
-                {/* Live Biometric Scanner Circle with Laser Beam & Pulse Rings */}
-                <div className="relative mx-auto size-36 md:size-40 rounded-full bg-gradient-to-b from-[#fdfbf7] to-[#f4ebe0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner animate-pulse-ring overflow-hidden group">
-                  {/* Animated Laser Scanning Beam */}
-                  <div className="absolute inset-x-0 top-0 z-10 pointer-events-none animate-laser">
-                    <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-rose-500 to-transparent shadow-[0_0_15px_rgba(244,63,94,0.8)]" />
-                    <div className="h-12 w-full bg-gradient-to-b from-rose-500/20 to-transparent blur-sm" />
-                  </div>
-
-                  {/* Central Glowing Biometric Icon */}
-                  <Fingerprint
-                    className={`size-20 md:size-24 text-[#8b2500] transition-all duration-300 drop-shadow-md ${
-                      scanning ? "scale-110 text-rose-600 animate-pulse" : "group-hover:scale-105"
-                    }`}
-                  />
-
-                  {scanning && (
-                    <span className="absolute inset-0 rounded-full border-4 border-rose-500 animate-ping opacity-40" />
-                  )}
-                </div>
-
-                <div className="space-y-1">
-                  <h2 className="text-xl md:text-2xl font-serif font-bold text-[#4a1c14]">
-                    Place Finger on Mantra Sensor
-                  </h2>
-                  <p className="text-xs md:text-sm text-[#7c533f]">
-                    {scanning
-                      ? "Scanning finger on Mantra sensor now..."
-                      : `Touch the Mantra sensor with your registered finger to confirm presence.`}
-                  </p>
-                </div>
-
-                {error && (
-                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-center gap-2 text-left animate-in fade-in duration-200">
-                    <AlertCircle className="size-4 shrink-0 text-rose-600" />
-                    <span>{error}</span>
-                  </div>
-                )}
-
-                <div className="space-y-2.5">
-                  <Button
-                    size="lg"
-                    onClick={() => void startFingerScan()}
-                    disabled={scanning}
-                    className="w-full h-14 text-base font-bold text-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(139,37,0,0.4)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shimmer-btn cursor-pointer bg-gradient-to-r from-[#4a1c14] to-[#8b2500]"
-                  >
-                    {scanning ? (
-                      <>
-                        <Loader2 className="size-5 animate-spin mr-2" />
-                        Scanning Mantra Fingerprint...
-                      </>
-                    ) : (
-                      <>
-                        <Fingerprint className="size-5 mr-2" />
-                        Touch to Scan Fingerprint
-                      </>
-                    )}
-                  </Button>
-
-                  <div className="flex items-center justify-between px-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBioMode("face");
-                      }}
-                      className="text-xs text-[#8b2500] hover:underline font-bold inline-flex items-center gap-1"
-                    >
-                      <Camera className="size-3.5" /> Switch to AI Face Camera
-                    </button>
-                    <button
-                      type="button"
-                      onClick={reset}
-                      className="text-xs text-[#7c533f] hover:text-[#4a1c14] font-medium"
-                    >
-                      Cancel / New Card
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </Card>
         )}
 
@@ -987,17 +633,9 @@ function Kiosk() {
             {/* Verified Student Banner */}
             <Card className="p-5 bg-white/90 backdrop-blur-sm border-[#e5d8c5] shadow-lg rounded-2xl flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                {student.facePhoto ? (
-                  <img
-                    src={student.facePhoto}
-                    alt={student.name}
-                    className="size-14 rounded-full object-cover border-2 border-emerald-500 shadow-md"
-                  />
-                ) : (
-                  <div className="size-14 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 flex items-center justify-center font-serif font-bold text-xl">
-                    {student.name[0]?.toUpperCase()}
-                  </div>
-                )}
+                <div className="size-14 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 flex items-center justify-center font-serif font-bold text-xl">
+                  {student.name[0]?.toUpperCase()}
+                </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-xl font-bold text-[#4a1c14]">{student.name}</h3>
