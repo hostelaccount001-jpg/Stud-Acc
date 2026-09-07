@@ -38,7 +38,7 @@ export type FaceDetectionResult = {
 };
 
 /**
- * Validates whether the canvas contains an actual living human face (versus blank wall, dark screen, dummy object).
+ * Validates whether the canvas contains an actual living human face (versus blank wall, ceiling, wire, dummy object).
  */
 export function detectHumanFace(canvas: HTMLCanvasElement): FaceDetectionResult {
   const ctx = canvas.getContext("2d");
@@ -66,11 +66,11 @@ export function detectHumanFace(canvas: HTMLCanvasElement): FaceDetectionResult 
     lumaGrid[i] = 0.299 * r + 0.587 * g + 0.114 * b;
   }
 
-  // Elliptical Face Mask
+  // Elliptical Face Mask (Center 64x64)
   const cx = 31.5;
   const cy = 31.5;
-  const rx = 24.0;
-  const ry = 28.0;
+  const rx = 22.0;
+  const ry = 26.0;
 
   let faceLumaSum = 0;
   let faceCount = 0;
@@ -80,11 +80,8 @@ export function detectHumanFace(canvas: HTMLCanvasElement): FaceDetectionResult 
       const idx = y * 64 + x;
       const dx = (x - cx) / rx;
       const dy = (y - cy) / ry;
-      const distSq = dx * dx + dy * dy;
-      const luma = lumaGrid[idx] ?? 0;
-
-      if (distSq <= 1.0) {
-        faceLumaSum += luma;
+      if (dx * dx + dy * dy <= 1.0) {
+        faceLumaSum += lumaGrid[idx] ?? 0;
         faceCount++;
       }
     }
@@ -93,57 +90,156 @@ export function detectHumanFace(canvas: HTMLCanvasElement): FaceDetectionResult 
   if (faceCount === 0) return { isHumanFace: false, confidence: 0, quality: 0, reason: "No face area" };
   const meanFaceLuma = faceLumaSum / faceCount;
 
-  // 1. Contrast & Variance Validation across Face Oval
+  // 1. Overall Contrast across Face Oval
   let varSum = 0;
   for (let y = 0; y < 64; y++) {
     for (let x = 0; x < 64; x++) {
       const dx = (x - cx) / rx;
       const dy = (y - cy) / ry;
       if (dx * dx + dy * dy <= 1.0) {
-        const luma = lumaGrid[y * 64 + x] ?? 0;
-        varSum += (luma - meanFaceLuma) * (luma - meanFaceLuma);
+        const l = lumaGrid[y * 64 + x] ?? 0;
+        varSum += (l - meanFaceLuma) * (l - meanFaceLuma);
       }
     }
   }
   const stdFaceLuma = Math.sqrt(varSum / faceCount);
 
-  // Reject completely pitch black, washed out white, or flat uniform wall / dummy surface
-  if (stdFaceLuma < 4.0 || meanFaceLuma < 8.0 || meanFaceLuma > 248.0) {
+  // Reject uniform walls, dark screens, or overexposed ceilings
+  if (stdFaceLuma < 8.0 || meanFaceLuma < 15.0 || meanFaceLuma > 240.0) {
     return {
       isHumanFace: false,
       confidence: 0,
       quality: Math.round(stdFaceLuma),
-      reason: "No face detected in camera view"
+      reason: "No human face in camera view"
     };
   }
 
-  // 2. Extract 128D Facial Landmark Vector
+  // 2. Anatomical Region Luminance Analysis (Forehead vs Eyes vs Mouth)
+  // Forehead: y: 10..18, x: 20..44
+  let foreheadSum = 0, foreheadCount = 0;
+  for (let y = 10; y <= 18; y++) {
+    for (let x = 20; x <= 44; x++) {
+      foreheadSum += lumaGrid[y * 64 + x] ?? 0;
+      foreheadCount++;
+    }
+  }
+  const foreheadAvg = foreheadSum / (foreheadCount || 1);
+
+  // Eyes region (Left eye + Right eye sockets): y: 20..32, x: 14..50
+  let eyesSum = 0, eyesCount = 0;
+  let leftEyeSum = 0, leftEyeCount = 0;
+  let rightEyeSum = 0, rightEyeCount = 0;
+  for (let y = 20; y <= 32; y++) {
+    for (let x = 14; x <= 28; x++) {
+      const val = lumaGrid[y * 64 + x] ?? 0;
+      leftEyeSum += val;
+      leftEyeCount++;
+      eyesSum += val;
+      eyesCount++;
+    }
+    for (let x = 36; x <= 50; x++) {
+      const val = lumaGrid[y * 64 + x] ?? 0;
+      rightEyeSum += val;
+      rightEyeCount++;
+      eyesSum += val;
+      eyesCount++;
+    }
+  }
+  const eyesAvg = eyesSum / (eyesCount || 1);
+  const leftEyeAvg = leftEyeSum / (leftEyeCount || 1);
+  const rightEyeAvg = rightEyeSum / (rightEyeCount || 1);
+
+  // Nose bridge / cheeks region: y: 30..42, x: 26..38
+  let noseSum = 0, noseCount = 0;
+  for (let y = 30; y <= 42; y++) {
+    for (let x = 26; x <= 38; x++) {
+      noseSum += lumaGrid[y * 64 + x] ?? 0;
+      noseCount++;
+    }
+  }
+  const noseAvg = noseSum / (noseCount || 1);
+
+  // Mouth/Chin region: y: 46..56, x: 20..44
+  let mouthSum = 0, mouthCount = 0;
+  for (let y = 46; y <= 56; y++) {
+    for (let x = 20; x <= 44; x++) {
+      mouthSum += lumaGrid[y * 64 + x] ?? 0;
+      mouthCount++;
+    }
+  }
+  const mouthAvg = mouthSum / (mouthCount || 1);
+
+  // In all real human faces, eye sockets are darker than the forehead/nose bridge
+  // In a blank ceiling with a line, foreheadAvg and eyesAvg are almost identical or random
+  const eyeForeheadDiff = Math.abs(foreheadAvg - eyesAvg);
+  const noseEyeDiff = Math.abs(noseAvg - eyesAvg);
+  const hasFaceTZone = (eyeForeheadDiff >= 3.0 || noseEyeDiff >= 3.0 || Math.abs(mouthAvg - noseAvg) >= 3.0);
+
+  // 3. Bilateral Symmetry Analysis (Left face half vs Horizontally Flipped Right face half)
+  let symDiffSum = 0;
+  let symCount = 0;
+  for (let y = 16; y <= 52; y++) {
+    for (let x = 4; x <= 30; x++) {
+      const leftVal = lumaGrid[y * 64 + (32 - x)] ?? 0;
+      const rightVal = lumaGrid[y * 64 + (31 + x)] ?? 0;
+      symDiffSum += Math.abs(leftVal - rightVal);
+      symCount++;
+    }
+  }
+  const avgBilateralDiff = symDiffSum / (symCount || 1);
+  const symmetryScore = Math.max(0, 1.0 - avgBilateralDiff / 45.0);
+
+  // 4. Multi-Directional Gradient Entropy Check (Rejects single lines/wires on ceilings)
+  const angleBins = [0, 0, 0, 0]; // 0 deg, 45 deg, 90 deg, 135 deg
+  let totalEdges = 0;
+
+  for (let y = 14; y < 50; y++) {
+    for (let x = 14; x < 50; x++) {
+      const idx = y * 64 + x;
+      const gx = (lumaGrid[idx + 1] ?? 0) - (lumaGrid[idx - 1] ?? 0);
+      const gy = (lumaGrid[idx + 64] ?? 0) - (lumaGrid[idx - 64] ?? 0);
+      const mag = Math.sqrt(gx * gx + gy * gy);
+
+      if (mag > 12.0) {
+        let angle = Math.atan2(gy, gx) * (180 / Math.PI);
+        if (angle < 0) angle += 180;
+        const bin = Math.min(3, Math.floor(angle / 45));
+        angleBins[bin] = (angleBins[bin] ?? 0) + 1;
+        totalEdges++;
+      }
+    }
+  }
+
+  // Real faces have edges in multiple directions (eyes horizontal, nose vertical, jaw diagonal)
+  // A wire/line has 90%+ edges in only 1 bin
+  const nonZeroBins = angleBins.filter((count) => count >= 3).length;
+  const maxBinCount = Math.max(...angleBins);
+  const singleDirectionDominance = totalEdges > 0 ? maxBinCount / totalEdges : 1.0;
+
+  // Strict Rejection of dummy/ceiling/wires
+  if (totalEdges < 18 || nonZeroBins < 2 || singleDirectionDominance > 0.85 || !hasFaceTZone || symmetryScore < 0.35) {
+    return {
+      isHumanFace: false,
+      confidence: Math.round(symmetryScore * 30),
+      quality: Math.round(stdFaceLuma),
+      reason: "No facial landmarks detected"
+    };
+  }
+
+  // 5. Extract 128D Vector & Final Score
   const vector = extractFaceVector(canvas);
   if (vector.length < 32) {
     return { isHumanFace: false, confidence: 0, quality: 0, reason: "Insufficient facial geometry" };
   }
 
-  // 3. Active feature energy check
-  const activeFeatures = vector.filter((v) => Math.abs(v) > 0.015).length;
-  const featureRichness = activeFeatures / vector.length;
-
-  if (featureRichness < 0.15) {
-    return {
-      isHumanFace: false,
-      confidence: Math.round(featureRichness * 100),
-      quality: Math.round(stdFaceLuma),
-      reason: "Object lacks facial contours"
-    };
-  }
-
-  const confidenceScore = Math.min(100, Math.round((featureRichness * 60 + Math.min(40, stdFaceLuma * 3))));
-  const isHuman = confidenceScore >= 40 && stdFaceLuma >= 4.5;
+  const confidenceScore = Math.min(100, Math.round((symmetryScore * 50 + (nonZeroBins / 4.0) * 30 + Math.min(20, stdFaceLuma * 1.5))));
+  const isHuman = confidenceScore >= 55;
 
   return {
     isHumanFace: isHuman,
     confidence: confidenceScore,
-    quality: Math.min(100, Math.round(stdFaceLuma * 3.5)),
-    reason: isHuman ? "Human face detected" : "Looking for face...",
+    quality: Math.min(100, Math.round(stdFaceLuma * 3.0)),
+    reason: isHuman ? "Human face verified" : "Looking for human face...",
     descriptor: isHuman ? vector : undefined
   };
 }
