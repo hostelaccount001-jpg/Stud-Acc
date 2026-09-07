@@ -95,12 +95,6 @@ function Kiosk() {
   const [error, setError] = useState<string>("");
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
   const [faceScanning, setFaceScanning] = useState(false);
-  const [faceDetectionStatus, setFaceDetectionStatus] = useState<{
-    isHumanFace: boolean;
-    confidence: number;
-    quality: number;
-    reason?: string;
-  }>({ isHumanFace: false, confidence: 0, quality: 0 });
 
   // Background printing receipt container
   const [activeReceipt, setActiveReceipt] = useState<ReceiptData | null>(null);
@@ -156,7 +150,6 @@ function Kiosk() {
       faceIntervalRef.current = null;
     }
     setFaceScanning(false);
-    setFaceDetectionStatus({ isHumanFace: false, confidence: 0, quality: 0 });
   }
 
   // Automatic Face Verifier Loop when Step 2 Face mode is active
@@ -194,19 +187,10 @@ function Kiosk() {
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      // 1. Anti-Dummy / Liveness Validation (Rejects paper, wall, dark, or dummy objects)
-      const detection = detectHumanFace(canvas);
-      setFaceDetectionStatus(detection);
-
-      if (!detection.isHumanFace || detection.confidence < 60) {
-        // Not a real human face or poorly positioned
-        return;
-      }
+      const probeVector = extractFaceVector(canvas);
+      if (!probeVector || probeVector.length < 32) return;
 
       setFaceScanning(true);
-      const probeVector = detection.descriptor || extractFaceVector(canvas);
-      if (probeVector.length < 32) return;
-
       const probePhoto = canvas.toDataURL("image/jpeg", 0.8);
 
       const res = await matchFace(
@@ -364,7 +348,7 @@ function Kiosk() {
       // Check that this student has registered biometric templates from Step 1
       const studentTemplates = detectedStudent.templates || [];
       if (studentTemplates.length === 0) {
-        setError(`❌ ${detectedStudent.name} ની ફિંગરપ્રિન્ટ એડમિન પોર્ટલમાં રજીસ્ટર કરેલી નથી. પહેલા એડમિનમાંથી ફિંગર ઉમેરો અથવા ઉપરથી AI Face પસંદ કરો.`);
+        setError(`❌ Fingerprint is not registered for ${detectedStudent.name} in Admin Portal. Please register fingerprint or switch to Face mode above.`);
         return;
       }
 
@@ -699,7 +683,7 @@ function Kiosk() {
                     : "text-[#7c533f] hover:bg-[#ebdcc8]"
                 }`}
               >
-                <Camera className="size-4" /> Scan Face (AI કેમેરો)
+                <Camera className="size-4" /> Scan Face (AI Camera)
               </button>
 
               <button

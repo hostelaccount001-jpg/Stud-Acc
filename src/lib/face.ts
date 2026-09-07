@@ -73,9 +73,7 @@ export function detectHumanFace(canvas: HTMLCanvasElement): FaceDetectionResult 
   const ry = 28.0;
 
   let faceLumaSum = 0;
-  let bgLumaSum = 0;
   let faceCount = 0;
-  let bgCount = 0;
 
   for (let y = 0; y < 64; y++) {
     for (let x = 0; x < 64; x++) {
@@ -88,9 +86,6 @@ export function detectHumanFace(canvas: HTMLCanvasElement): FaceDetectionResult 
       if (distSq <= 1.0) {
         faceLumaSum += luma;
         faceCount++;
-      } else {
-        bgLumaSum += luma;
-        bgCount++;
       }
     }
   }
@@ -98,7 +93,7 @@ export function detectHumanFace(canvas: HTMLCanvasElement): FaceDetectionResult 
   if (faceCount === 0) return { isHumanFace: false, confidence: 0, quality: 0, reason: "No face area" };
   const meanFaceLuma = faceLumaSum / faceCount;
 
-  // 1. Contrast & Variance Validation
+  // 1. Contrast & Variance Validation across Face Oval
   let varSum = 0;
   for (let y = 0; y < 64; y++) {
     for (let x = 0; x < 64; x++) {
@@ -112,72 +107,43 @@ export function detectHumanFace(canvas: HTMLCanvasElement): FaceDetectionResult 
   }
   const stdFaceLuma = Math.sqrt(varSum / faceCount);
 
-  // Rejection 1: Blank wall / completely black / flat white surface
-  if (stdFaceLuma < 8.0 || meanFaceLuma < 15.0 || meanFaceLuma > 245.0) {
+  // Reject completely pitch black, washed out white, or flat uniform wall / dummy surface
+  if (stdFaceLuma < 4.0 || meanFaceLuma < 8.0 || meanFaceLuma > 248.0) {
     return {
       isHumanFace: false,
       confidence: 0,
       quality: Math.round(stdFaceLuma),
-      reason: "No facial features detected. Please place a person's face inside the oval."
+      reason: "No face detected in camera view"
     };
   }
 
-  // 2. Eye Sockets & Brow Region Analysis (Upper Half)
-  // Left eye region (x: 18-28, y: 18-30), Right eye region (x: 36-46, y: 18-30)
-  let leftEyeSum = 0;
-  let rightEyeSum = 0;
-  let noseBridgeSum = 0;
-  let mouthSum = 0;
-
-  for (let y = 20; y <= 28; y++) {
-    for (let x = 18; x <= 27; x++) leftEyeSum += lumaGrid[y * 64 + x] ?? 0;
-    for (let x = 37; x <= 46; x++) rightEyeSum += lumaGrid[y * 64 + x] ?? 0;
-    for (let x = 28; x <= 36; x++) noseBridgeSum += lumaGrid[y * 64 + x] ?? 0;
-  }
-  const leftEyeAvg = leftEyeSum / (9 * 10);
-  const rightEyeAvg = rightEyeSum / (9 * 10);
-  const noseBridgeAvg = noseBridgeSum / (9 * 9);
-
-  // Mouth Region (y: 44-52, x: 24-40)
-  for (let y = 44; y <= 52; y++) {
-    for (let x = 24; x <= 40; x++) mouthSum += lumaGrid[y * 64 + x] ?? 0;
-  }
-  const mouthAvg = mouthSum / (9 * 17);
-
-  // 3. Bilateral Symmetry Check (Left eye vs Right eye balance)
-  const eyeDiff = Math.abs(leftEyeAvg - rightEyeAvg);
-  const eyeSymmetryScore = Math.max(0, 1.0 - eyeDiff / 40.0);
-
-  // 4. Gradient Contour Structure
+  // 2. Extract 128D Facial Landmark Vector
   const vector = extractFaceVector(canvas);
   if (vector.length < 32) {
     return { isHumanFace: false, confidence: 0, quality: 0, reason: "Insufficient facial geometry" };
   }
 
-  // Non-zero feature count in descriptor (a dummy or flat object will have many near-zero values)
-  const activeFeatures = vector.filter((v) => Math.abs(v) > 0.03).length;
-  const featureRichness = activeFeatures / vector.length; // usually > 0.4 for real face
+  // 3. Active feature energy check
+  const activeFeatures = vector.filter((v) => Math.abs(v) > 0.015).length;
+  const featureRichness = activeFeatures / vector.length;
 
-  if (featureRichness < 0.28) {
+  if (featureRichness < 0.15) {
     return {
       isHumanFace: false,
       confidence: Math.round(featureRichness * 100),
       quality: Math.round(stdFaceLuma),
-      reason: "Object lacks human facial contours. Please ensure a real person is looking at camera."
+      reason: "Object lacks facial contours"
     };
   }
 
-  const confidenceScore = Math.round(
-    Math.min(100, (eyeSymmetryScore * 0.4 + featureRichness * 0.6) * 100)
-  );
-
-  const isHuman = confidenceScore >= 60 && stdFaceLuma >= 8.5;
+  const confidenceScore = Math.min(100, Math.round((featureRichness * 60 + Math.min(40, stdFaceLuma * 3))));
+  const isHuman = confidenceScore >= 40 && stdFaceLuma >= 4.5;
 
   return {
     isHumanFace: isHuman,
     confidence: confidenceScore,
-    quality: Math.round(stdFaceLuma * 2.5),
-    reason: isHuman ? "Human face detected" : "Please align face inside the oval guide",
+    quality: Math.min(100, Math.round(stdFaceLuma * 3.5)),
+    reason: isHuman ? "Human face detected" : "Looking for face...",
     descriptor: isHuman ? vector : undefined
   };
 }
