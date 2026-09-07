@@ -404,6 +404,9 @@ export type Face512DVerifyResult = {
   message: string;
 };
 
+// Circuit breaker for local python server
+let faceServerOfflineUntil = 0;
+
 /**
  * Extract a 512D ArcFace embedding from an image via the Python InsightFace server.
  * Returns the embedding, detection confidence, and cropped face.
@@ -411,9 +414,12 @@ export type Face512DVerifyResult = {
 export async function extractFace512D(
   imageDataUrl: string
 ): Promise<Face512DExtractResult> {
+  if (Date.now() < faceServerOfflineUntil) {
+    return { success: false, embedding: [], det_score: 0, face_crop_b64: "", error: "Server offline" };
+  }
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3000);
+    const timer = setTimeout(() => controller.abort(), 800);
 
     const res = await fetch(`${FACE_API_BASE}/extract`, {
       method: "POST",
@@ -430,6 +436,7 @@ export async function extractFace512D(
     const data = await res.json() as Face512DExtractResult;
     return data;
   } catch {
+    faceServerOfflineUntil = Date.now() + 5000; // back off for 5s
     return { success: false, embedding: [], det_score: 0, face_crop_b64: "", error: "InsightFace server unreachable" };
   }
 }
@@ -442,9 +449,12 @@ export async function verifyFace512D(
   galleryEmbedding: number[],
   threshold: number = 0.45
 ): Promise<Face512DVerifyResult> {
+  if (Date.now() < faceServerOfflineUntil) {
+    return { verified: false, score: 0, should_update: false, message: "Server offline" };
+  }
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 2000);
+    const timer = setTimeout(() => controller.abort(), 800);
 
     const res = await fetch(`${FACE_API_BASE}/verify`, {
       method: "POST",
@@ -465,6 +475,7 @@ export async function verifyFace512D(
     const data = await res.json() as Face512DVerifyResult;
     return data;
   } catch {
+    faceServerOfflineUntil = Date.now() + 5000;
     return { verified: false, score: 0, should_update: false, message: "InsightFace server unreachable" };
   }
 }

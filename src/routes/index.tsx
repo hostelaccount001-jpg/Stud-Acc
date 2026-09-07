@@ -195,15 +195,17 @@ function Kiosk() {
       setFaceScanning(true);
       const probePhoto = canvas.toDataURL("image/jpeg", 0.8);
 
-      // Try 512D InsightFace server extraction (production-grade)
+      // Try 512D InsightFace server extraction if enrolled student has 512D descriptor
       let probeVector512: number[] | undefined;
-      try {
-        const extract512 = await extractFace512D(probePhoto);
-        if (extract512.success && extract512.embedding.length === 512) {
-          probeVector512 = extract512.embedding;
+      if (detectedStudent.faceDescriptor512 && detectedStudent.faceDescriptor512.length === 512) {
+        try {
+          const extract512 = await extractFace512D(probePhoto);
+          if (extract512.success && extract512.embedding.length === 512) {
+            probeVector512 = extract512.embedding;
+          }
+        } catch {
+          // 512D unavailable — will fall back to 128D
         }
-      } catch {
-        // 512D unavailable — will fall back to 128D
       }
 
       const res = await matchFace(
