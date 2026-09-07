@@ -13,7 +13,8 @@
 export type FaceRecord = {
   type: "face";
   photo: string; // base64 JPEG data URL
-  descriptor: number[]; // 128-dimensional biometric feature vector
+  descriptor: number[]; // 128-dimensional biometric feature vector (legacy)
+  descriptor512?: number[]; // 512-dimensional InsightFace ArcFace embedding (production)
   enrolled_at: string;
   suid?: string;
   nfc_no?: string;
@@ -382,23 +383,129 @@ export function compareFaceVectors(v1: number[], v2: number[]): number {
   return Math.round(Math.max(0, Math.min(100, finalScore)));
 }
 
+// ---------------------------------------------------------------------------
+// InsightFace 512D Server Pipeline (Production-Grade)
+// ---------------------------------------------------------------------------
+
+const FACE_API_BASE = "http://127.0.0.1:8000/api/face";
+
+export type Face512DExtractResult = {
+  success: boolean;
+  embedding: number[];
+  det_score: number;
+  face_crop_b64: string;
+  error?: string | null;
+};
+
+export type Face512DVerifyResult = {
+  verified: boolean;
+  score: number;
+  should_update: boolean;
+  message: string;
+};
+
 /**
- * 1:1 Live Face Matcher against local Python AI Biometric engine or in-browser fallback.
+ * Extract a 512D ArcFace embedding from an image via the Python InsightFace server.
+ * Returns the embedding, detection confidence, and cropped face.
+ */
+export async function extractFace512D(
+  imageDataUrl: string
+): Promise<Face512DExtractResult> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+
+    const res = await fetch(`${FACE_API_BASE}/extract`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: imageDataUrl }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      return { success: false, embedding: [], det_score: 0, face_crop_b64: "", error: `Server error ${res.status}` };
+    }
+
+    const data = await res.json() as Face512DExtractResult;
+    return data;
+  } catch {
+    return { success: false, embedding: [], det_score: 0, face_crop_b64: "", error: "InsightFace server unreachable" };
+  }
+}
+
+/**
+ * Verify two 512D embeddings via the Python InsightFace server (cosine similarity).
+ */
+export async function verifyFace512D(
+  probeEmbedding: number[],
+  galleryEmbedding: number[],
+  threshold: number = 0.45
+): Promise<Face512DVerifyResult> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+
+    const res = await fetch(`${FACE_API_BASE}/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        probe_embedding: probeEmbedding,
+        gallery_embedding: galleryEmbedding,
+        threshold,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (!res.ok) {
+      return { verified: false, score: 0, should_update: false, message: `Server error ${res.status}` };
+    }
+
+    const data = await res.json() as Face512DVerifyResult;
+    return data;
+  } catch {
+    return { verified: false, score: 0, should_update: false, message: "InsightFace server unreachable" };
+  }
+}
+
+/**
+ * 1:1 Live Face Matcher — tries InsightFace 512D server pipeline first,
+ * then falls back to local Python biometric service, then in-browser 128D.
  */
 export async function matchFace(
   probePhoto: string,
   galleryPhoto: string,
   probeVector?: number[],
-  galleryVector?: number[]
-): Promise<{ verified: boolean; score: number; reason?: string }> {
+  galleryVector?: number[],
+  probeVector512?: number[],
+  galleryVector512?: number[]
+): Promise<{ verified: boolean; score: number; should_update?: boolean; reason?: string }> {
   if (!probeVector || probeVector.length === 0) {
     return { verified: false, score: 0, reason: "No face detected in camera view. Please look directly at the lens." };
   }
-  if (!galleryPhoto && (!galleryVector || galleryVector.length === 0)) {
+  if (!galleryPhoto && (!galleryVector || galleryVector.length === 0) && (!galleryVector512 || galleryVector512.length === 0)) {
     return { verified: false, score: 0, reason: "Student does not have enrolled facial biometric data." };
   }
 
-  // 1. Try local Python Biometric Service on Port 8005
+  // 1. Try InsightFace 512D server verification (highest accuracy)
+  if (probeVector512 && galleryVector512 && probeVector512.length === 512 && galleryVector512.length === 512) {
+    try {
+      const result = await verifyFace512D(probeVector512, galleryVector512);
+      if (result.score > 0) {
+        return {
+          verified: result.verified,
+          score: Math.round(result.score * 100),
+          should_update: result.should_update,
+          reason: result.message,
+        };
+      }
+    } catch {
+      // Fall through to legacy endpoints
+    }
+  }
+
+  // 2. Try local Python Biometric Service on Port 8005 (supports both 512D and 128D)
   const endpoints = [
     "http://127.0.0.1:8005/verify-face",
     "http://127.0.0.1:8000/api/hardware/mantra/match",
@@ -417,18 +524,26 @@ export async function matchFace(
           galleryImage: galleryPhoto,
           probeVector,
           galleryVector,
+          probeVector512,
+          galleryVector512,
         }),
         signal: controller.signal,
       });
       clearTimeout(timer);
 
       if (res.ok) {
-        const data = (await res.json()) as { verified?: boolean; score?: number; message?: string };
+        const data = (await res.json()) as {
+          verified?: boolean;
+          score?: number;
+          should_update?: boolean;
+          message?: string;
+        };
         const score = Number(data.score ?? 0);
-        const verified = Boolean(data.verified) && score >= 70;
+        const verified = Boolean(data.verified) && score >= 45;
         return {
           verified,
           score,
+          should_update: Boolean(data.should_update),
           reason: data.message ?? (verified ? "Face verified" : "Face does not match scanned NFC card"),
         };
       }
@@ -437,7 +552,7 @@ export async function matchFace(
     }
   }
 
-  // 2. Strict In-Browser Zero-Mean Pearson Correlation
+  // 3. Strict In-Browser 128D Zero-Mean Pearson Correlation (fallback)
   if (probeVector && galleryVector && probeVector.length >= 32 && galleryVector.length >= 32) {
     const score = compareFaceVectors(probeVector, galleryVector);
     const verified = score >= 70;
@@ -465,6 +580,7 @@ export function toBiometricRecords(value: unknown): BiometricItem[] {
         type: "face",
         photo: (f as any).photo,
         descriptor: Array.isArray((f as any).descriptor) ? (f as any).descriptor : [],
+        descriptor512: Array.isArray((f as any).descriptor512) ? (f as any).descriptor512 : [],
         enrolled_at: String((f as any).enrolled_at ?? ""),
       });
     } else if (typeof (f as any).finger === "string") {
@@ -479,3 +595,4 @@ export function toBiometricRecords(value: unknown): BiometricItem[] {
   }
   return records;
 }
+

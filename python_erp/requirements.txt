@@ -9,3 +9,8 @@ passlib[bcrypt]>=1.7.4
 requests>=2.31.0
 openpyxl>=3.1.2
 pywin32>=306; sys_platform == 'win32'
+insightface>=0.7.3
+onnxruntime>=1.17.0
+numpy>=1.26.0
+opencv-python-headless>=4.9.0
+Pillow>=10.0.0

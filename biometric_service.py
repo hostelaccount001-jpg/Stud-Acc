@@ -58,10 +58,52 @@ def compute_vector_similarity(vec1, vec2):
     return round(min(100.0, max(0.0, final_score)), 2)
 
 
-def verify_face_match(probe_data, gallery_data, probe_vec=None, gallery_vec=None):
+def compute_cosine_similarity_512d(vec1, vec2):
+    """
+    Cosine similarity for 512D InsightFace ArcFace embeddings.
+    Returns similarity score (0.0 to 1.0).
+    Match threshold: >= 0.45
+    """
+    if not vec1 or not vec2 or len(vec1) < 64 or len(vec2) < 64:
+        return 0.0
+
+    min_len = min(len(vec1), len(vec2))
+    v1 = [float(x) for x in vec1[:min_len]]
+    v2 = [float(x) for x in vec2[:min_len]]
+
+    dot_product = sum(a * b for a, b in zip(v1, v2))
+    norm1 = math.sqrt(sum(a * a for a in v1))
+    norm2 = math.sqrt(sum(b * b for b in v2))
+
+    if norm1 == 0.0 or norm2 == 0.0:
+        return 0.0
+
+    return round(max(0.0, dot_product / (norm1 * norm2)), 4)
+
+
+def verify_face_match(probe_data, gallery_data, probe_vec=None, gallery_vec=None,
+                      probe_vec_512=None, gallery_vec_512=None):
     """
     Verifies 1:1 Face match between live probe face and enrolled gallery face.
+    Supports both 512D InsightFace embeddings (preferred) and 128D legacy vectors.
     """
+    # 1. Try 512D InsightFace cosine similarity first (production-grade)
+    if (probe_vec_512 and gallery_vec_512
+            and len(probe_vec_512) >= 256 and len(gallery_vec_512) >= 256):
+        score = compute_cosine_similarity_512d(probe_vec_512, gallery_vec_512)
+        is_matched = score >= 0.45
+        should_update = score >= 0.85
+        return {
+            "matched": is_matched,
+            "verified": is_matched,
+            "score": round(score * 100, 2),  # Convert to percentage for frontend
+            "cosine": score,
+            "type": "insightface_512d",
+            "should_update": should_update,
+            "message": "Face verified successfully (512D AI)" if is_matched else "Face does not match the scanned NFC card student"
+        }
+
+    # 2. Fallback to 128D legacy Pearson correlation
     if probe_vec and gallery_vec and len(probe_vec) >= 32 and len(gallery_vec) >= 32:
         score = compute_vector_similarity(probe_vec, gallery_vec)
         is_matched = score >= 70.0
@@ -69,7 +111,8 @@ def verify_face_match(probe_data, gallery_data, probe_vec=None, gallery_vec=None
             "matched": is_matched,
             "verified": is_matched,
             "score": score,
-            "type": "vector",
+            "type": "legacy_128d",
+            "should_update": False,
             "message": "Face verified successfully" if is_matched else "Face does not match the scanned NFC card student"
         }
 
@@ -78,6 +121,7 @@ def verify_face_match(probe_data, gallery_data, probe_vec=None, gallery_vec=None
         "verified": False,
         "score": 0.0,
         "type": "none",
+        "should_update": False,
         "message": "Insufficient facial descriptor vectors"
     }
 
@@ -266,14 +310,22 @@ class BiometricHandler(BaseHTTPRequestHandler):
             gallery_img = req_data.get("galleryImage") or req_data.get("gallery", "")
             probe_vec = req_data.get("probeVector") or req_data.get("probeDescriptor")
             gallery_vec = req_data.get("galleryVector") or req_data.get("galleryDescriptor")
+            probe_vec_512 = req_data.get("probeVector512") or req_data.get("probeDescriptor512")
+            gallery_vec_512 = req_data.get("galleryVector512") or req_data.get("galleryDescriptor512")
 
-            result = verify_face_match(probe_img, gallery_img, probe_vec, gallery_vec)
+            result = verify_face_match(
+                probe_img, gallery_img,
+                probe_vec, gallery_vec,
+                probe_vec_512, gallery_vec_512
+            )
 
             response_payload = {
                 "ok": True,
                 "verified": result["matched"],
                 "status": result["matched"],
                 "score": result["score"],
+                "type": result.get("type", "unknown"),
+                "should_update": result.get("should_update", False),
                 "message": result.get("message", "Processed")
             }
 

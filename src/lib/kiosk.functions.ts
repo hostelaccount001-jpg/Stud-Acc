@@ -52,6 +52,7 @@ export type LookupResult =
       templates: string[];
       facePhoto?: string | null;
       faceDescriptor?: number[] | null;
+      faceDescriptor512?: number[] | null;
       hasFace: boolean;
       hasFingerprint: boolean;
     };
@@ -135,11 +136,13 @@ export const lookupStudentBySuid = createServerFn({ method: "POST" })
     const templates: string[] = [];
     let facePhoto: string | null = null;
     let faceDescriptor: number[] | null = null;
+    let faceDescriptor512: number[] | null = null;
 
-    for (const f of fingerRecords as { type?: string; photo?: string; descriptor?: number[]; template?: string }[]) {
+    for (const f of fingerRecords as { type?: string; photo?: string; descriptor?: number[]; descriptor512?: number[]; template?: string }[]) {
       if (f && f.type === "face" && typeof f.photo === "string") {
         facePhoto = f.photo;
         if (Array.isArray(f.descriptor)) faceDescriptor = f.descriptor;
+        if (Array.isArray(f.descriptor512)) faceDescriptor512 = f.descriptor512;
       } else if (f && typeof f.template === "string" && f.template.trim().length > 0) {
         templates.push(f.template.trim());
       }
@@ -167,6 +170,7 @@ export const lookupStudentBySuid = createServerFn({ method: "POST" })
       templates,
       facePhoto,
       faceDescriptor,
+      faceDescriptor512,
       hasFace,
       hasFingerprint,
     };
@@ -236,11 +240,13 @@ export const lookupStudent = createServerFn({ method: "POST" })
     const templates: string[] = [];
     let facePhoto: string | null = null;
     let faceDescriptor: number[] | null = null;
+    let faceDescriptor512: number[] | null = null;
 
-    for (const f of fingerRecords as { type?: string; photo?: string; descriptor?: number[]; template?: string }[]) {
+    for (const f of fingerRecords as { type?: string; photo?: string; descriptor?: number[]; descriptor512?: number[]; template?: string }[]) {
       if (f && f.type === "face" && typeof f.photo === "string") {
         facePhoto = f.photo;
         if (Array.isArray(f.descriptor)) faceDescriptor = f.descriptor;
+        if (Array.isArray(f.descriptor512)) faceDescriptor512 = f.descriptor512;
       } else if (f && typeof f.template === "string" && f.template.trim().length > 0) {
         templates.push(f.template.trim());
       }
@@ -268,6 +274,7 @@ export const lookupStudent = createServerFn({ method: "POST" })
       templates,
       facePhoto,
       faceDescriptor,
+      faceDescriptor512,
       hasFace,
       hasFingerprint,
     };

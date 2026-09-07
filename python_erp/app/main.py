@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.config import settings
-from app.routers import auth, kiosk, students, services, reports, hardware
+from app.routers import auth, kiosk, students, services, reports, hardware, face
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,7 +15,7 @@ logger = logging.getLogger("python_erp")
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Enterprise-Grade Python ERP & Kiosk Backend with Mantra Fingerprint & Thermal Direct Printing",
+    description="Enterprise-Grade Python ERP & Kiosk Backend with InsightFace 512D AI Face + Mantra Fingerprint + Thermal Direct Printing",
     docs_url=f"{settings.API_PREFIX}/docs",
     redoc_url=f"{settings.API_PREFIX}/redoc",
     openapi_url=f"{settings.API_PREFIX}/openapi.json",
@@ -48,6 +48,7 @@ app.include_router(students.router, prefix=settings.API_PREFIX)
 app.include_router(services.router, prefix=settings.API_PREFIX)
 app.include_router(reports.router, prefix=settings.API_PREFIX)
 app.include_router(hardware.router, prefix=settings.API_PREFIX)
+app.include_router(face.router, prefix=settings.API_PREFIX)
 
 @app.get("/")
 async def root():

@@ -981,10 +981,23 @@ function BiometricEnroller({
       const vector = detection.descriptor || extractFaceVector(canvas);
       const photoDataUrl = canvas.toDataURL("image/jpeg", 0.85);
 
+      // Try 512D InsightFace server extraction (production-grade)
+      let descriptor512: number[] = [];
+      try {
+        const { extractFace512D } = await import("@/lib/face");
+        const extract512 = await extractFace512D(photoDataUrl);
+        if (extract512.success && extract512.embedding.length === 512) {
+          descriptor512 = extract512.embedding;
+        }
+      } catch {
+        // 512D unavailable — face registered with 128D only
+      }
+
       const newFace: FaceRecord = {
         type: "face",
         photo: photoDataUrl,
         descriptor: vector,
+        descriptor512,
         suid,
         nfc_no: nfcNo,
         enrolled_at: new Date().toISOString(),
@@ -993,7 +1006,12 @@ function BiometricEnroller({
       const otherRecords = records.filter((r) => r.type !== "face");
       onChange([...otherRecords, newFace]);
       stopCamera();
-      toast.success("✅ Real Human Face Auto-Captured & Registered (100% Accuracy)!");
+
+      if (descriptor512.length === 512) {
+        toast.success("✅ Face Registered with 512D InsightFace AI (Production-Grade Accuracy)!");
+      } else {
+        toast.success("✅ Face Registered with 128D Engine (InsightFace server offline, will upgrade on next registration)");
+      }
     } catch {
       toast.error("Failed to capture face. Please try again.");
     } finally {

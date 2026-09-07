@@ -107,3 +107,31 @@ class PrintReceiptRequest(BaseModel):
     receipt: ReceiptData
     printer_name: Optional[str] = None
     copies: int = 1
+
+# InsightFace 512D Face Biometric Models
+class FaceExtractRequest(BaseModel):
+    image: str = Field(..., description="Base64-encoded JPEG/PNG image")
+
+class FaceExtractResponse(BaseModel):
+    success: bool
+    embedding: List[float] = Field(default_factory=list, description="512D ArcFace embedding")
+    det_score: float = Field(default=0.0, description="Face detection confidence")
+    bbox: List[int] = Field(default_factory=list, description="Face bounding box [x1,y1,x2,y2]")
+    face_crop_b64: str = Field(default="", description="Base64 cropped face JPEG")
+    error: Optional[str] = None
+
+class FaceVerifyRequest(BaseModel):
+    probe_embedding: List[float] = Field(..., description="512D probe embedding")
+    gallery_embedding: List[float] = Field(..., description="512D gallery embedding")
+    threshold: float = Field(default=0.45, ge=0.0, le=1.0)
+
+class FaceVerifyResponse(BaseModel):
+    verified: bool
+    score: float = Field(description="Cosine similarity 0.0 to 1.0")
+    should_update: bool = Field(default=False, description="True if score >= 0.85 for age-invariant auto-update")
+    message: str
+
+class FaceRegisterRequest(BaseModel):
+    student_id: str = Field(..., description="Supabase student UUID")
+    image: str = Field(..., description="Base64-encoded JPEG/PNG image")
+

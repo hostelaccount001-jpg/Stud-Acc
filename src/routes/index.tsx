@@ -38,7 +38,7 @@ import {
   getStudentGallery
 } from "@/lib/kiosk.functions";
 import { captureFinger, matchTemplate, identify } from "@/lib/mantra";
-import { extractFaceVector, matchFace, detectHumanFace } from "@/lib/face";
+import { extractFaceVector, matchFace, detectHumanFace, extractFace512D } from "@/lib/face";
 import { ReceiptSlip, type ReceiptData } from "@/components/ReceiptSlip";
 
 export const Route = createFileRoute("/")({
@@ -65,6 +65,7 @@ type VerifiedStudent = {
   templates: string[];
   facePhoto?: string | null;
   faceDescriptor?: number[] | null;
+  faceDescriptor512?: number[] | null;
   hasFace: boolean;
   hasFingerprint: boolean;
 };
@@ -187,17 +188,31 @@ function Kiosk() {
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
+      // Extract 128D in-browser vector (fast, for fallback)
       const probeVector = extractFaceVector(canvas);
       if (!probeVector || probeVector.length < 32) return;
 
       setFaceScanning(true);
       const probePhoto = canvas.toDataURL("image/jpeg", 0.8);
 
+      // Try 512D InsightFace server extraction (production-grade)
+      let probeVector512: number[] | undefined;
+      try {
+        const extract512 = await extractFace512D(probePhoto);
+        if (extract512.success && extract512.embedding.length === 512) {
+          probeVector512 = extract512.embedding;
+        }
+      } catch {
+        // 512D unavailable — will fall back to 128D
+      }
+
       const res = await matchFace(
         probePhoto,
         detectedStudent.facePhoto || "",
         probeVector,
-        detectedStudent.faceDescriptor || undefined
+        detectedStudent.faceDescriptor || undefined,
+        probeVector512,
+        detectedStudent.faceDescriptor512 || undefined
       );
 
       if (res.verified) {
@@ -298,6 +313,7 @@ function Kiosk() {
         templates: result.templates || [],
         facePhoto: result.facePhoto,
         faceDescriptor: result.faceDescriptor,
+        faceDescriptor512: result.faceDescriptor512,
         hasFace: result.hasFace,
         hasFingerprint: result.hasFingerprint,
       };
