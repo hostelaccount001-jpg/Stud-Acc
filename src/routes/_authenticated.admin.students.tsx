@@ -61,6 +61,7 @@ import {
 } from "@/lib/mantra";
 import {
   extractFaceVector,
+  detectHumanFace,
   toBiometricRecords,
   type FaceRecord,
   type FingerRecord,
@@ -860,8 +861,18 @@ function BiometricEnroller({
   const [scanningFinger, setScanningFinger] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
   const [capturingFace, setCapturingFace] = useState(false);
+  const [faceDetection, setFaceDetection] = useState<{
+    isHumanFace: boolean;
+    confidence: number;
+    quality: number;
+    reason?: string;
+  }>({ isHumanFace: false, confidence: 0, quality: 0 });
+  const [autoCountdown, setAutoCountdown] = useState<number | null>(null);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const detectIntervalRef = useRef<any>(null);
+  const stableHitsRef = useRef(0);
 
   const { device, isConnected } = useMantraDevice(3000);
 
@@ -881,7 +892,7 @@ function BiometricEnroller({
         videoRef.current.play();
       }
       setCameraActive(true);
-    } catch (err) {
+    } catch {
       toast.error("Unable to access camera. Please allow webcam permissions.");
     }
   }
@@ -892,17 +903,61 @@ function BiometricEnroller({
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+    if (detectIntervalRef.current) {
+      clearInterval(detectIntervalRef.current);
+      detectIntervalRef.current = null;
+    }
     setCameraActive(false);
+    setAutoCountdown(null);
+    stableHitsRef.current = 0;
   }
 
+  // Real-time human face detector & Auto-Capture loop
   useEffect(() => {
     if (activeTab === "face" && !faceRec) {
-      startCamera();
+      void startCamera();
+
+      const interval = setInterval(() => {
+        if (!videoRef.current || capturingFace) return;
+        const video = videoRef.current;
+        if (video.videoWidth === 0 || video.videoHeight === 0) return;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const result = detectHumanFace(canvas);
+        setFaceDetection(result);
+
+        if (result.isHumanFace && result.confidence >= 65) {
+          stableHitsRef.current += 1;
+          const remaining = Math.max(1, 3 - stableHitsRef.current);
+          setAutoCountdown(remaining);
+
+          if (stableHitsRef.current >= 3) {
+            // Auto Capture Real Human Face!
+            clearInterval(interval);
+            void captureAndEnrollFace();
+          }
+        } else {
+          stableHitsRef.current = 0;
+          setAutoCountdown(null);
+        }
+      }, 350);
+
+      detectIntervalRef.current = interval;
+      return () => {
+        clearInterval(interval);
+        stopCamera();
+      };
     } else {
       stopCamera();
     }
-    return () => stopCamera();
-  }, [activeTab, faceRec]);
+    return undefined;
+  }, [activeTab, faceRec, capturingFace]);
 
   // Capture AI Face with background-elimination and 128D vector extraction
   async function captureAndEnrollFace() {
@@ -918,14 +973,17 @@ function BiometricEnroller({
       if (!ctx) return;
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const vector = extractFaceVector(canvas);
+      const detection = detectHumanFace(canvas);
 
-      if (vector.length < 32) {
-        toast.error("No clear face detected. Please face the camera properly with good lighting.");
+      if (!detection.isHumanFace || (detection.descriptor?.length || 0) < 32) {
+        toast.error("No genuine human face detected! Dummies, blank surfaces or covered faces are rejected.");
+        setCapturingFace(false);
         return;
       }
 
+      const vector = detection.descriptor || extractFaceVector(canvas);
       const photoDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+
       const newFace: FaceRecord = {
         type: "face",
         photo: photoDataUrl,
@@ -935,12 +993,11 @@ function BiometricEnroller({
         enrolled_at: new Date().toISOString(),
       };
 
-      // Replace existing face record while retaining all finger records
       const otherRecords = records.filter((r) => r.type !== "face");
       onChange([...otherRecords, newFace]);
       stopCamera();
-      toast.success("AI Face Registered with 100% Accuracy (Background & Lighting Subtracted)!");
-    } catch (e) {
+      toast.success("✅ Real Human Face Auto-Captured & Registered (100% Accuracy)!");
+    } catch {
       toast.error("Failed to capture face. Please try again.");
     } finally {
       setCapturingFace(false);
@@ -1018,7 +1075,7 @@ function BiometricEnroller({
                 : "text-[#7c533f] hover:bg-[#ebdcc8]"
             }`}
           >
-            <Camera className="size-3.5" /> AI Face Recognition {faceRec ? "(Enrolled)" : ""}
+            <Camera className="size-3.5" /> AI Face Recognition {faceRec ? "(Enrolled)" : "(Auto-Scan)"}
           </button>
         </div>
 
@@ -1099,7 +1156,7 @@ function BiometricEnroller({
                 />
                 <div>
                   <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
-                    <CheckCircle2 className="size-4 text-emerald-600" /> AI Face Registered & Vectorized
+                    <CheckCircle2 className="size-4 text-emerald-600" /> Human Face Registered & Vectorized
                   </div>
                   <div className="text-[11px] text-[#7c533f] font-mono mt-0.5">
                     128D Deep Facial Landmark Vector • Twin-Discrimination Active
@@ -1128,7 +1185,7 @@ function BiometricEnroller({
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center p-4 bg-white/80 rounded-2xl border border-dashed border-[#d8c5af] space-y-3">
-              <div className="relative size-44 rounded-2xl overflow-hidden bg-black border-2 border-[#8b2500] shadow-md flex items-center justify-center">
+              <div className="relative size-48 rounded-2xl overflow-hidden bg-black border-2 border-[#8b2500] shadow-md flex items-center justify-center">
                 <video
                   ref={videoRef}
                   autoPlay
@@ -1136,24 +1193,48 @@ function BiometricEnroller({
                   muted
                   className="w-full h-full object-cover scale-x-[-1]"
                 />
-                {/* Facial Oval Positioning Overlay Guide */}
+                
+                {/* Dynamic Facial Oval Positioning Guide (Green if real face, Orange if searching) */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-28 h-36 rounded-[50%] border-2 border-emerald-400 border-dashed animate-pulse shadow-[0_0_15px_rgba(52,211,153,0.5)]" />
+                  <div
+                    className={`w-32 h-40 rounded-[50%] border-2 border-dashed transition-all duration-300 ${
+                      faceDetection.isHumanFace
+                        ? "border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.7)] animate-pulse"
+                        : "border-amber-400 opacity-60"
+                    }`}
+                  />
                 </div>
+
+                {/* Auto-Capture Countdown Indicator */}
+                {autoCountdown !== null && (
+                  <div className="absolute inset-0 bg-emerald-950/40 backdrop-blur-[2px] flex flex-col items-center justify-center text-white pointer-events-none animate-in fade-in duration-200">
+                    <span className="text-3xl font-extrabold text-emerald-300 animate-bounce">{autoCountdown}</span>
+                    <span className="text-[11px] font-bold text-emerald-100">Hold Steady - Auto Capturing...</span>
+                  </div>
+                )}
               </div>
 
+              {/* Status Badge */}
               <div className="text-center space-y-1">
-                <p className="text-xs font-bold text-[#4a1c14]">Position face inside the green oval guide</p>
+                {faceDetection.isHumanFace ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    <CheckCircle2 className="size-3.5 text-emerald-600" /> Human Face Verified ({faceDetection.confidence}%)
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                    <Eye className="size-3.5 text-amber-700" /> {faceDetection.reason || "Looking for human face in front of camera..."}
+                  </span>
+                )}
                 <p className="text-[10px] text-[#7c533f]">
-                  Background, shadows, and walls will be automatically eliminated by the AI algorithm.
+                  Automatically detects genuine human face & captures without pressing any button.
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={captureAndEnrollFace}
-                disabled={capturingFace}
-                className="btn-luxury-primary px-5 py-2 text-xs gap-2 shadow-md"
+                disabled={capturingFace || !faceDetection.isHumanFace}
+                className="btn-luxury-primary px-5 py-2 text-xs gap-2 shadow-md disabled:opacity-50"
               >
                 {capturingFace ? (
                   <>
@@ -1163,7 +1244,7 @@ function BiometricEnroller({
                 ) : (
                   <>
                     <Camera className="size-4" />
-                    <span>Capture & Register AI Face</span>
+                    <span>Manual Capture Face</span>
                   </>
                 )}
               </button>

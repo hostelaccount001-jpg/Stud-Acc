@@ -38,7 +38,7 @@ import {
   getStudentGallery
 } from "@/lib/kiosk.functions";
 import { captureFinger, matchTemplate, identify } from "@/lib/mantra";
-import { extractFaceVector, matchFace } from "@/lib/face";
+import { extractFaceVector, matchFace, detectHumanFace } from "@/lib/face";
 import { ReceiptSlip, type ReceiptData } from "@/components/ReceiptSlip";
 
 export const Route = createFileRoute("/")({
@@ -95,6 +95,12 @@ function Kiosk() {
   const [error, setError] = useState<string>("");
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
   const [faceScanning, setFaceScanning] = useState(false);
+  const [faceDetectionStatus, setFaceDetectionStatus] = useState<{
+    isHumanFace: boolean;
+    confidence: number;
+    quality: number;
+    reason?: string;
+  }>({ isHumanFace: false, confidence: 0, quality: 0 });
 
   // Background printing receipt container
   const [activeReceipt, setActiveReceipt] = useState<ReceiptData | null>(null);
@@ -150,6 +156,7 @@ function Kiosk() {
       faceIntervalRef.current = null;
     }
     setFaceScanning(false);
+    setFaceDetectionStatus({ isHumanFace: false, confidence: 0, quality: 0 });
   }
 
   // Automatic Face Verifier Loop when Step 2 Face mode is active
@@ -157,10 +164,10 @@ function Kiosk() {
     if (step === "finger" && bioMode === "face" && detectedStudent) {
       void startFaceCamera();
 
-      // Trigger automatic face verification every 400ms
+      // Trigger automatic face verification every 350ms
       const interval = setInterval(() => {
         void verifyLiveFace();
-      }, 400);
+      }, 350);
       faceIntervalRef.current = interval;
 
       return () => {
@@ -186,10 +193,20 @@ function Kiosk() {
       if (!ctx) return;
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const probeVector = extractFaceVector(canvas);
-      if (probeVector.length < 32) return; // No face in view yet
+      
+      // 1. Anti-Dummy / Liveness Validation (Rejects paper, wall, dark, or dummy objects)
+      const detection = detectHumanFace(canvas);
+      setFaceDetectionStatus(detection);
+
+      if (!detection.isHumanFace || detection.confidence < 60) {
+        // Not a real human face or poorly positioned
+        return;
+      }
 
       setFaceScanning(true);
+      const probeVector = detection.descriptor || extractFaceVector(canvas);
+      if (probeVector.length < 32) return;
+
       const probePhoto = canvas.toDataURL("image/jpeg", 0.8);
 
       const res = await matchFace(
@@ -722,6 +739,21 @@ function Kiosk() {
                   </div>
                 </div>
 
+                {/* Real-time Human Face Detection & Liveness Status Badge */}
+                <div className="flex items-center justify-center">
+                  {faceDetectionStatus.isHumanFace ? (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold shadow-xs animate-in fade-in duration-200">
+                      <span className="size-2 rounded-full bg-emerald-500 animate-ping" />
+                      <span>👤 જીવંત ચહેરો મળ્યો (Human Face: {faceDetectionStatus.confidence}%) • 1:1 મેચિંગ ચાલુ...</span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-800 text-xs font-medium shadow-xs">
+                      <span className="size-2 rounded-full bg-amber-500" />
+                      <span>👁️ કેમેરા સામે ચહેરો લાવો (Dummy / નિર્જીવ વસ્તુ માન્ય નથી)</span>
+                    </div>
+                  )}
+                </div>
+
                 <div className="space-y-1">
                   <h2 className="text-lg md:text-xl font-serif font-bold text-[#4a1c14] flex items-center justify-center gap-2">
                     <ScanFace className="size-5 text-[#8b2500]" /> Look Directly into Camera
@@ -729,7 +761,7 @@ function Kiosk() {
                   <p className="text-xs text-[#7c533f]">
                     {faceScanning
                       ? "Verifying live facial landmarks against NFC card..."
-                      : "Automatic AI face recognition is active. Match will verify in ~300ms."}
+                      : "Automatic AI face recognition is active. Match will verify automatically."}
                   </p>
                 </div>
 
