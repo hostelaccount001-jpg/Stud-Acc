@@ -932,9 +932,9 @@ function BiometricEnroller({
         const result = detectHumanFace(canvas);
         setFaceDetection(result);
 
-        if (result.isHumanFace && result.confidence >= 60) {
+        if (result.isHumanFace) {
           stableHitsRef.current += 1;
-          if (stableHitsRef.current >= 2) {
+          if (stableHitsRef.current >= 1) {
             // Auto Capture Real Human Face!
             clearInterval(interval);
             void captureAndEnrollFace();

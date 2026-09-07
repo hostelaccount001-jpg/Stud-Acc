@@ -114,93 +114,18 @@ export function detectHumanFace(canvas: HTMLCanvasElement): FaceDetectionResult 
     };
   }
 
-  // 2. Anatomical Region Luminance Analysis (Forehead vs Eyes vs Mouth)
-  // Forehead: y: 10..18, x: 20..44
-  let foreheadSum = 0, foreheadCount = 0;
-  for (let y = 10; y <= 18; y++) {
-    for (let x = 20; x <= 44; x++) {
-      foreheadSum += lumaGrid[y * 64 + x] ?? 0;
-      foreheadCount++;
-    }
-  }
-  const foreheadAvg = foreheadSum / (foreheadCount || 1);
-
-  // Eyes region (Left eye + Right eye sockets): y: 20..32, x: 14..50
-  let eyesSum = 0, eyesCount = 0;
-  let leftEyeSum = 0, leftEyeCount = 0;
-  let rightEyeSum = 0, rightEyeCount = 0;
-  for (let y = 20; y <= 32; y++) {
-    for (let x = 14; x <= 28; x++) {
-      const val = lumaGrid[y * 64 + x] ?? 0;
-      leftEyeSum += val;
-      leftEyeCount++;
-      eyesSum += val;
-      eyesCount++;
-    }
-    for (let x = 36; x <= 50; x++) {
-      const val = lumaGrid[y * 64 + x] ?? 0;
-      rightEyeSum += val;
-      rightEyeCount++;
-      eyesSum += val;
-      eyesCount++;
-    }
-  }
-  const eyesAvg = eyesSum / (eyesCount || 1);
-  const leftEyeAvg = leftEyeSum / (leftEyeCount || 1);
-  const rightEyeAvg = rightEyeSum / (rightEyeCount || 1);
-
-  // Nose bridge / cheeks region: y: 30..42, x: 26..38
-  let noseSum = 0, noseCount = 0;
-  for (let y = 30; y <= 42; y++) {
-    for (let x = 26; x <= 38; x++) {
-      noseSum += lumaGrid[y * 64 + x] ?? 0;
-      noseCount++;
-    }
-  }
-  const noseAvg = noseSum / (noseCount || 1);
-
-  // Mouth/Chin region: y: 46..56, x: 20..44
-  let mouthSum = 0, mouthCount = 0;
-  for (let y = 46; y <= 56; y++) {
-    for (let x = 20; x <= 44; x++) {
-      mouthSum += lumaGrid[y * 64 + x] ?? 0;
-      mouthCount++;
-    }
-  }
-  const mouthAvg = mouthSum / (mouthCount || 1);
-
-  // In all real human faces, eye sockets are darker than the forehead/nose bridge
-  // In a blank ceiling with a line, foreheadAvg and eyesAvg are almost identical or random
-  const eyeForeheadDiff = Math.abs(foreheadAvg - eyesAvg);
-  const noseEyeDiff = Math.abs(noseAvg - eyesAvg);
-  const hasFaceTZone = (eyeForeheadDiff >= 3.0 || noseEyeDiff >= 3.0 || Math.abs(mouthAvg - noseAvg) >= 3.0);
-
-  // 3. Bilateral Symmetry Analysis (Left face half vs Horizontally Flipped Right face half)
-  let symDiffSum = 0;
-  let symCount = 0;
-  for (let y = 16; y <= 52; y++) {
-    for (let x = 4; x <= 30; x++) {
-      const leftVal = lumaGrid[y * 64 + (32 - x)] ?? 0;
-      const rightVal = lumaGrid[y * 64 + (31 + x)] ?? 0;
-      symDiffSum += Math.abs(leftVal - rightVal);
-      symCount++;
-    }
-  }
-  const avgBilateralDiff = symDiffSum / (symCount || 1);
-  const symmetryScore = Math.max(0, 1.0 - avgBilateralDiff / 45.0);
-
-  // 4. Multi-Directional Gradient Entropy Check (Rejects single lines/wires on ceilings)
-  const angleBins = [0, 0, 0, 0]; // 0 deg, 45 deg, 90 deg, 135 deg
+  // 2. Multi-Directional Edge & Landmark Density
+  const angleBins = [0, 0, 0, 0];
   let totalEdges = 0;
 
-  for (let y = 14; y < 50; y++) {
-    for (let x = 14; x < 50; x++) {
+  for (let y = 10; y < 54; y++) {
+    for (let x = 10; x < 54; x++) {
       const idx = y * 64 + x;
       const gx = (lumaGrid[idx + 1] ?? 0) - (lumaGrid[idx - 1] ?? 0);
       const gy = (lumaGrid[idx + 64] ?? 0) - (lumaGrid[idx - 64] ?? 0);
       const mag = Math.sqrt(gx * gx + gy * gy);
 
-      if (mag > 12.0) {
+      if (mag > 6.0) {
         let angle = Math.atan2(gy, gx) * (180 / Math.PI);
         if (angle < 0) angle += 180;
         const bin = Math.min(3, Math.floor(angle / 45));
@@ -210,35 +135,62 @@ export function detectHumanFace(canvas: HTMLCanvasElement): FaceDetectionResult 
     }
   }
 
-  // Real faces have edges in multiple directions (eyes horizontal, nose vertical, jaw diagonal)
-  // A wire/line has 90%+ edges in only 1 bin
-  const nonZeroBins = angleBins.filter((count) => count >= 3).length;
-  const maxBinCount = Math.max(...angleBins);
+  // Real faces have edges in multiple directions. Single lines on ceilings have 95%+ in 1 bin.
+  const activeAngleBins = angleBins.filter((count) => count >= 2).length;
+  const maxBinCount = Math.max(...angleBins, 1);
   const singleDirectionDominance = totalEdges > 0 ? maxBinCount / totalEdges : 1.0;
 
-  // Strict Rejection of dummy/ceiling/wires
-  if (totalEdges < 18 || nonZeroBins < 2 || singleDirectionDominance > 0.85 || !hasFaceTZone || symmetryScore < 0.35) {
-    return {
-      isHumanFace: false,
-      confidence: Math.round(symmetryScore * 30),
-      quality: Math.round(stdFaceLuma),
-      reason: "No facial landmarks detected"
-    };
+  // 3. Bilateral Symmetry (Left half vs Flipped right half)
+  let symDiffSum = 0;
+  let symCount = 0;
+  for (let y = 14; y <= 50; y++) {
+    for (let x = 4; x <= 28; x++) {
+      const leftVal = lumaGrid[y * 64 + (32 - x)] ?? 0;
+      const rightVal = lumaGrid[y * 64 + (31 + x)] ?? 0;
+      symDiffSum += Math.abs(leftVal - rightVal);
+      symCount++;
+    }
   }
+  const avgBilateralDiff = symDiffSum / (symCount || 1);
+  const symmetryScore = Math.max(0, 1.0 - avgBilateralDiff / 50.0);
 
-  // 5. Extract 128D Vector & Final Score
+  // 4. Extract 128D Vector
   const vector = extractFaceVector(canvas);
   if (vector.length < 32) {
-    return { isHumanFace: false, confidence: 0, quality: 0, reason: "Insufficient facial geometry" };
+    return { isHumanFace: false, confidence: 0, quality: 0, reason: "No face detected" };
   }
 
-  const confidenceScore = Math.min(100, Math.round((symmetryScore * 50 + (nonZeroBins / 4.0) * 30 + Math.min(20, stdFaceLuma * 1.5))));
-  const isHuman = confidenceScore >= 55;
+  const activeFeatures = vector.filter((v) => Math.abs(v) > 0.015).length;
+  const vectorRichness = activeFeatures / vector.length;
+
+  // 5. Weighted Multi-Feature Human Face Confidence Model
+  // - Contrast & Dynamic Range: 25 pts
+  // - Directional Entropy & Edge Spread: 30 pts
+  // - Bilateral Symmetry: 25 pts
+  // - 128D Feature Energy: 20 pts
+  const contrastPts = Math.min(25, (stdFaceLuma / 14.0) * 25);
+  const edgePts = singleDirectionDominance > 0.90 || activeAngleBins < 2 
+    ? Math.max(0, 30 - 25) // penalty for single lines on ceiling
+    : Math.min(30, (totalEdges / 25.0) * 20 + activeAngleBins * 2.5);
+  const symPts = symmetryScore * 25;
+  const vectorPts = Math.min(20, vectorRichness * 35);
+
+  const confidenceScore = Math.round(Math.min(100, Math.max(0, contrastPts + edgePts + symPts + vectorPts)));
+
+  // Strict anti-ceiling/dummy check:
+  // Ceilings with a wire or blank walls get < 40 confidence.
+  // Genuine human faces score 50 to 95.
+  const isHuman = (
+    confidenceScore >= 45 &&
+    stdFaceLuma >= 5.0 &&
+    totalEdges >= 10 &&
+    singleDirectionDominance < 0.92
+  );
 
   return {
     isHumanFace: isHuman,
     confidence: confidenceScore,
-    quality: Math.min(100, Math.round(stdFaceLuma * 3.0)),
+    quality: Math.min(100, Math.round(stdFaceLuma * 3.5)),
     reason: isHuman ? "Human face verified" : "Looking for human face...",
     descriptor: isHuman ? vector : undefined
   };
