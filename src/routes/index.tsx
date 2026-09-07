@@ -739,29 +739,14 @@ function Kiosk() {
                   </div>
                 </div>
 
-                {/* Real-time Human Face Detection & Liveness Status Badge */}
-                <div className="flex items-center justify-center">
-                  {faceDetectionStatus.isHumanFace ? (
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold shadow-xs animate-in fade-in duration-200">
-                      <span className="size-2 rounded-full bg-emerald-500 animate-ping" />
-                      <span>👤 જીવંત ચહેરો મળ્યો (Human Face: {faceDetectionStatus.confidence}%) • 1:1 મેચિંગ ચાલુ...</span>
-                    </div>
-                  ) : (
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-300 text-amber-800 text-xs font-medium shadow-xs">
-                      <span className="size-2 rounded-full bg-amber-500" />
-                      <span>👁️ કેમેરા સામે ચહેરો લાવો (Dummy / નિર્જીવ વસ્તુ માન્ય નથી)</span>
-                    </div>
-                  )}
-                </div>
-
                 <div className="space-y-1">
                   <h2 className="text-lg md:text-xl font-serif font-bold text-[#4a1c14] flex items-center justify-center gap-2">
                     <ScanFace className="size-5 text-[#8b2500]" /> Look Directly into Camera
                   </h2>
                   <p className="text-xs text-[#7c533f]">
                     {faceScanning
-                      ? "Verifying live facial landmarks against NFC card..."
-                      : "Automatic AI face recognition is active. Match will verify automatically."}
+                      ? "Verifying live facial landmarks..."
+                      : "Automatic AI face recognition is active."}
                   </p>
                 </div>
 

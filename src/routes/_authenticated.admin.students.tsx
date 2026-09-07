@@ -932,12 +932,9 @@ function BiometricEnroller({
         const result = detectHumanFace(canvas);
         setFaceDetection(result);
 
-        if (result.isHumanFace && result.confidence >= 65) {
+        if (result.isHumanFace && result.confidence >= 60) {
           stableHitsRef.current += 1;
-          const remaining = Math.max(1, 3 - stableHitsRef.current);
-          setAutoCountdown(remaining);
-
-          if (stableHitsRef.current >= 3) {
+          if (stableHitsRef.current >= 2) {
             // Auto Capture Real Human Face!
             clearInterval(interval);
             void captureAndEnrollFace();
@@ -946,7 +943,7 @@ function BiometricEnroller({
           stableHitsRef.current = 0;
           setAutoCountdown(null);
         }
-      }, 350);
+      }, 300);
 
       detectIntervalRef.current = interval;
       return () => {
@@ -1218,16 +1215,13 @@ function BiometricEnroller({
               <div className="text-center space-y-1">
                 {faceDetection.isHumanFace ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    <CheckCircle2 className="size-3.5 text-emerald-600" /> Human Face Verified ({faceDetection.confidence}%)
+                    <CheckCircle2 className="size-3.5 text-emerald-600" /> Face Detected ({faceDetection.confidence}%)
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                    <Eye className="size-3.5 text-amber-700" /> {faceDetection.reason || "Looking for human face in front of camera..."}
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium text-[#7c533f] bg-[#faf6ef] border border-[#e5d8c5]">
+                    <Eye className="size-3.5 text-[#8b2500]" /> Looking for face...
                   </span>
                 )}
-                <p className="text-[10px] text-[#7c533f]">
-                  Automatically detects genuine human face & captures without pressing any button.
-                </p>
               </div>
 
               <button
