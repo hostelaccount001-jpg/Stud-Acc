@@ -4,7 +4,7 @@ import { z } from "zod";
 export const studentInputSchema = z.object({
   suid: z.string().trim().min(1).max(40),
   name: z.string().trim().min(1).max(120),
-  nfc_no: z.string().trim().min(1).max(64),
+  nfc_no: z.string().trim().max(64).optional().nullable(),
   class_name: z.string().trim().max(60).optional().nullable(),
   room_no: z.string().trim().max(60).optional().nullable(),
   fingerprints: z.array(z.any()).optional(),
@@ -45,7 +45,7 @@ export const addStudentServer = createServerFn({ method: "POST" })
     const { error } = await supabaseAdmin.from("students").insert({
       suid: data.suid,
       name: data.name,
-      nfc_no: data.nfc_no,
+      nfc_no: data.nfc_no || data.suid,
       class_name: data.class_name || null,
       room_no: data.room_no || null,
       fingerprints: data.fingerprints || [],
@@ -70,7 +70,7 @@ export const updateStudentServer = createServerFn({ method: "POST" })
       .update({
         suid: data.data.suid,
         name: data.data.name,
-        nfc_no: data.data.nfc_no,
+        nfc_no: data.data.nfc_no || data.data.suid,
         class_name: data.data.class_name || null,
         room_no: data.data.room_no || null,
         fingerprints: data.data.fingerprints || [],
@@ -100,25 +100,15 @@ export const bulkUploadStudentsServer = createServerFn({ method: "POST" })
         {
           suid: d.suid,
           name: d.name,
-          nfc_no: d.nfc_no,
+          nfc_no: d.nfc_no || d.suid,
           class_name: d.class_name || null,
           room_no: d.room_no || null,
+          fingerprints: d.fingerprints || [],
           updated_at: new Date().toISOString(),
         },
         { onConflict: "suid" },
       );
       if (!error) count++;
-      else {
-        // Fallback insert if upsert had unique constraint issue
-        const { error: insErr } = await supabaseAdmin.from("students").insert({
-          suid: d.suid,
-          name: d.name,
-          nfc_no: d.nfc_no,
-          class_name: d.class_name || null,
-          room_no: d.room_no || null,
-        });
-        if (!insErr) count++;
-      }
     }
     return { count };
   });

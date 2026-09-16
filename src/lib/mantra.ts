@@ -439,9 +439,46 @@ export async function identify<T extends { templates: string[] }>(
   probe: string,
   gallery: T[],
 ): Promise<T | null> {
+  if (!probe || !gallery || gallery.length === 0) return null;
+
+  // 1. Try high-speed 1:N local endpoint first (< 50ms)
+  const candidateIdentifyUrls = [
+    "http://127.0.0.1:8005/identify-fingerprint",
+    "http://127.0.0.1:8004/identify-fingerprint",
+    "http://127.0.0.1:8005/mfs100/identify",
+  ];
+
+  for (const url of candidateIdentifyUrls) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 1500);
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ probeTemplate: probe, gallery }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+
+      if (res.ok) {
+        const data = (await res.json()) as Record<string, unknown>;
+        if (data["matched"] === true && data["student"]) {
+          const matchedId = (data["student"] as { id?: string })?.id;
+          const match = gallery.find((g) => (g as { id?: string }).id === matchedId);
+          return match ?? (data["student"] as T);
+        }
+      }
+    } catch {
+      // Continue to next or fallback
+    }
+  }
+
+  // 2. Fallback: Sequential template matching
   for (const entry of gallery) {
     for (const template of entry.templates) {
-      if (await matchTemplate(probe, template)) return entry;
+      if (probe.trim() === template.trim() || (await matchTemplate(probe, template))) {
+        return entry;
+      }
     }
   }
   return null;

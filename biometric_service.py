@@ -371,6 +371,70 @@ class BiometricHandler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response_payload).encode())
             return
 
+        # 2B. 1:N Fingerprint Identification Endpoint: /identify-fingerprint, /mfs100/identify
+        if self.path in ("/identify-fingerprint", "/mfs100/identify"):
+            probe = (
+                req_data.get("ProbTemplate")
+                or req_data.get("ProbeTemplate")
+                or req_data.get("probeTemplate")
+                or req_data.get("probe", "")
+            )
+            gallery = req_data.get("gallery") or req_data.get("students") or []
+
+            if not probe or not gallery:
+                self.send_response(200)
+                self._send_cors()
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"matched": False, "student": None, "reason": "Missing probe or gallery"}).encode())
+                return
+
+            try:
+                probe_bytes = base64.b64decode(probe)
+            except Exception:
+                probe_bytes = probe.encode("utf-8", errors="ignore")
+            probe_minutiae = parse_minutiae_template(probe_bytes)
+
+            best_match_student = None
+            highest_score = 0.0
+
+            for student in gallery:
+                templates = student.get("templates") or []
+                for tmpl in templates:
+                    if not tmpl:
+                        continue
+                    if probe.strip() == tmpl.strip():
+                        best_match_student = student
+                        highest_score = 1000.0
+                        break
+                    try:
+                        gallery_bytes = base64.b64decode(tmpl)
+                    except Exception:
+                        gallery_bytes = tmpl.encode("utf-8", errors="ignore")
+                    gallery_minutiae = parse_minutiae_template(gallery_bytes)
+                    score, matches = match_minutiae_sets(probe_minutiae, gallery_minutiae)
+                    if (matches >= 12 or score >= 350.0) and score > highest_score:
+                        highest_score = score
+                        best_match_student = student
+                if highest_score >= 800.0:
+                    break
+
+            is_matched = best_match_student is not None
+            response_payload = {
+                "matched": is_matched,
+                "status": is_matched,
+                "student": best_match_student,
+                "score": highest_score,
+                "message": f"Student identified: {best_match_student.get('name')}" if is_matched else "No matching student found"
+            }
+
+            self.send_response(200)
+            self._send_cors()
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(response_payload).encode())
+            return
+
         # 3. Unified Biometric Verification Endpoint: /verify-biometric
         if self.path == "/verify-biometric":
             if "probeVector" in req_data or "probeImage" in req_data:

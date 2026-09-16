@@ -90,7 +90,7 @@ export const Route = createFileRoute("/_authenticated/admin/students")({
 const studentSchema = z.object({
   suid: z.string().trim().min(1).max(40),
   name: z.string().trim().min(1).max(120),
-  nfc_no: z.string().trim().min(1).max(64),
+  nfc_no: z.string().trim().max(64).optional().or(z.literal("")),
   class_name: z.string().trim().max(60).optional().or(z.literal("")),
   room_no: z.string().trim().max(60).optional().or(z.literal("")),
 });
@@ -130,12 +130,13 @@ function StudentsPage() {
   const addStudent = useMutation({
     mutationFn: async (values: typeof form) => {
       const parsed = studentSchema.parse(values);
+      const safeNfc = parsed.nfc_no || parsed.suid;
       try {
         await addStudentFn({
           data: {
             suid: parsed.suid,
             name: parsed.name,
-            nfc_no: parsed.nfc_no,
+            nfc_no: safeNfc,
             class_name: parsed.class_name || null,
             room_no: parsed.room_no || null,
             fingerprints: newFingers,
@@ -146,7 +147,7 @@ function StudentsPage() {
         const { error } = await supabase.from("students").insert({
           suid: parsed.suid,
           name: parsed.name,
-          nfc_no: parsed.nfc_no,
+          nfc_no: safeNfc,
           class_name: parsed.class_name || null,
           room_no: parsed.room_no || null,
           fingerprints: newFingers,
@@ -167,6 +168,7 @@ function StudentsPage() {
     mutationFn: async () => {
       if (!editId) return;
       const parsed = studentSchema.parse(editForm);
+      const safeNfc = parsed.nfc_no || parsed.suid;
 
       // Check if any finger was captured via RDSERVICE instead of CLIENT
       for (const f of editFingers) {
@@ -183,7 +185,7 @@ function StudentsPage() {
             data: {
               suid: parsed.suid,
               name: parsed.name,
-              nfc_no: parsed.nfc_no,
+              nfc_no: safeNfc,
               class_name: parsed.class_name || null,
               room_no: parsed.room_no || null,
               fingerprints: editFingers,
@@ -197,7 +199,7 @@ function StudentsPage() {
           .update({
             suid: parsed.suid,
             name: parsed.name,
-            nfc_no: parsed.nfc_no,
+            nfc_no: safeNfc,
             class_name: parsed.class_name || null,
             room_no: parsed.room_no || null,
             fingerprints: editFingers,
@@ -523,11 +525,10 @@ function StudentsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="nfc_no" className="text-xs font-bold text-[#7c533f]">NFC Card UID *</Label>
+              <Label htmlFor="nfc_no" className="text-xs font-bold text-[#7c533f]">NFC Card UID (Optional)</Label>
               <Input
                 id="nfc_no"
-                required
-                placeholder="Scan / Enter NFC UID"
+                placeholder="Optional (Defaults to SUID)"
                 value={form.nfc_no}
                 onChange={(e) => setForm({ ...form, nfc_no: e.target.value })}
                 className="input-luxury h-10 px-3 font-mono text-sm font-semibold"
@@ -749,10 +750,10 @@ function StudentsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="edit-nfc" className="text-xs font-bold text-[#7c533f]">NFC Card UID *</Label>
+                <Label htmlFor="edit-nfc" className="text-xs font-bold text-[#7c533f]">NFC Card UID (Optional)</Label>
                 <Input
                   id="edit-nfc"
-                  required
+                  placeholder="Optional (Defaults to SUID)"
                   value={editForm.nfc_no}
                   onChange={(e) => setEditForm({ ...editForm, nfc_no: e.target.value })}
                   className="input-luxury h-10 font-mono text-sm font-semibold"

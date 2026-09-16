@@ -1,73 +1,69 @@
+import { useState, useEffect, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { useQuery } from "@tanstack/react-query";
 import {
   Fingerprint,
-  CreditCard,
-  Printer,
   CheckCircle2,
   AlertCircle,
   Loader2,
   RefreshCw,
-  Settings,
-  ShieldCheck,
-  Calculator,
-  Delete,
+  Printer,
+  Receipt,
   Sparkles,
-  Camera,
-  ScanFace,
-  Eye,
-  SwitchCamera,
+  Delete,
+  ShieldCheck,
+  Search,
+  User,
+  Cpu,
 } from "lucide-react";
 import {
+  captureFinger,
+  identify,
+  useMantraDevice,
+} from "@/lib/mantra";
+import {
   getKioskConfig,
-  lookupStudent,
   punchService,
-  getStudentGallery
+  getStudentGallery,
+  lookupStudentBySuid,
 } from "@/lib/kiosk.functions";
-import { captureFinger, matchTemplate, identify } from "@/lib/mantra";
-import { extractFaceVector, matchFace, detectHumanFace, extractFace512D } from "@/lib/face";
-import { ReceiptSlip, type ReceiptData } from "@/components/ReceiptSlip";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Gurukul Kiosk — Tap & Print Terminal" },
+      {
+        title: "Gurukul Kiosk — Direct Mantra MFS100 Fingerprint Biometric System",
+      },
       {
         name: "description",
-        content: "Self-service cashless payment terminal with Mantra fingerprint, NFC card and touch keypad amount entry.",
+        content: "Self-service cashless payment terminal with direct Mantra MFS100 fingerprint biometric authentication.",
       },
     ],
   }),
   component: Kiosk,
 });
 
-type Step = "finger" | "card" | "service";
+type Step = "scan" | "service";
+
 type VerifiedStudent = {
-  studentId: string;
+  id: string;
   suid: string;
   name: string;
-  nfc_no: string;
   class_name?: string | null | undefined;
   room_no?: string | null | undefined;
+  nfc_no?: string | undefined;
   templates: string[];
-  facePhoto?: string | null;
-  faceDescriptor?: number[] | null;
-  faceDescriptor512?: number[] | null;
-  hasFace: boolean;
-  hasFingerprint: boolean;
 };
 
 type CapturedScan = {
@@ -84,18 +80,29 @@ type ServiceItem = {
   print_receipt: boolean;
 };
 
+type ReceiptData = {
+  receiptNo: number;
+  suid: string;
+  name: string;
+  className?: string | null | undefined;
+  roomNo?: string | null | undefined;
+  service: string;
+  amount: number;
+  at: string;
+};
+
 function Kiosk() {
-  const [step, setStep] = useState<Step>("card");
-  const [bioMode, setBioMode] = useState<"finger" | "face">("face");
+  const [step, setStep] = useState<Step>("scan");
   const [capturedScan, setCapturedScan] = useState<CapturedScan | null>(null);
-  const [detectedStudent, setDetectedStudent] = useState<VerifiedStudent | null>(null);
   const [student, setStudent] = useState<VerifiedStudent | null>(null);
-  const [nfc, setNfc] = useState("");
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>("");
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
-  const [faceScanning, setFaceScanning] = useState(false);
+
+  // Manual SUID fallback modal state (for injured finger)
+  const [suidModalOpen, setSuidModalOpen] = useState(false);
+  const [manualSuid, setManualSuid] = useState("");
 
   // Background printing receipt container
   const [activeReceipt, setActiveReceipt] = useState<ReceiptData | null>(null);
@@ -104,15 +111,13 @@ function Kiosk() {
   const [customService, setCustomService] = useState<ServiceItem | null>(null);
   const [customAmountStr, setCustomAmountStr] = useState<string>("0");
 
-  const cardInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const faceIntervalRef = useRef<any>(null);
-
   const getConfig = useServerFn(getKioskConfig);
-  const lookup = useServerFn(lookupStudent);
   const punch = useServerFn(punchService);
   const getGallery = useServerFn(getStudentGallery);
+  const lookupBySuid = useServerFn(lookupStudentBySuid);
+
+  // Live Mantra MFS100 device status
+  const { device, checking: deviceChecking, isConnected } = useMantraDevice(3000);
 
   const config = useQuery({
     queryKey: ["kiosk-config"],
@@ -120,142 +125,15 @@ function Kiosk() {
     refetchInterval: 30000,
   });
 
+  const galleryQuery = useQuery({
+    queryKey: ["kiosk-gallery"],
+    queryFn: () => getGallery(),
+    refetchInterval: 60000,
+  });
+
   const title = config.data?.settings["kiosk_title"] || "Shree Swaminarayan Gurukul, Rajkot";
-  const subtitle = config.data?.settings["kiosk_subtitle"] || "Cashless Service Kiosk";
+  const subtitle = config.data?.settings["kiosk_subtitle"] || "Cashless Biometric Kiosk Terminal";
   const footerText = config.data?.settings["receipt_footer"] || "Jay Swaminarayan";
-
-  // Camera Management
-  async function startFaceCamera() {
-    try {
-      if (streamRef.current) return;
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-    } catch {
-      // Camera permission error
-    }
-  }
-
-  function stopFaceCamera() {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (faceIntervalRef.current) {
-      clearInterval(faceIntervalRef.current);
-      faceIntervalRef.current = null;
-    }
-    setFaceScanning(false);
-  }
-
-  // Automatic Face Verifier Loop when Step 2 Face mode is active
-  useEffect(() => {
-    if (step === "finger" && bioMode === "face" && detectedStudent) {
-      void startFaceCamera();
-
-      // Trigger automatic face verification every 350ms
-      const interval = setInterval(() => {
-        void verifyLiveFace();
-      }, 350);
-      faceIntervalRef.current = interval;
-
-      return () => {
-        clearInterval(interval);
-        stopFaceCamera();
-      };
-    } else {
-      stopFaceCamera();
-    }
-    return undefined;
-  }, [step, bioMode, detectedStudent]);
-
-  async function verifyLiveFace() {
-    if (!videoRef.current || !detectedStudent || faceScanning || busy) return;
-    const video = videoRef.current;
-    if (video.videoWidth === 0 || video.videoHeight === 0) return;
-
-    try {
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Extract 128D in-browser vector (fast, for fallback)
-      const probeVector = extractFaceVector(canvas);
-      if (!probeVector || probeVector.length < 32) return;
-
-      setFaceScanning(true);
-      const probePhoto = canvas.toDataURL("image/jpeg", 0.8);
-
-      // Try 512D InsightFace server extraction if enrolled student has 512D descriptor
-      let probeVector512: number[] | undefined;
-      if (detectedStudent.faceDescriptor512 && detectedStudent.faceDescriptor512.length === 512) {
-        try {
-          const extract512 = await extractFace512D(probePhoto);
-          if (extract512.success && extract512.embedding.length === 512) {
-            probeVector512 = extract512.embedding;
-          }
-        } catch {
-          // 512D unavailable — will fall back to 128D
-        }
-      }
-
-      const res = await matchFace(
-        probePhoto,
-        detectedStudent.facePhoto || "",
-        probeVector,
-        detectedStudent.faceDescriptor || undefined,
-        probeVector512,
-        detectedStudent.faceDescriptor512 || undefined
-      );
-
-      if (res.verified) {
-        // 1:1 Face Match Verified!
-        stopFaceCamera();
-        setStudent(detectedStudent);
-        setSuccessBanner(`Face Verified: Welcome, ${detectedStudent.name}!`);
-        setStep("service");
-      }
-    } catch {
-      // Ignore background transient loop errors
-    } finally {
-      setFaceScanning(false);
-    }
-  }
-
-  useEffect(() => {
-    if (step === "card") {
-      const t = setTimeout(() => cardInputRef.current?.focus(), 150);
-      return () => clearTimeout(t);
-    }
-    return undefined;
-  }, [step]);
-
-  // Safety fallback: If step is 'finger' but no student has tapped card, revert to 'card'
-  useEffect(() => {
-    if (step === "finger" && !detectedStudent) {
-      setStep("card");
-    }
-  }, [step, detectedStudent]);
-
-  // Instant Auto-submit NFC card when scanned by card reader on Step 1
-  useEffect(() => {
-    if (step === "card" && nfc.trim().length > 0 && !busy) {
-      const timer = setTimeout(() => {
-        void submitCard(nfc);
-      }, 200);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [nfc, step, busy]);
 
   // Auto-dismiss success banner
   useEffect(() => {
@@ -267,92 +145,28 @@ function Kiosk() {
   }, [successBanner]);
 
   function reset() {
-    stopFaceCamera();
-    setStep("card");
+    setStep("scan");
     setCapturedScan(null);
-    setDetectedStudent(null);
     setStudent(null);
-    setNfc("");
     setError("");
     setCustomService(null);
     setCustomAmountStr("0");
     setScanning(false);
+    setManualSuid("");
+    setSuidModalOpen(false);
   }
 
-  // STEP 1: Identify Student by NFC Card
-  async function submitCard(value: string) {
-    const code = value.trim();
-    if (!code) return;
-
-    setBusy(true);
-    setError("");
-    try {
-      const result = await lookup({ data: { nfc: code } });
-      
-      if (result.status === "not_found") {
-        setError("❌ Card not recognized. This NFC card is not registered in the system.");
-        setNfc("");
-        return;
-      }
-      if (result.status === "blocked") {
-        setError(`❌ Account Blocked: ${result.message}`);
-        setNfc("");
-        return;
-      }
-      if (result.status !== "ok") {
-        setError(`❌ ${result.message}`);
-        setNfc("");
-        return;
-      }
-
-      const identified: VerifiedStudent = {
-        studentId: result.studentId,
-        suid: result.suid,
-        name: result.name,
-        nfc_no: result.nfc_no,
-        class_name: result.class_name,
-        room_no: result.room_no,
-        templates: result.templates || [],
-        facePhoto: result.facePhoto,
-        faceDescriptor: result.faceDescriptor,
-        faceDescriptor512: result.faceDescriptor512,
-        hasFace: result.hasFace,
-        hasFingerprint: result.hasFingerprint,
-      };
-
-      setDetectedStudent(identified);
-      setSuccessBanner(`Card Identified: ${identified.name} (${identified.suid})`);
-      
-      // Default to Face mode if face is enrolled, otherwise Fingerprint mode
-      if (result.hasFace) {
-        setBioMode("face");
-      } else {
-        setBioMode("finger");
-      }
-
-      // Advance to Step 2: Biometric Verification
-      setStep("finger");
-    } catch {
-      setError("Error connecting to server. Please tap your card again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // STEP 2B: Verify Physical Biometric Presence on Mantra Sensor
+  // STEP 1: Direct Fingerprint Scan & 1:N Identification
   async function startFingerScan() {
-    if (!detectedStudent) {
-      setError("Please tap your NFC card first.");
-      setStep("card");
-      return;
-    }
-
+    if (scanning || busy) return;
     setScanning(true);
     setError("");
+
     try {
       const capture = await captureFinger(50, 10);
       if (!capture.ok) {
-        setError(capture.error || "Failed to capture fingerprint. Please place finger firmly on sensor.");
+        setError(capture.error || "Failed to capture fingerprint. Please place finger firmly on sensor glass.");
+        setScanning(false);
         return;
       }
 
@@ -363,50 +177,92 @@ function Kiosk() {
         at: new Date().toISOString(),
       });
 
-      // Check that this student has registered biometric templates from Step 1
-      const studentTemplates = detectedStudent.templates || [];
-      if (studentTemplates.length === 0) {
-        setError(`❌ Fingerprint is not registered for ${detectedStudent.name} in Admin Portal. Please register fingerprint or switch to Face mode above.`);
-        return;
-      }
-
       setBusy(true);
 
-      // Strictly match incoming fingerprint template against the biometric record of the NFC cardholder verified in Step 1
-      const matchResults = await Promise.all(
-        studentTemplates.map((registeredTemplate) => matchTemplate(capture.template, registeredTemplate))
-      );
-      const isMatched = matchResults.some(Boolean);
-
-      // If the fingerprint does not match that specific student's registered template, reject
-      if (!isMatched) {
-        setError("Fingerprint does not match the scanned NFC card.");
+      const gallery = galleryQuery.data || [];
+      if (gallery.length === 0) {
+        setError("Student database is loading or no biometric records enrolled. Please contact admin.");
+        setScanning(false);
+        setBusy(false);
         return;
       }
 
-      // Biometric verification succeeded!
-      stopFaceCamera();
-      setStudent(detectedStudent);
-      setSuccessBanner(`Biometric Verified: Welcome, ${detectedStudent.name}!`);
+      // Fast 1:N Identification across all enrolled students
+      const matched = await identify(capture.template, gallery);
 
-      // Advance to Step 3: Cashless Services
+      if (!matched) {
+        setError("❌ Fingerprint not recognized. Please place your registered finger firmly on the Mantra sensor.");
+        setScanning(false);
+        setBusy(false);
+        return;
+      }
+
+      const verified: VerifiedStudent = {
+        id: matched.id,
+        suid: matched.suid,
+        name: matched.name,
+        class_name: matched.class_name,
+        room_no: matched.room_no,
+        nfc_no: matched.nfc_no,
+        templates: matched.templates || [],
+      };
+
+      setStudent(verified);
+      setSuccessBanner(`Biometric Verified: Welcome, ${verified.name}!`);
       setStep("service");
     } catch {
-      setError("Biometric communication error. Please place your finger firmly on the Mantra sensor and try again.");
+      setError("Communication error with Mantra MFS100 scanner. Check USB connection and driver.");
     } finally {
       setScanning(false);
       setBusy(false);
     }
   }
 
-  // STEP 3: Handle Service Click (Fixed vs Custom Touch Keypad)
+  // Manual SUID Fallback (for emergency or injured finger)
+  async function handleManualSuidSubmit() {
+    const code = manualSuid.trim();
+    if (!code) return;
+    setBusy(true);
+    setError("");
+
+    try {
+      const res = await lookupBySuid({ data: { suid: code } });
+      if (res.status === "not_found") {
+        setError("❌ SUID not found in student database.");
+        return;
+      }
+      if (res.status === "blocked") {
+        setError(`❌ Account Blocked: ${res.message}`);
+        return;
+      }
+      if (res.status === "ok") {
+        const verified: VerifiedStudent = {
+          id: res.studentId,
+          suid: res.suid,
+          name: res.name,
+          class_name: res.class_name,
+          room_no: res.room_no,
+          nfc_no: res.nfc_no,
+          templates: res.templates || [],
+        };
+        setStudent(verified);
+        setSuidModalOpen(false);
+        setSuccessBanner(`Student Identified: ${verified.name}!`);
+        setStep("service");
+      }
+    } catch {
+      setError("Error looking up SUID. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // STEP 2: Service Selection & Execution
   function handleServiceClick(service: ServiceItem) {
     if (service.price === 0) {
-      // Custom manual amount required -> Open Touch Keypad
       setCustomService(service);
       setCustomAmountStr("0");
     } else {
-      // Fixed price -> Direct Punch
       void executePunch(service.id, service.price);
     }
   }
@@ -416,12 +272,13 @@ function Kiosk() {
     setBusy(true);
     setError("");
     const studentName = student.name;
-    const studentNfc = student.nfc_no;
 
     try {
       const res = await punch({
         data: {
-          nfc: studentNfc,
+          studentId: student.id,
+          suid: student.suid,
+          nfc: student.nfc_no,
           serviceId,
           customAmount: amount && amount > 0 ? amount : undefined,
         },
@@ -443,31 +300,31 @@ function Kiosk() {
           };
           setActiveReceipt(rData);
 
-          // Direct browser thermal print with raw thermal format
+          // Trigger thermal receipt print
           setTimeout(() => {
             window.print();
           }, 300);
         }
 
-        // Reset kiosk back to Step 1 for next student
+        // Auto-reset back to Step 1 for next student
         setTimeout(() => {
           reset();
-        }, 1500);
+        }, 3500);
       } else if (res.status === "blocked") {
-        setError(`❌ Card Blocked: ${res.message}`);
+        setError(`❌ Student Account Blocked: ${res.message}`);
       } else if (res.status === "limit") {
-        setError(`⚠️ Limit Exceeded: ${res.message}`);
+        setError(`⚠️ Daily Limit Exceeded: ${res.message}`);
       } else {
-        setError("❌ Card not recognized or registered.");
+        setError("❌ Transaction failed. Please try again.");
       }
     } catch {
-      setError("Transaction processing error. Please try again.");
+      setError("Transaction error. Please try again.");
     } finally {
       setBusy(false);
     }
   }
 
-  // Touch Keypad Input Handlers
+  // Touch Keypad Handlers
   function handleKeypadDigit(digit: string) {
     if (customAmountStr === "0") {
       setCustomAmountStr(digit);
@@ -494,22 +351,14 @@ function Kiosk() {
     setCustomAmountStr(String(next));
   }
 
-  function handleKeypadSubmit() {
-    const amt = parseFloat(customAmountStr);
-    if (!customService || isNaN(amt) || amt <= 0) {
-      setError("Please enter a valid amount greater than ₹0");
-      return;
-    }
-    const sId = customService.id;
-    setCustomService(null);
-    void executePunch(sId, amt);
-  }
-
   return (
     <div className="min-h-screen flex flex-col justify-between bg-gradient-to-br from-[#f8f5ee] via-[#f4ecdf] to-[#ede3d1] text-[#2c1810] p-4 md:p-8 select-none relative overflow-hidden">
-      {/* Ambient Animated Luxury Glow Spots */}
+      {/* Ambient Luxury Glow Spots */}
       <div className="absolute -top-32 -left-32 size-96 rounded-full bg-gradient-to-br from-amber-400/15 to-transparent blur-3xl pointer-events-none animate-float" />
-      <div className="absolute -bottom-32 -right-32 size-96 rounded-full bg-gradient-to-tl from-rose-500/10 to-transparent blur-3xl pointer-events-none animate-float" style={{ animationDelay: "2s" }} />
+      <div
+        className="absolute -bottom-32 -right-32 size-96 rounded-full bg-gradient-to-tl from-rose-500/10 to-transparent blur-3xl pointer-events-none animate-float"
+        style={{ animationDelay: "2s" }}
+      />
 
       {/* Background Thermal Slip for Instant Window Print */}
       {activeReceipt && (
@@ -544,7 +393,7 @@ function Kiosk() {
         <div className="max-w-4xl mx-auto px-16 sm:px-24">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#ebdcc8]/90 backdrop-blur-xs text-[#8b2500] text-xs font-bold tracking-wider uppercase shadow-inner border border-[#d8c5af]/80 mb-1.5 animate-in fade-in slide-in-from-top-2 duration-500">
             <Sparkles className="size-3.5 text-amber-600 animate-spin" style={{ animationDuration: "6s" }} />
-            <span>Shree Swaminarayan Gurukul • Campus Kiosk</span>
+            <span>Shree Swaminarayan Gurukul • Biometric Kiosk</span>
           </div>
           <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-[44px] font-serif font-black tracking-tight text-[#4a1c14] drop-shadow-sm whitespace-nowrap">
             {title}
@@ -554,40 +403,28 @@ function Kiosk() {
           </p>
         </div>
 
-        {/* 3-Step Flow Indicator */}
-        <div className="flex items-center gap-2 md:gap-3 justify-center pt-4">
+        {/* 2-Step Flow Indicator */}
+        <div className="flex items-center gap-3 justify-center pt-3">
           <span
-            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
-              step === "card"
+            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
+              step === "scan"
                 ? "bg-[#4a1c14] text-white shadow-lg scale-105 ring-2 ring-amber-500/40"
-                : detectedStudent
-                  ? "bg-emerald-600/20 text-emerald-900 border border-emerald-500/40"
-                  : "bg-[#ebdcc8] text-[#7c533f]"
+                : "bg-emerald-600/20 text-emerald-900 border border-emerald-500/40"
             }`}
           >
-            {detectedStudent ? <CheckCircle2 className="size-3.5 text-emerald-600" /> : null} 1. Tap NFC Card
+            {student ? <CheckCircle2 className="size-3.5 text-emerald-600" /> : <Fingerprint className="size-3.5" />}
+            1. Scan Fingerprint (MFS100)
           </span>
-          <span className="text-[#c5a880] font-bold">——</span>
+          <span className="text-[#c5a880] font-bold">———</span>
           <span
-            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
-              step === "finger"
-                ? "bg-[#4a1c14] text-white shadow-lg scale-105 ring-2 ring-amber-500/40"
-                : student
-                  ? "bg-emerald-600/20 text-emerald-900 border border-emerald-500/40"
-                  : "bg-[#ebdcc8] text-[#7c533f]"
-            }`}
-          >
-            {student ? <CheckCircle2 className="size-3.5 text-emerald-600" /> : null} 2. Biometric Verify
-          </span>
-          <span className="text-[#c5a880] font-bold">——</span>
-          <span
-            className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
+            className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
               step === "service"
                 ? "bg-[#4a1c14] text-white shadow-lg scale-105 ring-2 ring-amber-500/40"
                 : "bg-[#ebdcc8] text-[#7c533f]"
             }`}
           >
-            3. Cashless Service
+            <Receipt className="size-3.5" />
+            2. Cashless Service
           </span>
         </div>
       </header>
@@ -602,20 +439,63 @@ function Kiosk() {
 
       {/* Main Terminal Stage */}
       <main className="flex-1 flex items-center justify-center my-4 relative z-10">
-        {/* STEP 1: NFC Smart Card Tap — Identifies Student */}
-        {step === "card" && (
+        {/* STEP 1: Direct Fingerprint Scan on Mantra MFS100 */}
+        {step === "scan" && (
           <Card className="w-full max-w-xl p-8 md:p-12 text-center bg-white/95 backdrop-blur-md border-2 border-[#e5d8c5] shadow-[0_20px_60px_-15px_rgba(74,28,20,0.15)] rounded-3xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            {/* Live RFID Radar Circle */}
-            <div className="relative mx-auto size-36 rounded-full bg-gradient-to-b from-[#fdfbf7] to-[#f4ebe0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner animate-pulse-ring">
-              <CreditCard className="size-16 text-[#8b2500] animate-bounce" />
+            {/* Device Connectivity Badge */}
+            <div className="flex items-center justify-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                  isConnected
+                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                    : deviceChecking
+                    ? "bg-amber-50 text-amber-700 border border-amber-200"
+                    : "bg-rose-50 text-rose-700 border border-rose-200"
+                }`}
+              >
+                <span
+                  className={`size-2 rounded-full ${
+                    isConnected ? "bg-emerald-500 animate-pulse" : deviceChecking ? "bg-amber-500" : "bg-rose-500"
+                  }`}
+                />
+                {isConnected
+                  ? `Mantra ${device?.model || "MFS100"} Ready`
+                  : deviceChecking
+                  ? "Checking Mantra Device..."
+                  : "Mantra Scanner Not Connected"}
+              </span>
             </div>
 
-            <div className="space-y-2">
+            {/* Glowing Biometric Scanner Ring */}
+            <div
+              onClick={() => void startFingerScan()}
+              className="relative mx-auto size-40 md:size-48 rounded-full bg-gradient-to-b from-[#fdfbf7] to-[#f4ebe0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner animate-pulse-ring overflow-hidden group cursor-pointer hover:border-[#8b2500] transition-colors"
+            >
+              {/* Animated Laser Scanning Beam */}
+              <div className="absolute inset-x-0 top-0 z-10 pointer-events-none animate-laser">
+                <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-rose-500 to-transparent shadow-[0_0_15px_rgba(244,63,94,0.8)]" />
+                <div className="h-14 w-full bg-gradient-to-b from-rose-500/25 to-transparent blur-sm" />
+              </div>
+
+              <Fingerprint
+                className={`size-24 md:size-28 text-[#8b2500] transition-all duration-300 drop-shadow-md ${
+                  scanning ? "scale-110 text-rose-600 animate-pulse" : "group-hover:scale-105"
+                }`}
+              />
+
+              {scanning && (
+                <span className="absolute inset-0 rounded-full border-4 border-rose-500 animate-ping opacity-40" />
+              )}
+            </div>
+
+            <div className="space-y-1.5">
               <h2 className="text-2xl md:text-3xl font-serif font-bold text-[#4a1c14]">
-                Step 1: Tap Your NFC Card
+                આંગળી સ્કેનર પર મૂકો
               </h2>
               <p className="text-sm md:text-base text-[#7c533f]">
-                Please tap your registered Smart Card on the <strong>ID TECH</strong> reader to begin.
+                {scanning
+                  ? "સ્કેનિંગ ચાલુ છે... કૃપા કરીને આંગળી સ્થિર રાખો."
+                  : "Place your registered finger firmly on the Mantra MFS100 scanner."}
               </p>
             </div>
 
@@ -626,246 +506,46 @@ function Kiosk() {
               </div>
             )}
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (nfc.trim()) void submitCard(nfc);
-              }}
-              className="space-y-4"
-            >
-              <Input
-                ref={cardInputRef}
-                type="text"
-                autoFocus
-                disabled={busy}
-                placeholder="Tap card on ID TECH reader..."
-                value={nfc}
-                onChange={(e) => setNfc(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && nfc.trim()) {
-                    e.preventDefault();
-                    void submitCard(nfc);
-                  }
-                }}
-                className="h-16 text-center font-mono text-xl font-bold bg-[#fdfbf7] border-2 border-[#d8c5af] rounded-2xl focus-visible:ring-2 focus-visible:ring-[#8b2500] shadow-inner"
-              />
-
-              <div className="flex gap-3">
-                <Button
-                  type="submit"
-                  disabled={busy || !nfc.trim()}
-                  className="w-full h-14 font-bold text-base bg-[#4a1c14] hover:bg-[#6b2c1a] text-white rounded-2xl shadow-lg transition-transform active:scale-95"
-                >
-                  {busy ? <Loader2 className="size-5 animate-spin mr-2" /> : "Verify & Proceed"}
-                </Button>
-              </div>
-            </form>
-          </Card>
-        )}
-
-        {/* STEP 2: Dual Biometric Verification Stage (AI Face OR Mantra Fingerprint) */}
-        {step === "finger" && detectedStudent && (
-          <Card className="w-full max-w-xl p-6 md:p-8 text-center bg-white/95 backdrop-blur-md border-2 border-[#e5d8c5] shadow-[0_20px_60px_-15px_rgba(74,28,20,0.15)] rounded-3xl space-y-5 animate-in fade-in zoom-in-95 duration-300">
-            {/* Student Verified Info Banner */}
-            <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-300 text-center shadow-sm flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 text-left">
-                {detectedStudent.facePhoto ? (
-                  <img
-                    src={detectedStudent.facePhoto}
-                    alt={detectedStudent.name}
-                    className="size-11 rounded-full object-cover border-2 border-emerald-500 shadow-sm shrink-0"
-                  />
+            <div className="space-y-3 pt-2">
+              <Button
+                size="lg"
+                onClick={() => void startFingerScan()}
+                disabled={scanning || busy}
+                className="w-full h-15 text-lg font-bold text-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(139,37,0,0.4)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shimmer-btn cursor-pointer bg-gradient-to-r from-[#4a1c14] to-[#8b2500]"
+              >
+                {scanning ? (
+                  <>
+                    <Loader2 className="size-5 animate-spin mr-2" />
+                    Scanning Fingerprint...
+                  </>
+                ) : busy ? (
+                  <>
+                    <Loader2 className="size-5 animate-spin mr-2" />
+                    Identifying Student...
+                  </>
                 ) : (
-                  <div className="size-11 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-base shrink-0 shadow-sm">
-                    {detectedStudent.name[0]?.toUpperCase()}
-                  </div>
+                  <>
+                    <Fingerprint className="size-5 mr-2" />
+                    Touch to Scan Fingerprint
+                  </>
                 )}
-                <div>
-                  <div className="text-sm font-bold text-emerald-950">{detectedStudent.name}</div>
-                  <div className="text-[11px] text-emerald-700 font-mono">{detectedStudent.suid} • {detectedStudent.class_name || "Gurukul"}</div>
-                </div>
+              </Button>
+
+              {/* SUID Manual Lookup Fallback for injured fingers */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSuidModalOpen(true)}
+                  className="text-xs text-[#7c533f] hover:text-[#4a1c14] underline font-medium cursor-pointer"
+                >
+                  આંગળી સ્કેન ન થાય તો? SUID દ્વારા મેન્યુઅલ લોગઇન
+                </button>
               </div>
-              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shrink-0">
-                <CheckCircle2 className="size-3.5" /> Card Verified
-              </span>
             </div>
-
-            {/* Dual Biometric Mode Selector */}
-            <div className="flex items-center justify-center gap-2 p-1.5 rounded-2xl bg-[#faf6ef] border border-[#e5d8c5]">
-              <button
-                type="button"
-                onClick={() => setBioMode("face")}
-                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  bioMode === "face"
-                    ? "bg-[#4a1c14] text-white shadow-md scale-[1.02]"
-                    : "text-[#7c533f] hover:bg-[#ebdcc8]"
-                }`}
-              >
-                <Camera className="size-4" /> Scan Face (AI Camera)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setBioMode("finger")}
-                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  bioMode === "finger"
-                    ? "bg-[#4a1c14] text-white shadow-md scale-[1.02]"
-                    : "text-[#7c533f] hover:bg-[#ebdcc8]"
-                }`}
-              >
-                <Fingerprint className="size-4" /> Scan Fingerprint (Mantra)
-              </button>
-            </div>
-
-            {/* OPTION A: Live AI Face Scanner */}
-            {bioMode === "face" && (
-              <div className="space-y-4">
-                <div className="relative mx-auto size-48 md:size-52 rounded-3xl overflow-hidden bg-black border-2 border-[#8b2500] shadow-xl flex items-center justify-center group">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover scale-x-[-1]"
-                  />
-
-                  {/* High-Tech Oval Laser Guide & Target Ring */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-32 h-40 rounded-[50%] border-2 border-emerald-400 border-dashed animate-pulse shadow-[0_0_20px_rgba(52,211,153,0.7)]" />
-                  </div>
-
-                  {/* Animated Laser Scanning Beam */}
-                  <div className="absolute inset-x-0 top-0 z-10 pointer-events-none animate-laser">
-                    <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_15px_rgba(52,211,153,0.9)]" />
-                    <div className="h-12 w-full bg-gradient-to-b from-emerald-500/20 to-transparent blur-sm" />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <h2 className="text-lg md:text-xl font-serif font-bold text-[#4a1c14] flex items-center justify-center gap-2">
-                    <ScanFace className="size-5 text-[#8b2500]" /> Look Directly into Camera
-                  </h2>
-                  <p className="text-xs text-[#7c533f]">
-                    {faceScanning
-                      ? "Verifying live facial landmarks..."
-                      : "Automatic AI face recognition is active."}
-                  </p>
-                </div>
-
-                {error && (
-                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-center gap-2 text-left animate-in fade-in duration-200">
-                    <AlertCircle className="size-4 shrink-0 text-rose-600" />
-                    <span>{error}</span>
-                  </div>
-                )}
-
-                <div className="space-y-2.5">
-                  <Button
-                    size="lg"
-                    onClick={() => void verifyLiveFace()}
-                    disabled={faceScanning || busy}
-                    className="w-full h-13 text-sm font-bold text-white rounded-2xl shadow-md transition-all bg-gradient-to-r from-[#4a1c14] to-[#8b2500] hover:scale-[1.01]"
-                  >
-                    {faceScanning ? (
-                      <>
-                        <Loader2 className="size-4 animate-spin mr-2" />
-                        Verifying Facial Features...
-                      </>
-                    ) : (
-                      <>
-                        <Camera className="size-4 mr-2" />
-                        Manual Verify Face
-                      </>
-                    )}
-                  </Button>
-
-                  <div className="flex items-center justify-center px-1">
-                    <button
-                      type="button"
-                      onClick={reset}
-                      className="text-xs text-[#7c533f] hover:text-[#4a1c14] font-medium"
-                    >
-                      Cancel / New Card
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* OPTION B: Mantra Fingerprint Scanner */}
-            {bioMode === "finger" && (
-              <div className="space-y-4">
-                <div className="relative mx-auto size-36 md:size-40 rounded-full bg-gradient-to-b from-[#fdfbf7] to-[#f4ebe0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner animate-pulse-ring overflow-hidden group">
-                  <div className="absolute inset-x-0 top-0 z-10 pointer-events-none animate-laser">
-                    <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-rose-500 to-transparent shadow-[0_0_15px_rgba(244,63,94,0.8)]" />
-                    <div className="h-12 w-full bg-gradient-to-b from-rose-500/20 to-transparent blur-sm" />
-                  </div>
-
-                  <Fingerprint
-                    className={`size-20 md:size-24 text-[#8b2500] transition-all duration-300 drop-shadow-md ${
-                      scanning ? "scale-110 text-rose-600 animate-pulse" : "group-hover:scale-105"
-                    }`}
-                  />
-
-                  {scanning && (
-                    <span className="absolute inset-0 rounded-full border-4 border-rose-500 animate-ping opacity-40" />
-                  )}
-                </div>
-
-                <div className="space-y-1">
-                  <h2 className="text-xl md:text-2xl font-serif font-bold text-[#4a1c14]">
-                    Place Finger on Mantra Sensor
-                  </h2>
-                  <p className="text-xs md:text-sm text-[#7c533f]">
-                    {scanning
-                      ? "Scanning finger on Mantra sensor now..."
-                      : `Touch the Mantra sensor with your registered finger to confirm presence.`}
-                  </p>
-                </div>
-
-                {error && (
-                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-center gap-2 text-left animate-in fade-in duration-200">
-                    <AlertCircle className="size-4 shrink-0 text-rose-600" />
-                    <span>{error}</span>
-                  </div>
-                )}
-
-                <div className="space-y-2.5">
-                  <Button
-                    size="lg"
-                    onClick={() => void startFingerScan()}
-                    disabled={scanning}
-                    className="w-full h-14 text-base font-bold text-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(139,37,0,0.4)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shimmer-btn cursor-pointer bg-gradient-to-r from-[#4a1c14] to-[#8b2500]"
-                  >
-                    {scanning ? (
-                      <>
-                        <Loader2 className="size-5 animate-spin mr-2" />
-                        Scanning Mantra Fingerprint...
-                      </>
-                    ) : (
-                      <>
-                        <Fingerprint className="size-5 mr-2" />
-                        Touch to Scan Fingerprint
-                      </>
-                    )}
-                  </Button>
-
-                  <div className="flex items-center justify-center px-1">
-                    <button
-                      type="button"
-                      onClick={reset}
-                      className="text-xs text-[#7c533f] hover:text-[#4a1c14] font-medium"
-                    >
-                      Cancel / New Card
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
           </Card>
         )}
 
-        {/* STEP 3: Service Selection Grid */}
+        {/* STEP 2: Service Selection Grid */}
         {step === "service" && student && (
           <div className="w-full max-w-4xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
             {/* Verified Student Banner */}
@@ -878,12 +558,13 @@ function Kiosk() {
                   <div className="flex items-center gap-2">
                     <h3 className="text-xl font-bold text-[#4a1c14]">{student.name}</h3>
                     <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-600/15 text-emerald-800 border border-emerald-500/30 flex items-center gap-1">
-                      <CheckCircle2 className="size-3.5 text-emerald-600" /> Verified
+                      <CheckCircle2 className="size-3.5 text-emerald-600" /> Biometric Verified
                     </span>
                   </div>
                   <p className="text-xs font-mono text-[#7c533f] mt-0.5">
                     SUID: <span className="font-bold text-[#4a1c14]">{student.suid}</span>
                     {student.class_name ? ` • Class: ${student.class_name}` : ""}
+                    {student.room_no ? ` • Room: ${student.room_no}` : ""}
                   </p>
                 </div>
               </div>
@@ -891,7 +572,7 @@ function Kiosk() {
                 variant="outline"
                 size="sm"
                 onClick={reset}
-                className="rounded-xl border-[#d8c5af] text-[#6b4a3a] hover:bg-[#f5ecdf]"
+                className="rounded-xl border-[#d8c5af] text-[#6b4a3a] hover:bg-[#f5ecdf] cursor-pointer"
               >
                 <RefreshCw className="size-4 mr-1.5" /> Cancel / Exit
               </Button>
@@ -904,79 +585,96 @@ function Kiosk() {
               </div>
             )}
 
-            {/* Services Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-              {(config.data?.services ?? []).map((service) => {
-                const isCustom = service.price === 0;
-
-                return (
-                  <Card
-                    key={service.id}
-                    onClick={() => !busy && handleServiceClick(service)}
-                    className="group relative cursor-pointer overflow-hidden p-8 text-center bg-white/90 backdrop-blur-sm border-2 border-[#e5d8c5] hover:border-[#8b2500] shadow-xl hover:shadow-2xl rounded-3xl transition-all duration-200 hover:-translate-y-1"
-                  >
-                    <div className="mx-auto size-20 rounded-full bg-[#fdf8f0] group-hover:bg-[#f7ece0] border border-[#e5d8c5] flex items-center justify-center mb-4 transition-colors">
-                      {isCustom ? (
-                        <Calculator className="size-9 text-[#8b2500]" />
-                      ) : (
-                        <Printer className="size-9 text-[#8b2500]" />
+            {/* Services Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-5">
+              {(config.data?.services ?? []).map((service) => (
+                <button
+                  key={service.id}
+                  disabled={busy}
+                  onClick={() => handleServiceClick(service)}
+                  className="p-6 rounded-2xl bg-white/95 border-2 border-[#e5d8c5] shadow-md hover:shadow-xl hover:border-[#8b2500] active:scale-95 transition-all text-left flex flex-col justify-between h-40 group relative overflow-hidden cursor-pointer"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-[#8b2500]">
+                        Service
+                      </span>
+                      {service.print_receipt && (
+                        <Printer className="size-4 text-[#7c533f] group-hover:text-[#8b2500]" />
                       )}
                     </div>
-                    <h4 className="text-2xl font-serif font-bold text-[#4a1c14] group-hover:text-[#8b2500]">
+                    <h4 className="text-lg md:text-xl font-serif font-bold text-[#4a1c14] group-hover:text-[#8b2500] line-clamp-2">
                       {service.name}
                     </h4>
+                  </div>
 
-                    {isCustom ? (
-                      <div className="mt-3">
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-800 border border-amber-500/30">
-                          Custom Amount
-                        </span>
-                        <div className="text-lg font-bold text-[#8b2500] mt-1">
-                          Touch to Enter ₹
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-3 text-3xl font-extrabold text-[#8b2500]">
-                        ₹{service.price}
-                      </div>
-                    )}
-
-                    <p className="text-xs text-[#7c533f] mt-2 font-medium">
-                      {service.print_receipt ? "Prints thermal receipt" : "Digital transaction"}
-                    </p>
-
-                    <Button
-                      size="lg"
-                      disabled={busy}
-                      className="w-full mt-6 bg-[#4a1c14] group-hover:bg-[#8b2500] text-white font-bold rounded-xl shadow-md"
-                    >
-                      {busy ? (
-                        <Loader2 className="size-4 animate-spin mr-2" />
-                      ) : isCustom ? (
-                        "Enter Amount"
-                      ) : (
-                        "Select & Pay ₹" + service.price
-                      )}
-                    </Button>
-                  </Card>
-                );
-              })}
+                  <div className="flex items-baseline justify-between pt-2 border-t border-[#f0e6d8]">
+                    <span className="text-2xl md:text-3xl font-mono font-black text-[#4a1c14]">
+                      {service.price === 0 ? "Manual Amount" : `₹${service.price}`}
+                    </span>
+                    <span className="text-xs font-bold text-[#8b2500] group-hover:translate-x-1 transition-transform">
+                      Select →
+                    </span>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         )}
       </main>
 
-      {/* TOUCHSCREEN NUMPAD DIALOG FOR CUSTOM AMOUNT (e.g. Store / Canteen) */}
-      <Dialog open={customService !== null} onOpenChange={(open) => !open && setCustomService(null)}>
-        <DialogContent className="sm:max-w-md p-6 bg-white rounded-3xl border-[#e5d8c5] shadow-2xl">
-          <DialogHeader className="text-center space-y-1">
-            <DialogTitle className="text-2xl font-serif font-bold text-[#4a1c14] flex items-center justify-center gap-2">
-              <Calculator className="size-6 text-[#8b2500]" />
-              {customService?.name} — Enter Amount
+      {/* Manual SUID Entry Fallback Dialog */}
+      <Dialog open={suidModalOpen} onOpenChange={setSuidModalOpen}>
+        <DialogContent className="max-w-md bg-[#fdfbf7] border-2 border-[#e5d8c5] rounded-3xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-serif font-bold text-[#4a1c14] flex items-center gap-2">
+              <User className="size-5 text-[#8b2500]" /> SUID દ્વારા શોધો
             </DialogTitle>
-            <DialogDescription className="text-xs text-[#7c533f]">
-              Touch the numbers below to enter the exact bill amount.
-            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 my-2">
+            <p className="text-xs text-[#7c533f]">
+              જો વિદ્યાર્થીની આંગળીમાં ઈજા કે પટ્ટી હોય તો અહીં SUID નંબર નાખીને આગળ વધી શકાય છે.
+            </p>
+            <Input
+              autoFocus
+              type="text"
+              placeholder="Enter Student SUID..."
+              value={manualSuid}
+              onChange={(e) => setManualSuid(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && manualSuid.trim()) {
+                  void handleManualSuidSubmit();
+                }
+              }}
+              className="h-14 font-mono text-lg font-bold bg-white border-2 border-[#d8c5af] rounded-2xl text-center"
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setSuidModalOpen(false)}
+              className="rounded-xl border-[#d8c5af]"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleManualSuidSubmit()}
+              disabled={busy || !manualSuid.trim()}
+              className="bg-[#4a1c14] hover:bg-[#8b2500] text-white rounded-xl"
+            >
+              {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : "Verify SUID"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Custom Amount Numpad Dialog */}
+      <Dialog open={Boolean(customService)} onOpenChange={(open) => !open && setCustomService(null)}>
+        <DialogContent className="max-w-sm p-5 bg-[#fdfbf7] border-2 border-[#e5d8c5] rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-center font-serif text-xl font-bold text-[#4a1c14]">
+              {customService?.name}
+            </DialogTitle>
           </DialogHeader>
 
           {/* Amount Display */}
@@ -994,7 +692,7 @@ function Kiosk() {
                 key={amt}
                 type="button"
                 onClick={() => handleAddChipAmount(amt)}
-                className="px-3 py-1 rounded-full text-xs font-bold bg-[#f2e5d5] hover:bg-[#8b2500] hover:text-white text-[#6b4a3a] border border-[#d8c5af] transition-all"
+                className="px-3 py-1 rounded-full text-xs font-bold bg-[#f2e5d5] hover:bg-[#8b2500] hover:text-white text-[#6b4a3a] border border-[#d8c5af] transition-all cursor-pointer"
               >
                 +₹{amt}
               </button>
@@ -1008,7 +706,7 @@ function Kiosk() {
                 key={num}
                 type="button"
                 onClick={() => handleKeypadDigit(num)}
-                className="h-14 rounded-2xl text-2xl font-bold font-mono bg-white hover:bg-[#f7ece0] active:scale-95 border-2 border-[#e5d8c5] shadow-sm text-[#4a1c14] transition-all flex items-center justify-center"
+                className="h-14 rounded-2xl text-2xl font-bold font-mono bg-white hover:bg-[#f7ece0] active:scale-95 border-2 border-[#e5d8c5] shadow-sm text-[#4a1c14] transition-all flex items-center justify-center cursor-pointer"
               >
                 {num}
               </button>
@@ -1016,21 +714,21 @@ function Kiosk() {
             <button
               type="button"
               onClick={handleKeypadClear}
-              className="h-14 rounded-2xl text-lg font-bold bg-rose-50 hover:bg-rose-100 active:scale-95 border-2 border-rose-200 text-rose-700 transition-all flex items-center justify-center"
+              className="h-14 rounded-2xl text-lg font-bold bg-rose-50 hover:bg-rose-100 active:scale-95 border-2 border-rose-200 text-rose-700 transition-all flex items-center justify-center cursor-pointer"
             >
               Clear
             </button>
             <button
               type="button"
               onClick={() => handleKeypadDigit("0")}
-              className="h-14 rounded-2xl text-2xl font-bold font-mono bg-white hover:bg-[#f7ece0] active:scale-95 border-2 border-[#e5d8c5] shadow-sm text-[#4a1c14] transition-all flex items-center justify-center"
+              className="h-14 rounded-2xl text-2xl font-bold font-mono bg-white hover:bg-[#f7ece0] active:scale-95 border-2 border-[#e5d8c5] shadow-sm text-[#4a1c14] transition-all flex items-center justify-center cursor-pointer"
             >
               0
             </button>
             <button
               type="button"
               onClick={handleKeypadBackspace}
-              className="h-14 rounded-2xl text-lg font-bold bg-amber-50 hover:bg-amber-100 active:scale-95 border-2 border-amber-200 text-amber-800 transition-all flex items-center justify-center"
+              className="h-14 rounded-2xl text-lg font-bold bg-amber-50 hover:bg-amber-100 active:scale-95 border-2 border-amber-200 text-amber-800 transition-all flex items-center justify-center cursor-pointer"
             >
               <Delete className="size-6" />
             </button>
@@ -1041,7 +739,7 @@ function Kiosk() {
               type="button"
               variant="outline"
               onClick={() => setCustomService(null)}
-              className="w-full sm:w-auto rounded-xl border-[#d8c5af]"
+              className="w-full sm:w-auto rounded-xl border-[#d8c5af] cursor-pointer"
             >
               Cancel
             </Button>
@@ -1049,7 +747,7 @@ function Kiosk() {
               type="button"
               disabled={busy || Number(customAmountStr) <= 0}
               onClick={() => customService && executePunch(customService.id, Number(customAmountStr))}
-              className="w-full sm:flex-1 h-12 text-base font-bold bg-[#4a1c14] hover:bg-[#8b2500] text-white rounded-xl shadow-lg"
+              className="w-full sm:flex-1 h-12 text-base font-bold bg-[#4a1c14] hover:bg-[#8b2500] text-white rounded-xl shadow-lg cursor-pointer"
             >
               {busy ? (
                 <Loader2 className="size-5 animate-spin mr-2" />
@@ -1063,10 +761,47 @@ function Kiosk() {
 
       {/* Terminal Footer */}
       <footer className="text-center text-xs font-medium text-[#8f6853] py-2 flex flex-col sm:flex-row items-center justify-center gap-2">
-        <span>Shree Swaminarayan Gurukul, Rajkot · Cashless Kiosk Terminal</span>
+        <span>Shree Swaminarayan Gurukul, Rajkot · Cashless Biometric Terminal</span>
         <span className="hidden sm:inline">|</span>
-        <span className="font-semibold text-[#6b4a3a]">Powered by EverStep Tech</span>
+        <span className="font-semibold text-[#6b4a3a]">Mantra MFS100 STQC Optical Scanner</span>
       </footer>
+    </div>
+  );
+}
+
+function ReceiptSlip({
+  title,
+  receipt,
+  footerText,
+}: {
+  title: string;
+  receipt: ReceiptData;
+  footerText: string;
+}) {
+  return (
+    <div className="font-mono text-black text-xs leading-tight w-[58mm] p-2 space-y-2">
+      <div className="text-center">
+        <div className="font-bold text-sm uppercase">{title}</div>
+        <div className="text-[10px]">CASHLESS RECEIPT</div>
+      </div>
+      <div className="border-b border-black border-dashed" />
+      <div>
+        <div>Rec #: {receipt.receiptNo}</div>
+        <div>Date : {new Date(receipt.at).toLocaleString("en-IN")}</div>
+        <div>SUID : {receipt.suid}</div>
+        <div>Name : {receipt.name}</div>
+        {receipt.className && <div>Class: {receipt.className}</div>}
+        {receipt.roomNo && <div>Room : {receipt.roomNo}</div>}
+      </div>
+      <div className="border-b border-black border-dashed" />
+      <div className="flex justify-between font-bold text-sm">
+        <span>{receipt.service}</span>
+        <span>₹{receipt.amount}</span>
+      </div>
+      <div className="border-b border-black border-dashed" />
+      <div className="text-center text-[10px] pt-1">
+        <div>{footerText}</div>
+      </div>
     </div>
   );
 }

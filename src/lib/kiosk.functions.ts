@@ -12,7 +12,9 @@ const identifySchema = z.object({
 });
 
 const punchSchema = z.object({
-  nfc: z.string().trim().min(1).max(64),
+  studentId: z.string().uuid().optional(),
+  suid: z.string().trim().optional(),
+  nfc: z.string().trim().optional(),
   serviceId: z.string().uuid(),
   customAmount: z.number().positive().max(10000).optional(),
 });
@@ -285,12 +287,20 @@ export const punchService = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<PunchResult> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    let studentQuery = supabaseAdmin
+      .from("students")
+      .select("id, suid, name, nfc_no, class_name, room_no, blocked");
+
+    if (data.studentId) {
+      studentQuery = studentQuery.eq("id", data.studentId);
+    } else if (data.suid) {
+      studentQuery = studentQuery.eq("suid", data.suid);
+    } else if (data.nfc) {
+      studentQuery = studentQuery.eq("nfc_no", data.nfc);
+    }
+
     const [{ data: student }, { data: service }, { data: settingsRows }] = await Promise.all([
-      supabaseAdmin
-        .from("students")
-        .select("id, suid, name, nfc_no, class_name, room_no, blocked")
-        .eq("nfc_no", data.nfc)
-        .maybeSingle(),
+      studentQuery.maybeSingle(),
       supabaseAdmin
         .from("services")
         .select("id, name, price, print_receipt, active, daily_limit")
@@ -341,7 +351,7 @@ export const punchService = createServerFn({ method: "POST" })
       .insert({
         student_id: student.id,
         suid: student.suid,
-        nfc_no: student.nfc_no,
+        nfc_no: student.nfc_no || student.suid,
         student_name: student.name,
         service_id: service.id,
         service_name: service.name,
