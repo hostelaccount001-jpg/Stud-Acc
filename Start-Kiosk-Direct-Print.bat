@@ -25,7 +25,19 @@ echo Target URL: %TARGET_URL%
 echo.
 
 :: -------------------------------------------------------------------
-:: 2. Auto-Start Python Local Biometric Matcher (Port 8005)
+:: 2. Auto-Start Mantra MFS100 Direct Web Bridge (Port 8032)
+:: -------------------------------------------------------------------
+netstat -ano | findstr ":8032" >nul
+if errorlevel 1 (
+    echo Starting Mantra MFS100 Native Direct Web Bridge (Port 8032)...
+    start "Mantra MFS100 Bridge" /min "C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy Bypass -File "%~dp0mantra_service.ps1"
+    timeout /t 1 /nobreak >nul
+) else (
+    echo Mantra MFS100 Native Web Bridge is already active on Port 8032.
+)
+
+:: -------------------------------------------------------------------
+:: 3. Auto-Start Python Local Biometric Matcher (Port 8005)
 :: -------------------------------------------------------------------
 netstat -ano | findstr ":8005" >nul
 if errorlevel 1 (
