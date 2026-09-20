@@ -26,7 +26,6 @@ import {
   getKioskConfig,
   punchService,
   getStudentGallery,
-  lookupStudentBySuid,
 } from "@/lib/kiosk.functions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -100,10 +99,6 @@ function Kiosk() {
   const [error, setError] = useState<string>("");
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
-  // Manual SUID fallback modal state (for injured finger)
-  const [suidModalOpen, setSuidModalOpen] = useState(false);
-  const [manualSuid, setManualSuid] = useState("");
-
   // Background printing receipt container
   const [activeReceipt, setActiveReceipt] = useState<ReceiptData | null>(null);
 
@@ -114,7 +109,6 @@ function Kiosk() {
   const getConfig = useServerFn(getKioskConfig);
   const punch = useServerFn(punchService);
   const getGallery = useServerFn(getStudentGallery);
-  const lookupBySuid = useServerFn(lookupStudentBySuid);
 
   // Live Mantra MFS100 device status
   const { device, checking: deviceChecking, isConnected } = useMantraDevice(3000);
@@ -152,8 +146,6 @@ function Kiosk() {
     setCustomService(null);
     setCustomAmountStr("0");
     setScanning(false);
-    setManualSuid("");
-    setSuidModalOpen(false);
   }
 
   // STEP 1: Direct Fingerprint Scan & 1:N Identification
@@ -214,45 +206,6 @@ function Kiosk() {
       setError("Communication error with Mantra MFS100 scanner. Check USB connection and driver.");
     } finally {
       setScanning(false);
-      setBusy(false);
-    }
-  }
-
-  // Manual SUID Fallback (for emergency or injured finger)
-  async function handleManualSuidSubmit() {
-    const code = manualSuid.trim();
-    if (!code) return;
-    setBusy(true);
-    setError("");
-
-    try {
-      const res = await lookupBySuid({ data: { suid: code } });
-      if (res.status === "not_found") {
-        setError("❌ SUID not found in student database.");
-        return;
-      }
-      if (res.status === "blocked") {
-        setError(`❌ Account Blocked: ${res.message}`);
-        return;
-      }
-      if (res.status === "ok") {
-        const verified: VerifiedStudent = {
-          id: res.studentId,
-          suid: res.suid,
-          name: res.name,
-          class_name: res.class_name,
-          room_no: res.room_no,
-          nfc_no: res.nfc_no,
-          templates: res.templates || [],
-        };
-        setStudent(verified);
-        setSuidModalOpen(false);
-        setSuccessBanner(`Student Identified: ${verified.name}!`);
-        setStep("service");
-      }
-    } catch {
-      setError("Error looking up SUID. Please try again.");
-    } finally {
       setBusy(false);
     }
   }
@@ -506,40 +459,34 @@ function Kiosk() {
               </div>
             )}
 
-            <div className="space-y-3 pt-2">
+            <div className="pt-2">
               <Button
                 size="lg"
                 onClick={() => void startFingerScan()}
                 disabled={scanning || busy}
-                className="w-full h-15 text-lg font-bold text-white rounded-2xl shadow-[0_10px_25px_-5px_rgba(139,37,0,0.4)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shimmer-btn cursor-pointer bg-gradient-to-r from-[#4a1c14] to-[#8b2500]"
+                className="w-full h-15 text-lg font-bold text-white rounded-2xl shadow-[0_12px_28px_-6px_rgba(139,37,0,0.45)] transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] shimmer-btn cursor-pointer bg-gradient-to-r from-[#4a1c14] via-[#6d2518] to-[#8b2500] border border-amber-500/20"
               >
                 {scanning ? (
                   <>
-                    <Loader2 className="size-5 animate-spin mr-2" />
+                    <Loader2 className="size-5 animate-spin mr-2 text-amber-300" />
                     Scanning Fingerprint...
                   </>
                 ) : busy ? (
                   <>
-                    <Loader2 className="size-5 animate-spin mr-2" />
-                    Identifying Student...
+                    <Loader2 className="size-5 animate-spin mr-2 text-amber-300" />
+                    Verifying Biometrics...
                   </>
                 ) : (
                   <>
-                    <Fingerprint className="size-5 mr-2" />
+                    <Fingerprint className="size-5 mr-2 text-amber-300" />
                     Touch to Scan Fingerprint
                   </>
                 )}
               </Button>
 
-              {/* SUID Manual Lookup Fallback for injured fingers */}
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => setSuidModalOpen(true)}
-                  className="text-xs text-[#7c533f] hover:text-[#4a1c14] underline font-medium cursor-pointer"
-                >
-                  આંગળી સ્કેન ન થાય તો? SUID દ્વારા મેન્યુઅલ લોગઇન
-                </button>
+              <div className="pt-4 flex items-center justify-center gap-2 text-[11px] font-semibold text-[#8b6553]">
+                <ShieldCheck className="size-3.5 text-emerald-600" />
+                <span>Mantra MFS100 Hardware Biometric Verification</span>
               </div>
             </div>
           </Card>
@@ -622,51 +569,6 @@ function Kiosk() {
           </div>
         )}
       </main>
-
-      {/* Manual SUID Entry Fallback Dialog */}
-      <Dialog open={suidModalOpen} onOpenChange={setSuidModalOpen}>
-        <DialogContent className="max-w-md bg-[#fdfbf7] border-2 border-[#e5d8c5] rounded-3xl p-6">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-serif font-bold text-[#4a1c14] flex items-center gap-2">
-              <User className="size-5 text-[#8b2500]" /> SUID દ્વારા શોધો
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 my-2">
-            <p className="text-xs text-[#7c533f]">
-              જો વિદ્યાર્થીની આંગળીમાં ઈજા કે પટ્ટી હોય તો અહીં SUID નંબર નાખીને આગળ વધી શકાય છે.
-            </p>
-            <Input
-              autoFocus
-              type="text"
-              placeholder="Enter Student SUID..."
-              value={manualSuid}
-              onChange={(e) => setManualSuid(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && manualSuid.trim()) {
-                  void handleManualSuidSubmit();
-                }
-              }}
-              className="h-14 font-mono text-lg font-bold bg-white border-2 border-[#d8c5af] rounded-2xl text-center"
-            />
-          </div>
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setSuidModalOpen(false)}
-              className="rounded-xl border-[#d8c5af]"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleManualSuidSubmit()}
-              disabled={busy || !manualSuid.trim()}
-              className="bg-[#4a1c14] hover:bg-[#8b2500] text-white rounded-xl"
-            >
-              {busy ? <Loader2 className="size-4 animate-spin mr-2" /> : "Verify SUID"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Custom Amount Numpad Dialog */}
       <Dialog open={Boolean(customService)} onOpenChange={(open) => !open && setCustomService(null)}>
