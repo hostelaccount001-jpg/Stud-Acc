@@ -499,26 +499,93 @@ function Kiosk() {
               )}
             </div>
 
-            {/* Glowing Biometric Scanner Ring */}
-            <div
-              onClick={() => void startFingerScan()}
-              className="relative mx-auto size-40 md:size-48 rounded-full bg-gradient-to-b from-[#fdfbf7] to-[#f4ebe0] border-2 border-dashed border-[#b87333] flex items-center justify-center shadow-inner animate-pulse-ring overflow-hidden group cursor-pointer hover:border-[#8b2500] transition-colors"
-            >
-              {/* Animated Laser Scanning Beam */}
-              <div className="absolute inset-x-0 top-0 z-10 pointer-events-none animate-laser">
-                <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-rose-500 to-transparent shadow-[0_0_15px_rgba(244,63,94,0.8)]" />
-                <div className="h-14 w-full bg-gradient-to-b from-rose-500/25 to-transparent blur-sm" />
+            {/* Ultra-Secure Biometric HUD & Scanner Target */}
+            <div className="relative mx-auto w-64 md:w-72 flex flex-col items-center py-2">
+              {/* Corner targeting HUD brackets */}
+              <div className="absolute top-0 left-0 w-5 h-5 border-t-2 border-l-2 border-[#8b2500]/50 rounded-tl-sm pointer-events-none" />
+              <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2 border-[#8b2500]/50 rounded-tr-sm pointer-events-none" />
+              <div className="absolute bottom-7 left-0 w-5 h-5 border-b-2 border-l-2 border-[#8b2500]/50 rounded-bl-sm pointer-events-none" />
+              <div className="absolute bottom-7 right-0 w-5 h-5 border-b-2 border-r-2 border-[#8b2500]/50 rounded-br-sm pointer-events-none" />
+
+              {/* HUD Telemetry Top Badges */}
+              <div className="w-full flex justify-between items-center px-1 mb-2.5 text-[10px] font-mono tracking-widest text-[#8b2500]/80 font-semibold select-none">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block size-1.5 rounded-full bg-emerald-500 animate-ping" />
+                  [ 500 DPI ]
+                </span>
+                <span className="tracking-wider uppercase font-bold text-[#8b2500]">
+                  {scanning ? "CAPTURE IN PROGRESS" : "OPTICAL ARMED"}
+                </span>
+                <span>[ ISO/IEC ]</span>
               </div>
 
-              <Fingerprint
-                className={`size-24 md:size-28 text-[#8b2500] transition-all duration-300 drop-shadow-md ${
-                  scanning ? "scale-110 text-rose-600 animate-pulse" : "group-hover:scale-105"
-                }`}
-              />
+              {/* Outer Biometric Glass Ring Container */}
+              <div
+                onClick={() => void startFingerScan()}
+                className="relative size-44 md:size-52 rounded-full flex items-center justify-center p-2 cursor-pointer group select-none transition-all duration-300"
+              >
+                {/* Rotating Calibration Track Ring 1 (Clockwise) */}
+                <div className="absolute inset-0 rounded-full border border-dashed border-[#8b2500]/30 animate-spin-slow-cw pointer-events-none" />
 
-              {scanning && (
-                <span className="absolute inset-0 rounded-full border-4 border-rose-500 animate-ping opacity-40" />
-              )}
+                {/* Rotating Segmented Ring 2 (Counter-Clockwise) */}
+                <div className="absolute inset-2 rounded-full border-2 border-dotted border-[#b87333]/40 animate-spin-slow-ccw pointer-events-none" />
+
+                {/* Ambient Outer Pulse Halo */}
+                <div
+                  className={`absolute inset-3 rounded-full transition-all duration-500 pointer-events-none ${
+                    scanning
+                      ? "bg-rose-500/15 ring-4 ring-rose-500/30 animate-ping"
+                      : "bg-amber-500/10 animate-pulse-ring"
+                  }`}
+                />
+
+                {/* Central Optical Glass Pod with Matrix Grid */}
+                <div className="relative size-full rounded-full cyber-matrix-bg bg-gradient-to-b from-[#fefcf9] via-[#f7efe6] to-[#eddcd0] border-2 border-[#b87333]/80 shadow-[inset_0_2px_12px_rgba(0,0,0,0.1),0_8px_25px_rgba(139,37,0,0.15)] flex items-center justify-center overflow-hidden">
+                  {/* Targeting Crosshairs */}
+                  <div className="absolute inset-x-0 top-1/2 h-[1px] bg-[#8b2500]/15 pointer-events-none" />
+                  <div className="absolute inset-y-0 left-1/2 w-[1px] bg-[#8b2500]/15 pointer-events-none" />
+
+                  {/* High-Tech Dual-Way Oscillating Laser Beam */}
+                  <div className="absolute inset-x-0 top-0 z-20 pointer-events-none animate-laser-oscillate">
+                    {/* Laser Main Core Line */}
+                    <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-rose-500 to-transparent shadow-[0_0_12px_#f43f5e,0_0_24px_#f43f5e]" />
+                    {/* Volumetric Light Cone */}
+                    <div className="h-16 w-full bg-gradient-to-b from-rose-500/30 via-rose-500/10 to-transparent blur-xs" />
+                    {/* Center Targeting Reticle Dot */}
+                    <div className="absolute -top-1 left-1/2 -translate-x-1/2 size-2 rounded-full bg-rose-400 shadow-[0_0_8px_#f43f5e] border border-white" />
+                  </div>
+
+                  {/* Holographic Breathing Fingerprint Icon */}
+                  <Fingerprint
+                    className={`size-24 md:size-28 transition-all duration-300 drop-shadow-lg z-10 ${
+                      scanning
+                        ? "text-rose-600 scale-110 animate-pulse drop-shadow-[0_0_15px_rgba(225,29,72,0.6)]"
+                        : "text-[#8b2500] animate-holographic-breathe group-hover:scale-105"
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* Real-time Telemetry & Frequency Visualizer Bars */}
+              <div className="mt-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f4ebe0]/80 border border-[#b87333]/30 shadow-xs">
+                <span className="text-[10px] font-mono font-bold text-[#8b2500] uppercase tracking-wider mr-1">
+                  FREQ
+                </span>
+                {[40, 70, 100, 60, 85, 30, 95, 55, 80, 45].map((val, idx) => (
+                  <span
+                    key={idx}
+                    className="w-1 rounded-full bg-gradient-to-t from-[#8b2500] to-amber-500"
+                    style={{
+                      animation: `live-eq-bar ${0.6 + (idx % 4) * 0.25}s ease-in-out infinite alternate`,
+                      animationDelay: `${idx * 0.08}s`,
+                      height: `${Math.max(4, Math.min(16, val * 0.16))}px`,
+                    }}
+                  />
+                ))}
+                <span className="text-[10px] font-mono font-bold text-emerald-700 ml-1">
+                  MFS100 ACTIVE
+                </span>
+              </div>
             </div>
 
             <div className="space-y-1.5">

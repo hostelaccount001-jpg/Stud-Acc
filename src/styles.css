@@ -406,6 +406,68 @@ div[role="alertdialog"],
   }
 }
 
+/* Cyber HUD & Biometric Scanner Keyframes */
+@keyframes radar-spin-cw {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes radar-spin-ccw {
+  0% {
+    transform: rotate(360deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes biometric-laser-oscillate {
+  0% {
+    transform: translateY(-8px);
+    opacity: 0.3;
+  }
+  12% {
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(165px);
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-8px);
+    opacity: 0.3;
+  }
+}
+
+@keyframes holographic-breathe {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(139, 37, 0, 0.4)) drop-shadow(0 0 15px rgba(245, 158, 11, 0.25));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 14px rgba(139, 37, 0, 0.7)) drop-shadow(0 0 25px rgba(245, 158, 11, 0.5));
+    transform: scale(1.03);
+  }
+}
+
+@keyframes live-eq-bar {
+  0%, 100% {
+    height: 4px;
+    opacity: 0.35;
+  }
+  50% {
+    height: 16px;
+    opacity: 1;
+  }
+}
+
 .animate-laser {
   animation: laser-sweep 2.2s ease-in-out infinite;
 }
@@ -416,6 +478,30 @@ div[role="alertdialog"],
 
 .animate-float {
   animation: subtle-float 4s ease-in-out infinite;
+}
+
+.animate-spin-slow-cw {
+  animation: radar-spin-cw 20s linear infinite;
+}
+
+.animate-spin-slow-ccw {
+  animation: radar-spin-ccw 14s linear infinite;
+}
+
+.animate-laser-oscillate {
+  animation: biometric-laser-oscillate 2.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+.animate-holographic-breathe {
+  animation: holographic-breathe 3.2s ease-in-out infinite;
+}
+
+.cyber-matrix-bg {
+  background-image: 
+    radial-gradient(circle, rgba(139, 37, 0, 0.15) 1px, transparent 1px),
+    linear-gradient(to right, rgba(216, 197, 175, 0.2) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(216, 197, 175, 0.2) 1px, transparent 1px);
+  background-size: 14px 14px, 14px 14px, 14px 14px;
 }
 
 .shimmer-btn {
