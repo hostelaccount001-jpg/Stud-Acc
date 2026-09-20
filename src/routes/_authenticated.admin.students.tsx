@@ -119,7 +119,7 @@ function StudentsPage() {
     queryKey: ["students", search],
     queryFn: async () => {
       let q = supabase.from("students").select("*").order("suid").limit(500);
-      if (search.trim()) q = q.or(`suid.ilike.%${search.trim()}%,name.ilike.%${search.trim()}%,class_name.ilike.%${search.trim()}%`);
+      if (search.trim()) q = q.or(`suid.ilike.%${search.trim()}%,name.ilike.%${search.trim()}%,class_name.ilike.%${search.trim()}%,room_no.ilike.%${search.trim()}%`);
       const { data, error } = await q;
       if (error) throw error;
       return data;
@@ -505,7 +505,7 @@ function StudentsPage() {
               />
             </div>
 
-            <div className="space-y-1.5 md:col-span-2">
+            <div className="space-y-1.5">
               <Label htmlFor="name" className="text-xs font-bold text-[#7c533f]">Full Student Name *</Label>
               <Input
                 id="name"
@@ -525,6 +525,17 @@ function StudentsPage() {
                 value={form.class_name}
                 onChange={(e) => setForm({ ...form, class_name: e.target.value })}
                 className="input-luxury h-10 px-3 text-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="room_no" className="text-xs font-bold text-[#7c533f]">Room No / Hostel</Label>
+              <Input
+                id="room_no"
+                placeholder="Enter Room No (e.g. 101, B-12)"
+                value={form.room_no}
+                onChange={(e) => setForm({ ...form, room_no: e.target.value })}
+                className="input-luxury h-10 px-3 text-sm font-mono font-semibold"
               />
             </div>
           </div>
@@ -556,7 +567,7 @@ function StudentsPage() {
             <div className="relative w-full">
               <Search className="size-4.5 absolute left-3.5 top-3 text-[#7c533f]/50" />
               <Input
-                placeholder="Search by SUID, Name, or Class..."
+                placeholder="Search by SUID, Name, Class, or Room..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="input-luxury pl-10 h-10 text-sm w-full"
@@ -576,6 +587,7 @@ function StudentsPage() {
                 <th className="py-3 pr-4">SUID</th>
                 <th className="py-3 pr-4">Student</th>
                 <th className="py-3 pr-4">Class</th>
+                <th className="py-3 pr-4">Room No</th>
                 <th className="py-3 pr-4">Fingerprints</th>
                 <th className="py-3 pr-4">Status</th>
                 <th className="py-3 pr-4 text-right">Actions</th>
@@ -605,6 +617,15 @@ function StudentsPage() {
                     </td>
                     <td className="py-3.5 pr-4 font-sans text-[#4a1c14]">
                       {s.class_name ?? "—"}
+                    </td>
+                    <td className="py-3.5 pr-4 font-sans font-medium text-[#7c533f]">
+                      {s.room_no ? (
+                        <span className="px-2.5 py-1 rounded-lg bg-[#faf6ef] border border-[#d8c5af] font-mono font-bold text-[#4a1c14]">
+                          {s.room_no}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="py-3.5 pr-4">
                       {fingerCount > 0 ? (
@@ -656,7 +677,7 @@ function StudentsPage() {
 
               {studentList.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-sm font-sans text-[#7c533f]">
+                  <td colSpan={8} className="py-12 text-center text-sm font-sans text-[#7c533f]">
                     No student records found. Add a student above or import an Excel file.
                   </td>
                 </tr>
@@ -674,7 +695,7 @@ function StudentsPage() {
               <Pencil className="size-5 text-[#8b2500]" /> Edit Student & Biometrics
             </DialogTitle>
             <DialogDescription className="text-xs text-[#7c533f]">
-              Update SUID, name, class, and enrolled fingerprints.
+              Update SUID, name, class, room number, and enrolled fingerprints.
             </DialogDescription>
           </DialogHeader>
 
@@ -708,7 +729,7 @@ function StudentsPage() {
                 />
               </div>
 
-              <div className="space-y-1.5 md:col-span-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="edit-class" className="text-xs font-bold text-[#7c533f]">Class / Std</Label>
                 <Input
                   id="edit-class"
@@ -716,6 +737,17 @@ function StudentsPage() {
                   value={editForm.class_name}
                   onChange={(e) => setEditForm({ ...editForm, class_name: e.target.value })}
                   className="input-luxury h-10 text-sm"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-room" className="text-xs font-bold text-[#7c533f]">Room No / Hostel</Label>
+                <Input
+                  id="edit-room"
+                  placeholder="Enter Room No (e.g. 101, B-12)"
+                  value={editForm.room_no}
+                  onChange={(e) => setEditForm({ ...editForm, room_no: e.target.value })}
+                  className="input-luxury h-10 text-sm font-mono font-semibold"
                 />
               </div>
             </div>
