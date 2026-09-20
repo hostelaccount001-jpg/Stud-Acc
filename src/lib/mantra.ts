@@ -390,12 +390,12 @@ export async function matchTemplate(probe: string, gallery: string): Promise<boo
 
   // 2. High-speed parallel probe across candidate local endpoints (timeout 600ms)
   const candidateUrls = [
+    "http://127.0.0.1:8032/mfs100/match",
+    "http://127.0.0.1:8032/match",
     "http://127.0.0.1:8005/verify-biometric",
     "http://127.0.0.1:8005/mfs100/match",
     "http://127.0.0.1:8004/mfs100/match",
     "http://127.0.0.1:8004/verify-biometric",
-    "https://127.0.0.1:8005/verify-biometric",
-    "https://127.0.0.1:8004/mfs100/match",
   ];
 
   const matchPromises = candidateUrls.map(async (url): Promise<boolean | null> => {
@@ -443,9 +443,10 @@ export async function identify<T extends { templates: string[] }>(
 
   // 1. Try high-speed 1:N local endpoint first (< 50ms)
   const candidateIdentifyUrls = [
+    "http://127.0.0.1:8032/identify-fingerprint",
+    "http://127.0.0.1:8032/mfs100/identify",
     "http://127.0.0.1:8005/identify-fingerprint",
     "http://127.0.0.1:8004/identify-fingerprint",
-    "http://127.0.0.1:8005/mfs100/identify",
   ];
 
   for (const url of candidateIdentifyUrls) {

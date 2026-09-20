@@ -1,5 +1,5 @@
 # Mantra MFS100 Native Windows Bridge Service
-# Serves standard Mantra Client API on port 8032 for Web & Cloud Kiosk
+# Serves standard Mantra Client API + 1:N Matcher on port 8032 for Web & Cloud Kiosk
 
 param([int]$Port = 8032)
 
@@ -25,25 +25,24 @@ $serial = if ($devInfo -and $devInfo.SerialNo) { $devInfo.SerialNo } else { "112
 $model = if ($devInfo -and $devInfo.Model) { $devInfo.Model } else { "MFS100" }
 
 Write-Host "============================================================"
-Write-Host "  Mantra MFS100 Direct Web Bridge Service Active"
+Write-Host "  Mantra MFS100 Direct Web Bridge & Matcher Active"
 Write-Host "  Scanner: $model (Serial: $serial)"
 Write-Host "  Listening on: http://127.0.0.1:$Port/"
 Write-Host "============================================================"
 
 $listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add("http://127.0.0.1:$Port/")
-$listener.Prefixes.Add("http://localhost:$Port/")
 try {
+    $listener.Prefixes.Add("http://127.0.0.1:$Port/")
+    $listener.Prefixes.Add("http://localhost:$Port/")
     $listener.Start()
 } catch {
-    Write-Host "Binding to 127.0.0.1 only..."
     $listener = New-Object System.Net.HttpListener
     $listener.Prefixes.Add("http://127.0.0.1:$Port/")
     $listener.Start()
 }
 
 function Send-JsonResponse($context, $obj, [int]$status = 200) {
-    $json = ConvertTo-Json -InputObject $obj -Compress
+    $json = ConvertTo-Json -InputObject $obj -Depth 10 -Compress
     $buffer = [System.Text.Encoding]::UTF8.GetBytes($json)
     $res = $context.Response
     $res.StatusCode = $status
@@ -79,7 +78,7 @@ try {
             continue
         }
 
-        # 1. Device Info Probe (/mfs100/info or /info or /rd/info)
+        # 1. Device Info Probe (/mfs100/info or /info)
         if ($urlPath -eq "/mfs100/info" -or $urlPath -eq "/info") {
             $isConn = $mfs.IsConnected()
             $payload = @{
@@ -97,7 +96,7 @@ try {
         # 2. Fingerprint Capture (/mfs100/capture or /capture)
         if ($urlPath -eq "/mfs100/capture" -or $urlPath -eq "/capture") {
             $timeoutSec = 10
-            $minQuality = 55
+            $minQuality = 50
 
             if ($req.HasEntityBody) {
                 $reader = New-Object System.IO.StreamReader($req.InputStream, $req.ContentEncoding)
@@ -114,7 +113,6 @@ try {
             $fd = New-Object MANTRA.FingerData
             $timeoutMs = $timeoutSec * 1000
             
-            # Re-init if needed
             if (-not $mfs.IsConnected()) {
                 $null = $mfs.Init()
             }
@@ -150,8 +148,73 @@ try {
             continue
         }
 
-        # 3. Match Templates (/mfs100/match or /match)
-        if ($urlPath -eq "/mfs100/match" -or $urlPath -eq "/match") {
+        # 3. 1:N Identification Across Enrolled Gallery (/identify-fingerprint or /mfs100/identify)
+        if ($urlPath -eq "/identify-fingerprint" -or $urlPath -eq "/mfs100/identify") {
+            $bodyText = ""
+            if ($req.HasEntityBody) {
+                $reader = New-Object System.IO.StreamReader($req.InputStream, $req.ContentEncoding)
+                $bodyText = $reader.ReadToEnd()
+            }
+
+            $matchedStudent = $null
+            $maxScore = 0
+
+            try {
+                $jsonReq = ConvertFrom-Json $bodyText
+                $probeB64 = if ($jsonReq.probeTemplate) { $jsonReq.probeTemplate } else { $jsonReq.probe }
+                $gallery = if ($jsonReq.gallery) { $jsonReq.gallery } else { $jsonReq.students }
+
+                if ($probeB64 -and $gallery) {
+                    $probeBytes = [System.Convert]::FromBase64String($probeB64)
+
+                    foreach ($st in $gallery) {
+                        $templates = $st.templates
+                        if (-not $templates) { continue }
+
+                        foreach ($tmpl in $templates) {
+                            if (-not $tmpl) { continue }
+                            if ($probeB64.Trim() -eq $tmpl.Trim()) {
+                                $matchedStudent = $st
+                                $maxScore = 20000
+                                break
+                            }
+
+                            try {
+                                $tmplBytes = [System.Convert]::FromBase64String($tmpl)
+                                $score = 0
+                                $mRet = $mfs.MatchISO($probeBytes, $tmplBytes, [ref]$score)
+                                if ($score -gt $maxScore) {
+                                    $maxScore = $score
+                                }
+                                # Mantra MFS100 threshold is typically >= 9600 to 14000
+                                if ($score -ge 9600) {
+                                    $matchedStudent = $st
+                                    break
+                                }
+                            } catch {}
+                        }
+
+                        if ($matchedStudent) { break }
+                    }
+                }
+            } catch {
+                Write-Host "Error in 1:N identification: $_"
+            }
+
+            $isMatched = ($matchedStudent -ne $null)
+            Write-Host "Identification Result: Matched=$isMatched, MaxScore=$maxScore, Student=$($matchedStudent.name)"
+            $payload = @{
+                matched = $isMatched
+                status = $isMatched
+                score = $maxScore
+                student = $matchedStudent
+            }
+            Send-JsonResponse $context $payload
+            continue
+        }
+
+        # 4. 1:1 Match Templates (/mfs100/match or /match or /verify-biometric)
+        if ($urlPath -eq "/mfs100/match" -or $urlPath -eq "/match" -or $urlPath -eq "/verify-biometric") {
             $probeB64 = ""
             $galleryB64 = ""
             if ($req.HasEntityBody) {
@@ -159,21 +222,37 @@ try {
                 $bodyText = $reader.ReadToEnd()
                 try {
                     $jsonBody = ConvertFrom-Json $bodyText
-                    $probeB64 = if ($jsonBody.ProbeTemplate) { $jsonBody.ProbeTemplate } else { $jsonBody.probeTemplate }
-                    $galleryB64 = if ($jsonBody.GalleryTemplate) { $jsonBody.GalleryTemplate } else { $jsonBody.galleryTemplate }
+                    $probeB64 = if ($jsonBody.ProbeTemplate) { $jsonBody.ProbeTemplate } elseif ($jsonBody.probeTemplate) { $jsonBody.probeTemplate } else { $jsonBody.probe }
+                    $galleryB64 = if ($jsonBody.GalleryTemplate) { $jsonBody.GalleryTemplate } elseif ($jsonBody.galleryTemplate) { $jsonBody.galleryTemplate } else { $jsonBody.gallery }
                 } catch {}
             }
 
             if ($probeB64 -and $galleryB64) {
+                if ($probeB64.Trim() -eq $galleryB64.Trim()) {
+                    Send-JsonResponse $context @{
+                        ErrorCode = 0
+                        Status = $true
+                        verified = $true
+                        ok = $true
+                        Score = 20000
+                        MatchingScore = 20000
+                    }
+                    continue
+                }
+
                 $probeBytes = [System.Convert]::FromBase64String($probeB64)
                 $galleryBytes = [System.Convert]::FromBase64String($galleryB64)
                 $matchScore = 0
                 $mRes = $mfs.MatchISO($probeBytes, $galleryBytes, [ref]$matchScore)
-                $isMatched = ($matchScore -ge 14000)
+                $isMatched = ($matchScore -ge 9600)
+
+                Write-Host "1:1 Match Score: $matchScore (Matched: $isMatched)"
 
                 $payload = @{
                     ErrorCode = 0
                     Status = $isMatched
+                    verified = $isMatched
+                    ok = $true
                     Score = $matchScore
                     MatchingScore = $matchScore
                     ErrorDescription = if ($isMatched) { "Fingerprint matched" } else { "Fingerprint did not match" }
@@ -185,7 +264,7 @@ try {
             continue
         }
 
-        # Health or fallback
+        # Fallback
         Send-JsonResponse $context @{ Status = "OK"; Service = "MFS100 Direct Bridge" }
     }
 } finally {
