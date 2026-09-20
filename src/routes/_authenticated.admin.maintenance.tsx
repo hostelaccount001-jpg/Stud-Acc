@@ -41,8 +41,8 @@ import { executeErpFormatServer } from "@/lib/maintenance.functions";
 export const Route = createFileRoute("/_authenticated/admin/maintenance")({
   head: () => ({
     meta: [
-      { title: "Format ERP & Database — Gurukul Kiosk ERP" },
-      { name: "description", content: "Selectively format or reset specific ERP modules: Students, Services, Limits, Reports, or Users." },
+      { title: "System Maintenance & Database Console — Gurukul Kiosk ERP" },
+      { name: "description", content: "Selectively manage, maintain, or reset specific ERP modules." },
     ],
   }),
   component: MaintenancePage,
@@ -160,10 +160,10 @@ function MaintenancePage() {
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e5d8c5] pb-6">
         <div>
           <h1 className="text-3xl md:text-4xl font-serif font-bold text-[#4a1c14] tracking-tight flex items-center gap-2.5">
-            <Database className="size-8 text-[#8b2500]" /> ERP Module Format & Reset Console
+            <Database className="size-8 text-[#8b2500]" /> System Maintenance & Database Console
           </h1>
           <p className="mt-1 text-sm text-[#7c533f] font-medium">
-            Selectively format any individual module from the ERP sidebar, or execute a complete clean factory reset.
+            Selectively reset or purge test data from individual ERP modules, or execute a comprehensive system maintenance wipe.
           </p>
         </div>
 
@@ -172,7 +172,7 @@ function MaintenancePage() {
           onClick={triggerFullReset}
           className="btn-luxury-danger px-6 py-2.5 text-xs gap-2 shadow-lg"
         >
-          <ShieldAlert className="size-4" /> Full ERP Factory Format (Wipe All 5 Modules)
+          <ShieldAlert className="size-4" /> Full System Reset (Wipe All Modules)
         </button>
       </header>
 

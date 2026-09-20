@@ -195,7 +195,7 @@ function Kiosk() {
               setBusy(false);
               break; // exit loop as student is now verified
             } else {
-              setError("❌ ફિંગરપ્રિન્ટ ઓળખાઈ નથી. કૃપા કરીને નોંધાયેલ આંગળી બરાબર મૂકો.");
+              setError("❌ Fingerprint not recognized. Please place your registered finger firmly on the sensor.");
               setBusy(false);
               await new Promise((resolve) => setTimeout(resolve, 2500));
               if (!cancelled) setError("");
@@ -527,12 +527,12 @@ function Kiosk() {
 
             <div className="space-y-1.5">
               <h2 className="text-2xl md:text-3xl font-serif font-bold text-[#4a1c14]">
-                {scanning ? "સ્કેનર પર સીધી આંગળી મૂકો" : "ડિવાઇસ પર આંગળી મૂકો"}
+                {scanning ? "Place Finger on Scanner Glass" : "Place Finger to Authenticate"}
               </h2>
               <p className="text-sm md:text-base text-[#7c533f] font-medium">
                 {scanning
-                  ? "🟢 સેન્સર ચાલુ છે! કોઈપણ બટન ક્લિક કર્યા વગર Mantra પર આંગળી મૂકો."
-                  : "Mantra MFS100 કાચ પર સીધી આંગળી મૂકો એટલે તરત જ ડિટેક્ટ થશે."}
+                  ? "🟢 Optical sensor active. Place registered finger directly on Mantra glass."
+                  : "Mantra MFS100 optical biometric sensor is armed and ready."}
               </p>
             </div>
 
@@ -558,7 +558,7 @@ function Kiosk() {
                 ) : scanning ? (
                   <>
                     <span className="size-3 rounded-full bg-emerald-400 animate-ping mr-2.5" />
-                    ઓટો-ડિટેક્ટ ચાલુ: ડિવાઇસ પર આંગળી મૂકો
+                    Auto-Sense Active: Touch Sensor
                   </>
                 ) : (
                   <>

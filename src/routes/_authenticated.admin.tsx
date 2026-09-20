@@ -31,7 +31,7 @@ const nav = [
   { to: "/admin/settings", label: "Limits & Messages", icon: SlidersHorizontal, desc: "Daily cap & kiosk headers" },
   { to: "/admin/reports", label: "Reports", icon: FileSpreadsheet, desc: "Excel exports & analytics" },
   { to: "/admin/staff", label: "Users & Roles", icon: ShieldCheck, desc: "Super Admin user manager" },
-  { to: "/admin/maintenance", label: "Format ERP & DB", icon: Database, desc: "Database reset & wipe tools" },
+  { to: "/admin/maintenance", label: "System Maintenance", icon: Database, desc: "Database reset & audit tools" },
 ] as const;
 
 function AdminLayout() {
