@@ -1,3 +1,5 @@
+import { cn } from "@/lib/utils";
+
 export type ReceiptData = {
   receiptNo: number;
   suid: string;
@@ -13,71 +15,97 @@ export function ReceiptSlip({
   title = "SHREE SWAMINARAYAN GURUKUL, RAJKOT",
   receipt,
   footerText = "Jay Swaminarayan",
+  preview = false,
 }: {
   title: string;
   receipt: ReceiptData;
   footerText?: string;
+  preview?: boolean;
 }) {
   const at = new Date(receipt.at);
   const formattedNo = String(receipt.receiptNo);
   const dateStr = `${at.getDate()}/${at.getMonth() + 1}/${at.getFullYear()}`;
 
   return (
-    <div id="print-receipt" className="hidden print:block text-black font-mono text-[12px] leading-relaxed mx-auto max-w-[72mm] p-2 bg-white">
-      {/* Title & Subtitle */}
-      <div style={{ textAlign: "center", fontWeight: 800, fontSize: "13px", textTransform: "uppercase", lineHeight: 1.2, marginBottom: "3px" }}>
+    <div
+      id="print-receipt"
+      className={cn(
+        "font-mono text-black text-xs leading-tight w-full max-w-[72mm] mx-auto p-4 bg-white",
+        preview
+          ? "rounded-2xl border-2 border-dashed border-[#d8c5af] shadow-sm space-y-1"
+          : "print:block"
+      )}
+    >
+      {/* Header */}
+      <div className="text-center font-bold uppercase text-[13px] text-[#4a1c14] tracking-wide leading-snug">
         {title}
       </div>
-      <div style={{ textAlign: "center", fontSize: "10px", color: "#444", letterSpacing: "0.5px", marginBottom: "6px" }}>
+      <div className="text-center text-[10px] text-zinc-500 tracking-wider mt-0.5">
         Cashless Service Receipt
       </div>
 
-      {/* Dashed Line */}
-      <div style={{ textAlign: "center", color: "#666", fontSize: "11px", margin: "2px 0" }}>
-        ----------------------------------------
+      {/* Dashed Separator */}
+      <div className="text-center text-zinc-400 text-xs my-1 select-none overflow-hidden">
+        --------------------------------
       </div>
 
-      {/* Meta Fields */}
-      <div style={{ display: "flex", justifyContent: "space-between", margin: "3px 0" }}>
-        <span style={{ color: "#222" }}>Receipt No:</span>
-        <span style={{ fontWeight: 800 }}>#{formattedNo}</span>
+      {/* Details */}
+      <div className="space-y-1">
+        <div className="flex justify-between items-center text-xs">
+          <span className="text-zinc-600">Receipt No:</span>
+          <span className="font-bold text-[#8b2500]">#{formattedNo}</span>
+        </div>
+
+        <div className="flex justify-between items-center text-xs">
+          <span className="text-zinc-600">Date:</span>
+          <span className="font-semibold text-zinc-800">{dateStr}</span>
+        </div>
+
+        <div className="flex justify-between items-center text-xs">
+          <span className="text-zinc-600">SUID:</span>
+          <span className="font-bold text-[#8b2500]">{receipt.suid}</span>
+        </div>
+
+        <div className="flex justify-between items-center text-xs">
+          <span className="text-zinc-600">Name:</span>
+          <span className="font-bold uppercase text-zinc-900 text-right truncate max-w-[65%]">
+            {receipt.name}
+          </span>
+        </div>
+
+        {receipt.className && (
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-zinc-600">Class:</span>
+            <span className="font-medium text-zinc-800">{receipt.className}</span>
+          </div>
+        )}
+
+        {receipt.roomNo && (
+          <div className="flex justify-between items-center text-xs">
+            <span className="text-zinc-600">Room:</span>
+            <span className="font-medium text-zinc-800">{receipt.roomNo}</span>
+          </div>
+        )}
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", margin: "3px 0" }}>
-        <span style={{ color: "#222" }}>Date:</span>
-        <span style={{ fontWeight: 600 }}>{dateStr}</span>
+      {/* Dashed Separator */}
+      <div className="text-center text-zinc-400 text-xs my-1 select-none overflow-hidden">
+        --------------------------------
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", margin: "3px 0" }}>
-        <span style={{ color: "#222" }}>SUID:</span>
-        <span style={{ fontWeight: 800 }}>{receipt.suid}</span>
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "space-between", margin: "3px 0" }}>
-        <span style={{ color: "#222" }}>Name:</span>
-        <span style={{ fontWeight: 800, textTransform: "uppercase", textAlign: "right", maxWidth: "65%" }}>
-          {receipt.name}
-        </span>
-      </div>
-
-      {/* Dashed Line */}
-      <div style={{ textAlign: "center", color: "#666", fontSize: "11px", margin: "4px 0" }}>
-        ----------------------------------------
-      </div>
-
-      {/* Service & Price */}
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: 800, margin: "6px 0" }}>
+      {/* Service & Amount */}
+      <div className="flex justify-between items-center font-bold text-sm text-[#4a1c14] py-1">
         <span>{receipt.service} / Service:</span>
-        <span>Rs. {receipt.amount.toFixed(2)}</span>
+        <span className="text-[#8b2500]">Rs. {Number(receipt.amount).toFixed(2)}</span>
       </div>
 
-      {/* Dashed Line */}
-      <div style={{ textAlign: "center", color: "#666", fontSize: "11px", margin: "4px 0" }}>
-        ----------------------------------------
+      {/* Dashed Separator */}
+      <div className="text-center text-zinc-400 text-xs my-1 select-none overflow-hidden">
+        --------------------------------
       </div>
 
-      {/* Centered Blessing / Footer */}
-      <div style={{ textAlign: "center", fontWeight: 800, fontSize: "12px", marginTop: "8px", marginBottom: "4px" }}>
+      {/* Footer Blessing */}
+      <div className="text-center font-bold mt-2 text-[#4a1c14] text-xs">
         {footerText}
       </div>
     </div>

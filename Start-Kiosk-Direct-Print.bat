@@ -72,8 +72,8 @@ if not exist %EDGE_PATH% (
 :: Dedicated temp profile to enforce clean kiosk flags
 set KIOSK_DIR="%TEMP%\gurukul-kiosk-chrome-profile"
 
-:: Security flags to allow HTTPS Vercel to communicate seamlessly with local Mantra RD Service on 127.0.0.1
-set SEC_FLAGS=--allow-running-insecure-content --ignore-certificate-errors --unsafely-treat-insecure-origin-as-secure=http://127.0.0.1:11100,http://127.0.0.1:11101,http://127.0.0.1:11102,http://127.0.0.1:11103,http://127.0.0.1:11104,http://127.0.0.1:11105,http://127.0.0.1:8004,http://127.0.0.1:8005,http://127.0.0.1:8003
+:: Security flags to allow HTTPS Vercel to communicate seamlessly with local Mantra RD Service and Bridge on 127.0.0.1
+set SEC_FLAGS=--allow-running-insecure-content --ignore-certificate-errors --unsafely-treat-insecure-origin-as-secure=http://127.0.0.1:8032,http://127.0.0.1:11100,http://127.0.0.1:11101,http://127.0.0.1:11102,http://127.0.0.1:11103,http://127.0.0.1:11104,http://127.0.0.1:11105,http://127.0.0.1:8004,http://127.0.0.1:8005,http://127.0.0.1:8003
 
 if exist %CHROME_PATH% (
     echo Starting Google Chrome in Silent Kiosk Print Mode on %TARGET_URL% ...

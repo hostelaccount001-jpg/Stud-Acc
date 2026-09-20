@@ -37,6 +37,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { ReceiptSlip, type ReceiptData } from "@/components/ReceiptSlip";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -79,16 +80,6 @@ type ServiceItem = {
   print_receipt: boolean;
 };
 
-type ReceiptData = {
-  receiptNo: number;
-  suid: string;
-  name: string;
-  className?: string | null | undefined;
-  roomNo?: string | null | undefined;
-  service: string;
-  amount: number;
-  at: string;
-};
 
 function Kiosk() {
   const [step, setStep] = useState<Step>("scan");
@@ -667,43 +658,17 @@ function Kiosk() {
         <span className="hidden sm:inline">|</span>
         <span className="font-semibold text-[#6b4a3a]">Mantra MFS100 STQC Optical Scanner</span>
       </footer>
-    </div>
-  );
-}
 
-function ReceiptSlip({
-  title,
-  receipt,
-  footerText,
-}: {
-  title: string;
-  receipt: ReceiptData;
-  footerText: string;
-}) {
-  return (
-    <div className="font-mono text-black text-xs leading-tight w-[58mm] p-2 space-y-2">
-      <div className="text-center">
-        <div className="font-bold text-sm uppercase">{title}</div>
-        <div className="text-[10px]">CASHLESS RECEIPT</div>
-      </div>
-      <div className="border-b border-black border-dashed" />
-      <div>
-        <div>Rec #: {receipt.receiptNo}</div>
-        <div>Date : {new Date(receipt.at).toLocaleString("en-IN")}</div>
-        <div>SUID : {receipt.suid}</div>
-        <div>Name : {receipt.name}</div>
-        {receipt.className && <div>Class: {receipt.className}</div>}
-        {receipt.roomNo && <div>Room : {receipt.roomNo}</div>}
-      </div>
-      <div className="border-b border-black border-dashed" />
-      <div className="flex justify-between font-bold text-sm">
-        <span>{receipt.service}</span>
-        <span>₹{receipt.amount}</span>
-      </div>
-      <div className="border-b border-black border-dashed" />
-      <div className="text-center text-[10px] pt-1">
-        <div>{footerText}</div>
-      </div>
+      {/* Hidden Thermal Slip - Active During window.print() */}
+      {activeReceipt && (
+        <div className="hidden print:block">
+          <ReceiptSlip
+            title={title}
+            receipt={activeReceipt}
+            footerText={footerText}
+          />
+        </div>
+      )}
     </div>
   );
 }

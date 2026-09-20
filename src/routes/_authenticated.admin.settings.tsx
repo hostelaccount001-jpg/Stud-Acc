@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Sliders, Save, CheckCircle2, Loader2, Eye, Receipt, SlidersHorizontal } from "lucide-react";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { getSettingsServer, updateSettingsServer } from "@/lib/settings.functions";
+import { ReceiptSlip } from "@/components/ReceiptSlip";
 
 export const Route = createFileRoute("/_authenticated/admin/settings")({
   head: () => ({
@@ -209,34 +210,19 @@ function SettingsPage() {
             <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-2 text-[#7c533f]">
               <Receipt className="size-4 text-[#8b2500]" /> Thermal Receipt Slip Preview
             </h3>
-            <div className="rounded-2xl border-2 border-dashed border-[#d8c5af] bg-white p-5 font-mono text-xs text-zinc-900 leading-tight space-y-1.5 shadow-sm">
-              <div className="text-center font-bold uppercase text-[#4a1c14]">{previewTitle}</div>
-              <div className="text-center text-[10px] text-zinc-500">Cashless Service Receipt</div>
-              <div className="text-center text-zinc-300">--------------------------------</div>
-              <div className="flex justify-between">
-                <span>Receipt No:</span>
-                <span className="font-bold text-[#8b2500]">#1024</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Date:</span>
-                <span>{new Date().toLocaleDateString("en-IN")}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>SUID:</span>
-                <span className="font-bold text-[#8b2500]">GR-1001</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Name:</span>
-                <span>STUDENT NAME</span>
-              </div>
-              <div className="text-center text-zinc-300">--------------------------------</div>
-              <div className="flex justify-between font-bold text-sm text-[#4a1c14]">
-                <span>Store / Service:</span>
-                <span className="text-[#8b2500]">Rs. 50.00</span>
-              </div>
-              <div className="text-center text-zinc-300">--------------------------------</div>
-              <div className="text-center font-bold mt-2 text-[#4a1c14]">{previewFooter}</div>
-            </div>
+            <ReceiptSlip
+              title={previewTitle}
+              receipt={{
+                receiptNo: 1024,
+                suid: "GR-1001",
+                name: "STUDENT NAME",
+                service: "Store",
+                amount: 50,
+                at: new Date().toISOString(),
+              }}
+              footerText={previewFooter}
+              preview={true}
+            />
           </Card>
         </div>
       </div>

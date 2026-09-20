@@ -465,12 +465,12 @@ function StaffPage() {
 
       {/* Create User Dialog with Granular Module Selection */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="modal-luxury sm:max-w-lg p-6 md:p-8">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-primary">
-              <UserPlus className="size-5" /> Create New User Account
+            <DialogTitle className="font-serif text-2xl font-bold text-[#4a1c14] flex items-center gap-2">
+              <UserPlus className="size-6 text-[#8b2500]" /> Create New User Account
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs text-[#7c533f]">
               Add a new user and configure their individual module permissions.
             </DialogDescription>
           </DialogHeader>
@@ -478,49 +478,52 @@ function StaffPage() {
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="create-name">Full Name</Label>
+                <Label htmlFor="create-name" className="text-xs font-bold text-[#7c533f]">Full Name</Label>
                 <Input
                   id="create-name"
                   placeholder="Enter Full Name"
                   value={createForm.fullName}
                   onChange={(e) => setCreateForm({ ...createForm, fullName: e.target.value })}
+                  className="input-luxury h-10 font-semibold text-sm"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="create-email">Email Address</Label>
+                <Label htmlFor="create-email" className="text-xs font-bold text-[#7c533f]">Email Address</Label>
                 <Input
                   id="create-email"
                   type="email"
                   placeholder="Enter Email Address"
                   value={createForm.email}
                   onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                  className="input-luxury h-10 font-semibold text-sm"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="create-pass">Initial Password</Label>
+              <Label htmlFor="create-pass" className="text-xs font-bold text-[#7c533f]">Initial Password</Label>
               <Input
                 id="create-pass"
                 type="password"
                 placeholder="Minimum 6 characters"
                 value={createForm.password}
                 onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                className="input-luxury h-10 font-semibold text-sm"
               />
             </div>
 
             {/* Role Preset Selector */}
             <div className="space-y-2">
-              <Label>Quick Role Preset</Label>
+              <Label className="text-xs font-bold text-[#7c533f]">Quick Role Preset</Label>
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => handleCreateRolePreset("staff")}
-                  className={`p-2.5 rounded-lg border text-left transition-all ${
+                  className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
                     createForm.role === "staff"
-                      ? "border-primary bg-primary/10 text-primary font-semibold"
-                      : "border-border hover:bg-muted text-muted-foreground"
+                      ? "border-[#8b2500] bg-[#f8ede3] text-[#4a1c14] font-bold shadow-xs"
+                      : "border-[#e5d8c5] bg-white hover:bg-[#faf4eb] text-[#7c533f]"
                   }`}
                 >
                   <p className="text-xs font-bold">Staff</p>
@@ -530,10 +533,10 @@ function StaffPage() {
                 <button
                   type="button"
                   onClick={() => handleCreateRolePreset("admin")}
-                  className={`p-2.5 rounded-lg border text-left transition-all ${
+                  className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
                     createForm.role === "admin"
-                      ? "border-primary bg-primary/10 text-primary font-semibold"
-                      : "border-border hover:bg-muted text-muted-foreground"
+                      ? "border-[#8b2500] bg-[#f8ede3] text-[#4a1c14] font-bold shadow-xs"
+                      : "border-[#e5d8c5] bg-white hover:bg-[#faf4eb] text-[#7c533f]"
                   }`}
                 >
                   <p className="text-xs font-bold">Admin</p>
@@ -543,10 +546,10 @@ function StaffPage() {
                 <button
                   type="button"
                   onClick={() => handleCreateRolePreset("super_admin")}
-                  className={`p-2.5 rounded-lg border text-left transition-all ${
+                  className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
                     createForm.role === "super_admin"
-                      ? "border-amber-500 bg-amber-500/10 text-amber-600 font-semibold"
-                      : "border-border hover:bg-muted text-muted-foreground"
+                      ? "border-amber-600 bg-amber-50 text-amber-900 font-bold shadow-xs"
+                      : "border-[#e5d8c5] bg-white hover:bg-[#faf4eb] text-[#7c533f]"
                   }`}
                 >
                   <p className="text-xs font-bold">Super Admin</p>
@@ -556,10 +559,10 @@ function StaffPage() {
             </div>
 
             {/* Granular Module Checkboxes */}
-            <div className="space-y-2 border rounded-lg p-3 bg-secondary/30">
-              <Label className="text-xs font-semibold text-foreground">Custom Module Access:</Label>
+            <div className="p-3.5 rounded-2xl border-2 border-[#e5d8c5] bg-[#faf6ef] space-y-2.5">
+              <Label className="text-xs font-bold text-[#7c533f]">Custom Module Access:</Label>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <label className="flex items-center gap-2 p-1.5 rounded hover:bg-card cursor-pointer">
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white border border-[#e5d8c5] hover:bg-[#faf4eb] cursor-pointer shadow-xs">
                   <Switch
                     checked={createForm.permissions.students}
                     onCheckedChange={(v) =>
@@ -569,10 +572,10 @@ function StaffPage() {
                       })
                     }
                   />
-                  <span>👥 Students Module</span>
+                  <span className="font-semibold text-[#4a1c14]">👥 Students Module</span>
                 </label>
 
-                <label className="flex items-center gap-2 p-1.5 rounded hover:bg-card cursor-pointer">
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white border border-[#e5d8c5] hover:bg-[#faf4eb] cursor-pointer shadow-xs">
                   <Switch
                     checked={createForm.permissions.services}
                     onCheckedChange={(v) =>
@@ -582,10 +585,10 @@ function StaffPage() {
                       })
                     }
                   />
-                  <span>🔧 Services Module</span>
+                  <span className="font-semibold text-[#4a1c14]">🔧 Services Module</span>
                 </label>
 
-                <label className="flex items-center gap-2 p-1.5 rounded hover:bg-card cursor-pointer">
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white border border-[#e5d8c5] hover:bg-[#faf4eb] cursor-pointer shadow-xs">
                   <Switch
                     checked={createForm.permissions.settings}
                     onCheckedChange={(v) =>
@@ -595,10 +598,10 @@ function StaffPage() {
                       })
                     }
                   />
-                  <span>🎛️ Limits & Messages</span>
+                  <span className="font-semibold text-[#4a1c14]">🎛️ Limits & Messages</span>
                 </label>
 
-                <label className="flex items-center gap-2 p-1.5 rounded hover:bg-card cursor-pointer">
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white border border-[#e5d8c5] hover:bg-[#faf4eb] cursor-pointer shadow-xs">
                   <Switch
                     checked={createForm.permissions.reports}
                     onCheckedChange={(v) =>
@@ -608,10 +611,10 @@ function StaffPage() {
                       })
                     }
                   />
-                  <span>📊 Reports & Export</span>
+                  <span className="font-semibold text-[#4a1c14]">📊 Reports & Export</span>
                 </label>
 
-                <label className="flex items-center gap-2 p-1.5 rounded hover:bg-card cursor-pointer col-span-2">
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white border border-amber-300 hover:bg-amber-50 cursor-pointer col-span-2 shadow-xs">
                   <Switch
                     checked={createForm.permissions.users}
                     onCheckedChange={(v) =>
@@ -621,41 +624,50 @@ function StaffPage() {
                       })
                     }
                   />
-                  <span className="font-semibold text-amber-600">👑 Users & Roles (Super Admin)</span>
+                  <span className="font-bold text-amber-700">👑 Users & Roles (Super Admin)</span>
                 </label>
               </div>
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowCreateDialog(false)}>
+          <DialogFooter className="gap-2 pt-2 border-t border-[#e5d8c5]">
+            <button
+              type="button"
+              onClick={() => setShowCreateDialog(false)}
+              className="btn-luxury-secondary px-5 py-2.5 text-xs"
+            >
               Cancel
-            </Button>
-            <Button onClick={() => createUser.mutate()} disabled={createUser.isPending}>
+            </button>
+            <button
+              type="button"
+              onClick={() => createUser.mutate()}
+              disabled={createUser.isPending}
+              className="btn-luxury-primary px-6 py-2.5 text-xs gap-2"
+            >
               {createUser.isPending ? <Loader2 className="size-4 animate-spin mr-1.5" /> : null}
               Create Account
-            </Button>
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Edit User Permissions Dialog */}
       <Dialog open={editingUser !== null} onOpenChange={(open) => !open && setEditingUser(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="modal-luxury sm:max-w-md p-6 md:p-8">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-primary">
-              <Sliders className="size-5" /> Edit Module Permissions
+            <DialogTitle className="font-serif text-2xl font-bold text-[#4a1c14] flex items-center gap-2">
+              <Sliders className="size-6 text-[#8b2500]" /> Edit Module Permissions
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs text-[#7c533f]">
               Modify access rights for <strong>{editingUser?.full_name}</strong> ({editingUser?.email}).
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2">
-            <div className="space-y-2 border rounded-lg p-3 bg-secondary/30 text-xs">
-              <div className="flex items-center justify-between p-1.5 rounded hover:bg-card">
-                <span className="font-medium flex items-center gap-2">
-                  <Users className="size-4 text-primary" /> Students Master
+            <div className="space-y-2 border-2 border-[#e5d8c5] rounded-2xl p-3 bg-[#faf6ef] text-xs">
+              <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-[#e5d8c5]">
+                <span className="font-semibold text-[#4a1c14] flex items-center gap-2">
+                  <Users className="size-4 text-[#8b2500]" /> Students Master
                 </span>
                 <Switch
                   checked={editPerms.students}
@@ -663,9 +675,9 @@ function StaffPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-1.5 rounded hover:bg-card">
-                <span className="font-medium flex items-center gap-2">
-                  <Wrench className="size-4 text-primary" /> Services & Pricing
+              <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-[#e5d8c5]">
+                <span className="font-semibold text-[#4a1c14] flex items-center gap-2">
+                  <Wrench className="size-4 text-[#8b2500]" /> Services & Pricing
                 </span>
                 <Switch
                   checked={editPerms.services}
@@ -673,9 +685,9 @@ function StaffPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-1.5 rounded hover:bg-card">
-                <span className="font-medium flex items-center gap-2">
-                  <SlidersHorizontal className="size-4 text-primary" /> Limits & Messages
+              <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-[#e5d8c5]">
+                <span className="font-semibold text-[#4a1c14] flex items-center gap-2">
+                  <SlidersHorizontal className="size-4 text-[#8b2500]" /> Limits & Messages
                 </span>
                 <Switch
                   checked={editPerms.settings}
@@ -683,9 +695,9 @@ function StaffPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-1.5 rounded hover:bg-card">
-                <span className="font-medium flex items-center gap-2">
-                  <FileSpreadsheet className="size-4 text-primary" /> Reports & Analytics
+              <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-[#e5d8c5]">
+                <span className="font-semibold text-[#4a1c14] flex items-center gap-2">
+                  <FileSpreadsheet className="size-4 text-[#8b2500]" /> Reports & Analytics
                 </span>
                 <Switch
                   checked={editPerms.reports}
@@ -693,9 +705,9 @@ function StaffPage() {
                 />
               </div>
 
-              <div className="flex items-center justify-between p-1.5 rounded hover:bg-card border-t pt-2">
-                <span className="font-semibold text-amber-600 flex items-center gap-2">
-                  <Crown className="size-4" /> Super Admin Access
+              <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-amber-300">
+                <span className="font-bold text-amber-700 flex items-center gap-2">
+                  <Crown className="size-4 text-amber-600" /> Super Admin Access
                 </span>
                 <Switch
                   checked={editPerms.users}
@@ -705,49 +717,68 @@ function StaffPage() {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setEditingUser(null)}>
+          <DialogFooter className="gap-2 pt-2 border-t border-[#e5d8c5]">
+            <button
+              type="button"
+              onClick={() => setEditingUser(null)}
+              className="btn-luxury-secondary px-5 py-2.5 text-xs"
+            >
               Cancel
-            </Button>
-            <Button onClick={() => savePermissions.mutate()} disabled={savePermissions.isPending}>
+            </button>
+            <button
+              type="button"
+              onClick={() => savePermissions.mutate()}
+              disabled={savePermissions.isPending}
+              className="btn-luxury-primary px-6 py-2.5 text-xs gap-2"
+            >
               {savePermissions.isPending ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <CheckCircle2 className="size-4 mr-1.5" />}
               Save Permissions
-            </Button>
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Reset Password Dialog */}
       <Dialog open={resetUserId !== null} onOpenChange={(open) => !open && setResetUserId(null)}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="modal-luxury sm:max-w-sm p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <KeyRound className="size-5 text-primary" /> Reset User Password
+            <DialogTitle className="font-serif text-2xl font-bold text-[#4a1c14] flex items-center gap-2">
+              <KeyRound className="size-6 text-[#8b2500]" /> Reset Password
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs text-[#7c533f]">
               Set a new login password for this user account.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3 py-2">
-            <Label htmlFor="reset-pass">New Password</Label>
+            <Label htmlFor="reset-pass" className="text-xs font-bold text-[#7c533f]">New Password</Label>
             <Input
               id="reset-pass"
               type="password"
               placeholder="Enter new password (min 6 chars)"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              className="input-luxury h-10 font-semibold text-sm"
             />
           </div>
 
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setResetUserId(null)}>
+          <DialogFooter className="gap-2 pt-2 border-t border-[#e5d8c5]">
+            <button
+              type="button"
+              onClick={() => setResetUserId(null)}
+              className="btn-luxury-secondary px-5 py-2.5 text-xs"
+            >
               Cancel
-            </Button>
-            <Button onClick={() => resetPassword.mutate()} disabled={resetPassword.isPending}>
+            </button>
+            <button
+              type="button"
+              onClick={() => resetPassword.mutate()}
+              disabled={resetPassword.isPending}
+              className="btn-luxury-primary px-6 py-2.5 text-xs gap-2"
+            >
               {resetPassword.isPending ? <Loader2 className="size-4 animate-spin mr-1.5" /> : null}
               Save Password
-            </Button>
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
