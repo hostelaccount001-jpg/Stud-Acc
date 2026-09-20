@@ -35,3 +35,11 @@ dist-ssr
 __pycache__/
 *.pyc
 
+# Local standalone folders & build artifacts
+server.js
+netlify.toml
+scratch/
+react-kiosk/
+python-backend/
+supabase_*.sql
+assets/
