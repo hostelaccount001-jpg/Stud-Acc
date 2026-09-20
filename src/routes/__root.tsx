@@ -75,10 +75,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Shree Swaminarayan Gurukul — Cashless Kiosk ERP | EverStep Tech" },
-      { name: "description", content: "Comprehensive Cashless Biometric & NFC Smart Card Kiosk ERP for Shree Swaminarayan Gurukul, powered by EverStep Tech." },
+      { name: "description", content: "Comprehensive Cashless Biometric Kiosk ERP for Shree Swaminarayan Gurukul, powered by EverStep Tech." },
       { name: "author", content: "EverStep Tech" },
       { property: "og:title", content: "Gurukul Kiosk ERP — EverStep Tech" },
-      { property: "og:description", content: "Cashless smart card and fingerprint biometric kiosk system." },
+      { property: "og:description", content: "Cashless fingerprint biometric kiosk system." },
       { property: "og:image", content: "/logo.png" },
     ],
     links: [

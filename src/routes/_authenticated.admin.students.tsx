@@ -81,7 +81,7 @@ export const Route = createFileRoute("/_authenticated/admin/students")({
   head: () => ({
     meta: [
       { title: "Students & Biometrics — Gurukul Kiosk ERP" },
-      { name: "description", content: "Add, edit, or delete students, enrol fingerprints on Mantra MFS100 / MFS110, and manage NFC cards." },
+      { name: "description", content: "Add, edit, or delete students, and enrol fingerprints on Mantra MFS100 / MFS110." },
     ],
   }),
   component: StudentsPage,
@@ -90,12 +90,11 @@ export const Route = createFileRoute("/_authenticated/admin/students")({
 const studentSchema = z.object({
   suid: z.string().trim().min(1).max(40),
   name: z.string().trim().min(1).max(120),
-  nfc_no: z.string().trim().max(64).optional().or(z.literal("")),
   class_name: z.string().trim().max(60).optional().or(z.literal("")),
   room_no: z.string().trim().max(60).optional().or(z.literal("")),
 });
 
-const emptyForm = { suid: "", name: "", nfc_no: "", class_name: "", room_no: "" };
+const emptyForm = { suid: "", name: "", class_name: "", room_no: "" };
 
 function StudentsPage() {
   const qc = useQueryClient();
@@ -120,7 +119,7 @@ function StudentsPage() {
     queryKey: ["students", search],
     queryFn: async () => {
       let q = supabase.from("students").select("*").order("suid").limit(500);
-      if (search.trim()) q = q.or(`suid.ilike.%${search.trim()}%,name.ilike.%${search.trim()}%,nfc_no.ilike.%${search.trim()}%`);
+      if (search.trim()) q = q.or(`suid.ilike.%${search.trim()}%,name.ilike.%${search.trim()}%,class_name.ilike.%${search.trim()}%`);
       const { data, error } = await q;
       if (error) throw error;
       return data;
@@ -130,7 +129,7 @@ function StudentsPage() {
   const addStudent = useMutation({
     mutationFn: async (values: typeof form) => {
       const parsed = studentSchema.parse(values);
-      const safeNfc = parsed.nfc_no || parsed.suid;
+      const safeNfc = parsed.suid;
       try {
         await addStudentFn({
           data: {
@@ -168,7 +167,7 @@ function StudentsPage() {
     mutationFn: async () => {
       if (!editId) return;
       const parsed = studentSchema.parse(editForm);
-      const safeNfc = parsed.nfc_no || parsed.suid;
+      const safeNfc = parsed.suid;
 
       // Check if any finger was captured via RDSERVICE instead of CLIENT
       for (const f of editFingers) {
@@ -271,8 +270,8 @@ function StudentsPage() {
 
   function downloadSample() {
     const ws = XLSX.utils.json_to_sheet([
-      { SUID: "GR1001", NAME: "STUDENT NAME 1", NFCNO: "CARD1001", CLASS: "Class 10", ROOM: "101" },
-      { SUID: "GR1002", NAME: "STUDENT NAME 2", NFCNO: "CARD1002", CLASS: "Class 10", ROOM: "102" },
+      { SUID: "GR1001", NAME: "STUDENT NAME 1", CLASS: "Class 10", ROOM: "101" },
+      { SUID: "GR1002", NAME: "STUDENT NAME 2", CLASS: "Class 10", ROOM: "102" },
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Students");
@@ -297,11 +296,10 @@ function StudentsPage() {
         "Sr No": idx + 1,
         "SUID / GR No": s.suid,
         "Student Name": s.name,
-        "NFC Card UID": s.nfc_no,
         "Class / Std": s.class_name || "-",
         "Room No": s.room_no || "-",
         "Enrolled Fingers": Array.isArray(s.fingerprints) ? s.fingerprints.length : 0,
-        "Card Status": s.blocked ? "BLOCKED" : "ACTIVE",
+        "Account Status": s.blocked ? "BLOCKED" : "ACTIVE",
         "Created At": s.created_at ? new Date(s.created_at).toLocaleDateString("en-IN") : "-",
       }));
 
@@ -311,10 +309,9 @@ function StudentsPage() {
         { wch: 16 },
         { wch: 32 },
         { wch: 18 },
-        { wch: 18 },
-        { wch: 12 },
-        { wch: 18 },
         { wch: 14 },
+        { wch: 18 },
+        { wch: 16 },
         { wch: 16 },
       ];
 
@@ -359,9 +356,7 @@ function StudentsPage() {
             getVal(r, ["suid", "grno", "gr_no", "gr", "rollno", "roll_no", "id", "enrollment", "student_id"]) ||
             `SUID${String(index + 1).padStart(3, "0")}`;
           const name = getVal(r, ["name", "student_name", "fullname", "student"]) || `Student ${suid}`;
-          const nfc_no =
-            getVal(r, ["nfc_no", "nfcno", "nfc", "card_no", "cardno", "card", "rfid", "smartcard"]) ||
-            `NFC-${suid}`;
+          const nfc_no = suid;
           const class_name = getVal(r, ["class_name", "classname", "class", "std", "standard", "grade"]) || null;
           const room_no = getVal(r, ["room_no", "roomno", "room", "hostel_room", "room_number"]) || null;
 
@@ -401,7 +396,6 @@ function StudentsPage() {
     id: string;
     suid: string;
     name: string;
-    nfc_no: string;
     class_name: string | null;
     room_no: string | null;
     fingerprints: unknown;
@@ -410,7 +404,6 @@ function StudentsPage() {
     setEditForm({
       suid: s.suid,
       name: s.name,
-      nfc_no: s.nfc_no,
       class_name: s.class_name ?? "",
       room_no: s.room_no ?? "",
     });
@@ -428,7 +421,7 @@ function StudentsPage() {
             <Users className="size-8 text-[#8b2500]" /> Students & Biometrics
           </h1>
           <p className="mt-1 text-sm text-[#7c533f] font-medium">
-            SUID and NFC card mapping, up to {MAX_FINGERS} fingerprints on Mantra MFS110, plus temporary card blocking.
+            SUID and biometric enrollment, up to {MAX_FINGERS} fingerprints on Mantra MFS100 / MFS110, plus temporary account blocking.
           </p>
         </div>
 
@@ -488,7 +481,7 @@ function StudentsPage() {
           </div>
           <div>
             <h2 className="text-lg font-serif font-bold text-[#4a1c14]">Add New Student Record</h2>
-            <p className="text-xs text-[#7c533f]">Register student profile with Smart NFC card and live biometrics</p>
+            <p className="text-xs text-[#7c533f]">Register student profile with SUID and live Mantra biometrics</p>
           </div>
         </div>
 
@@ -499,7 +492,7 @@ function StudentsPage() {
             addStudent.mutate(form);
           }}
         >
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
             <div className="space-y-1.5">
               <Label htmlFor="suid" className="text-xs font-bold text-[#7c533f]">SUID / GR No *</Label>
               <Input
@@ -525,17 +518,6 @@ function StudentsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="nfc_no" className="text-xs font-bold text-[#7c533f]">NFC Card UID (Optional)</Label>
-              <Input
-                id="nfc_no"
-                placeholder="Optional (Defaults to SUID)"
-                value={form.nfc_no}
-                onChange={(e) => setForm({ ...form, nfc_no: e.target.value })}
-                className="input-luxury h-10 px-3 font-mono text-sm font-semibold"
-              />
-            </div>
-
-            <div className="space-y-1.5">
               <Label htmlFor="class_name" className="text-xs font-bold text-[#7c533f]">Class / Std</Label>
               <Input
                 id="class_name"
@@ -551,7 +533,6 @@ function StudentsPage() {
           <BiometricEnroller
             records={newFingers}
             onChange={setNewFingers}
-            nfcNo={form.nfc_no}
             suid={form.suid}
           />
 
@@ -575,7 +556,7 @@ function StudentsPage() {
             <div className="relative w-full">
               <Search className="size-4.5 absolute left-3.5 top-3 text-[#7c533f]/50" />
               <Input
-                placeholder="Search by SUID, Name, or NFC Card..."
+                placeholder="Search by SUID, Name, or Class..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="input-luxury pl-10 h-10 text-sm w-full"
@@ -594,10 +575,9 @@ function StudentsPage() {
               <tr className="border-b border-[#e5d8c5] text-left text-xs uppercase tracking-wider text-[#7c533f] font-bold">
                 <th className="py-3 pr-4">SUID</th>
                 <th className="py-3 pr-4">Student</th>
-                <th className="py-3 pr-4">NFC Card</th>
                 <th className="py-3 pr-4">Class</th>
                 <th className="py-3 pr-4">Fingerprints</th>
-                <th className="py-3 pr-4">Card Active</th>
+                <th className="py-3 pr-4">Status</th>
                 <th className="py-3 pr-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -622,9 +602,6 @@ function StudentsPage() {
                         </span>
                         <span>{s.name}</span>
                       </div>
-                    </td>
-                    <td className="py-3.5 pr-4 text-[#7c533f]">
-                      {s.nfc_no}
                     </td>
                     <td className="py-3.5 pr-4 font-sans text-[#4a1c14]">
                       {s.class_name ?? "—"}
@@ -679,7 +656,7 @@ function StudentsPage() {
 
               {studentList.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-sm font-sans text-[#7c533f]">
+                  <td colSpan={7} className="py-12 text-center text-sm font-sans text-[#7c533f]">
                     No student records found. Add a student above or import an Excel file.
                   </td>
                 </tr>
@@ -697,7 +674,7 @@ function StudentsPage() {
               <Pencil className="size-5 text-[#8b2500]" /> Edit Student & Biometrics
             </DialogTitle>
             <DialogDescription className="text-xs text-[#7c533f]">
-              Update SUID, name, smart card mapping, and enrolled fingerprints.
+              Update SUID, name, class, and enrolled fingerprints.
             </DialogDescription>
           </DialogHeader>
 
@@ -731,21 +708,11 @@ function StudentsPage() {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-nfc" className="text-xs font-bold text-[#7c533f]">NFC Card UID (Optional)</Label>
-                <Input
-                  id="edit-nfc"
-                  placeholder="Optional (Defaults to SUID)"
-                  value={editForm.nfc_no}
-                  onChange={(e) => setEditForm({ ...editForm, nfc_no: e.target.value })}
-                  className="input-luxury h-10 font-mono text-sm font-semibold"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="edit-class" className="text-xs font-bold text-[#7c533f]">Class</Label>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor="edit-class" className="text-xs font-bold text-[#7c533f]">Class / Std</Label>
                 <Input
                   id="edit-class"
+                  placeholder="Enter Class / Standard"
                   value={editForm.class_name}
                   onChange={(e) => setEditForm({ ...editForm, class_name: e.target.value })}
                   className="input-luxury h-10 text-sm"
@@ -756,7 +723,6 @@ function StudentsPage() {
             <BiometricEnroller
               records={editFingers}
               onChange={setEditFingers}
-              nfcNo={editForm.nfc_no}
               suid={editForm.suid}
             />
 
@@ -789,7 +755,7 @@ function StudentsPage() {
               <Trash2 className="size-5" /> Delete Student Record?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-[#7c533f]">
-              The student profile, card mapping and enrolled fingerprints will be permanently removed from the active database. Past transaction logs are preserved in reports.
+              The student profile and enrolled biometrics will be permanently removed from the active database. Past transaction logs are preserved in reports.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 pt-4">
@@ -812,7 +778,7 @@ function StudentsPage() {
               <AlertTriangle className="size-6 text-rose-600" /> DANGER: Delete ALL Students?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-[#7c533f]">
-              This will permanently delete all {studentList.length} students, their NFC card mappings, and all enrolled biometrics from the system.
+              This will permanently delete all {studentList.length} student profiles and all enrolled biometrics from the system.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 pt-4 border-t border-[#e5d8c5]">
@@ -833,12 +799,10 @@ function StudentsPage() {
 function BiometricEnroller({
   records,
   onChange,
-  nfcNo,
   suid,
 }: {
   records: any[];
   onChange: (records: any[]) => void;
-  nfcNo?: string;
   suid?: string;
 }) {
   const [scanningFinger, setScanningFinger] = useState(false);

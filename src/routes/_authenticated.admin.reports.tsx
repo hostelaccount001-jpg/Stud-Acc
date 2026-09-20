@@ -287,7 +287,6 @@ function ReportsPage() {
       return (
         r.student_name.toLowerCase().includes(q) ||
         r.suid.toLowerCase().includes(q) ||
-        (r.nfc_no && r.nfc_no.toLowerCase().includes(q)) ||
         String(r.receipt_no).includes(q)
       );
     });
@@ -328,7 +327,6 @@ function ReportsPage() {
         "Student Name": r.student_name,
         "Service": r.service_name,
         "Amount (Rs)": Number(r.amount),
-        "Card / NFC": r.nfc_no,
       })),
     );
     const wb = XLSX.utils.book_new();

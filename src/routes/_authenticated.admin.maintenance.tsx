@@ -289,7 +289,7 @@ function MaintenancePage() {
                 </span>
               </div>
               <p className="text-xs text-[#7c533f]">
-                Wipes all registered student names, SUIDs, NFC smart card mappings, and biometric fingerprints.
+                Wipes all registered student profiles, SUIDs, and enrolled biometric fingerprints.
               </p>
             </div>
           </div>

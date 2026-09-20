@@ -62,7 +62,6 @@ type VerifiedStudent = {
   name: string;
   class_name?: string | null | undefined;
   room_no?: string | null | undefined;
-  nfc_no?: string | undefined;
   templates: string[];
 };
 
@@ -185,7 +184,6 @@ function Kiosk() {
                 name: matched.name,
                 class_name: matched.class_name,
                 room_no: matched.room_no,
-                nfc_no: matched.nfc_no,
                 templates: matched.templates || [],
               };
 
@@ -272,7 +270,6 @@ function Kiosk() {
         name: matched.name,
         class_name: matched.class_name,
         room_no: matched.room_no,
-        nfc_no: matched.nfc_no,
         templates: matched.templates || [],
       };
 
@@ -308,7 +305,6 @@ function Kiosk() {
         data: {
           studentId: student.id,
           suid: student.suid,
-          nfc: student.nfc_no,
           serviceId,
           customAmount: amount && amount > 0 ? amount : undefined,
         },
