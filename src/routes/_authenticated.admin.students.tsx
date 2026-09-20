@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +57,13 @@ import {
   Video,
   Eye,
   RefreshCw,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ArrowDownAZ,
+  ArrowUpAZ,
+  Filter,
+  RotateCcw,
 } from "lucide-react";
 import { z } from "zod";
 import {
@@ -105,7 +119,15 @@ function StudentsPage() {
   const toggleBlockFn = useServerFn(toggleBlockServer);
   const bulkUploadFn = useServerFn(bulkUploadStudentsServer);
 
+  type StudentSortKey = "name" | "suid" | "class" | "room" | "fingers" | "status";
+
   const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<StudentSortKey>("name");
+  const [sortAsc, setSortAsc] = useState(true);
+  const [filterClass, setFilterClass] = useState("all");
+  const [filterFinger, setFilterFinger] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+
   const [form, setForm] = useState(emptyForm);
   const [newFingers, setNewFingers] = useState<any[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
@@ -118,7 +140,7 @@ function StudentsPage() {
   const students = useQuery({
     queryKey: ["students", search],
     queryFn: async () => {
-      let q = supabase.from("students").select("*").order("suid").limit(500);
+      let q = supabase.from("students").select("*").order("suid").limit(2000);
       if (search.trim()) q = q.or(`suid.ilike.%${search.trim()}%,name.ilike.%${search.trim()}%,class_name.ilike.%${search.trim()}%,room_no.ilike.%${search.trim()}%`);
       const { data, error } = await q;
       if (error) throw error;
@@ -412,6 +434,99 @@ function StudentsPage() {
 
   const studentList = students.data ?? [];
 
+  const uniqueClasses = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of studentList) {
+      if (s.class_name && s.class_name.trim()) set.add(s.class_name.trim());
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [studentList]);
+
+  const filteredAndSortedStudents = useMemo(() => {
+    const filtered = studentList.filter((s) => {
+      if (filterClass !== "all" && (s.class_name || "").trim() !== filterClass) return false;
+      if (filterStatus === "active" && s.blocked) return false;
+      if (filterStatus === "blocked" && !s.blocked) return false;
+
+      const biometrics = toBiometricRecords(s.fingerprints);
+      const fingerList = biometrics.filter((b) => b.type !== "face");
+      const hasFingers = fingerList.length > 0;
+      if (filterFinger === "enrolled" && !hasFingers) return false;
+      if (filterFinger === "missing" && hasFingers) return false;
+
+      return true;
+    });
+
+    const dir = sortAsc ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      switch (sortKey) {
+        case "name":
+          return (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }) * dir;
+        case "suid":
+          return (a.suid || "").localeCompare(b.suid || "", undefined, { numeric: true }) * dir;
+        case "class":
+          return (a.class_name || "").localeCompare(b.class_name || "", undefined, { numeric: true }) * dir;
+        case "room":
+          return (a.room_no || "").localeCompare(b.room_no || "", undefined, { numeric: true }) * dir;
+        case "fingers": {
+          const countA = Array.isArray(a.fingerprints) ? a.fingerprints.length : 0;
+          const countB = Array.isArray(b.fingerprints) ? b.fingerprints.length : 0;
+          return (countA - countB) * dir;
+        }
+        case "status": {
+          const valA = a.blocked ? 1 : 0;
+          const valB = b.blocked ? 1 : 0;
+          return (valA - valB) * dir;
+        }
+        default:
+          return 0;
+      }
+    });
+  }, [studentList, filterClass, filterFinger, filterStatus, sortKey, sortAsc]);
+
+  function resetDirectoryFilters() {
+    setSearch("");
+    setFilterClass("all");
+    setFilterFinger("all");
+    setFilterStatus("all");
+    setSortKey("name");
+    setSortAsc(true);
+  }
+
+  function renderHeader(label: string, key: StudentSortKey) {
+    const isActive = sortKey === key;
+    return (
+      <th className="py-3 pr-4">
+        <button
+          type="button"
+          onClick={() => {
+            if (sortKey === key) {
+              setSortAsc(!sortAsc);
+            } else {
+              setSortKey(key);
+              setSortAsc(true);
+            }
+          }}
+          className={`group inline-flex items-center gap-1.5 font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer select-none ${
+            isActive ? "text-[#8b2500]" : "text-[#7c533f] hover:text-[#4a1c14]"
+          }`}
+          title={`Click to sort by ${label} (${isActive ? (sortAsc ? "A to Z / Ascending" : "Z to A / Descending") : "Click to sort"})`}
+        >
+          <span>{label}</span>
+          {isActive ? (
+            sortAsc ? (
+              <ArrowUp className="size-3.5 text-[#8b2500]" />
+            ) : (
+              <ArrowDown className="size-3.5 text-[#8b2500]" />
+            )
+          ) : (
+            <ArrowUpDown className="size-3.5 text-[#7c533f]/40 group-hover:text-[#7c533f]" />
+          )}
+        </button>
+      </th>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in zoom-in-98 duration-300">
       {/* Page Header with Animated Luxury Action Buttons */}
@@ -562,39 +677,134 @@ function StudentsPage() {
 
       {/* STUDENTS DIRECTORY TABLE CARD */}
       <Card className="card-luxury p-6 md:p-8 space-y-6">
+        {/* Header & Quick Controls */}
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e5d8c5] pb-4">
-          <div className="flex items-center gap-3 max-w-md w-full">
-            <div className="relative w-full">
-              <Search className="size-4.5 absolute left-3.5 top-3 text-[#7c533f]/50" />
+          <div>
+            <h2 className="text-xl font-serif font-bold text-[#4a1c14] flex items-center gap-2">
+              <Users className="size-5 text-[#8b2500]" /> Student Directory & Enrollment Ledger
+            </h2>
+            <p className="text-xs text-[#7c533f] mt-0.5">
+              Click any column header to sort (A → Z Name, SUID, Class, Room, Biometrics).
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Quick One-Click A to Z / Z to A Toggle Button */}
+            <button
+              type="button"
+              onClick={() => {
+                if (sortKey === "name") {
+                  setSortAsc(!sortAsc);
+                } else {
+                  setSortKey("name");
+                  setSortAsc(true);
+                }
+              }}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                sortKey === "name"
+                  ? "bg-[#8b2500] text-white shadow-amber-900/20"
+                  : "bg-[#faf6ef] text-[#4a1c14] border border-[#d8c5af] hover:bg-[#8b2500] hover:text-white"
+              }`}
+              title="Click to toggle Name A to Z / Z to A sort"
+            >
+              {sortKey === "name" && !sortAsc ? (
+                <>
+                  <ArrowDownAZ className="size-4" />
+                  <span>Name: Z → A</span>
+                </>
+              ) : (
+                <>
+                  <ArrowUpAZ className="size-4" />
+                  <span>Name: A → Z</span>
+                </>
+              )}
+            </button>
+
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#faf6ef] text-[#4a1c14] border border-[#d8c5af]">
+              Showing: <strong className="font-mono text-[#8b2500]">{filteredAndSortedStudents.length}</strong> of {studentList.length}
+            </span>
+          </div>
+        </div>
+
+        {/* Query & Filter Bar */}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 items-end bg-[#faf6ef]/70 p-4 rounded-2xl border border-[#e5d8c5]">
+          {/* Search Box */}
+          <div className="space-y-1 sm:col-span-2 lg:col-span-2">
+            <Label htmlFor="search-students" className="text-[11px] font-bold text-[#7c533f]">Search Student</Label>
+            <div className="relative">
+              <Search className="size-4 absolute left-3 top-3 text-[#7c533f]/50" />
               <Input
+                id="search-students"
                 placeholder="Search by SUID, Name, Class, or Room..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="input-luxury pl-10 h-10 text-sm w-full"
+                className="input-luxury pl-9 h-10 text-xs w-full"
               />
             </div>
           </div>
 
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#faf6ef] text-[#4a1c14] border border-[#d8c5af]">
-            Total: <strong className="font-mono text-[#8b2500]">{studentList.length}</strong> Students Enrolled
-          </span>
+          {/* Class Filter */}
+          <div className="space-y-1">
+            <Label className="text-[11px] font-bold text-[#7c533f]">Filter by Class</Label>
+            <Select value={filterClass} onValueChange={setFilterClass}>
+              <SelectTrigger className="input-luxury h-10 text-xs font-semibold">
+                <SelectValue placeholder="All Classes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Classes ({uniqueClasses.length})</SelectItem>
+                {uniqueClasses.map((cls) => (
+                  <SelectItem key={cls} value={cls}>
+                    {cls}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Biometrics Filter */}
+          <div className="space-y-1">
+            <Label className="text-[11px] font-bold text-[#7c533f]">Biometrics Status</Label>
+            <Select value={filterFinger} onValueChange={setFilterFinger}>
+              <SelectTrigger className="input-luxury h-10 text-xs font-semibold">
+                <SelectValue placeholder="All Biometrics" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Biometrics</SelectItem>
+                <SelectItem value="enrolled">Enrolled Only (Fingers Added)</SelectItem>
+                <SelectItem value="missing">Missing Fingerprints</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Reset Filters */}
+          <div>
+            <button
+              type="button"
+              onClick={resetDirectoryFilters}
+              className="btn-luxury-secondary h-10 px-4 text-xs gap-1.5 w-full justify-center"
+              title="Reset all filters and sort to Name A-Z"
+            >
+              <RotateCcw className="size-3.5" /> Reset Filters
+            </button>
+          </div>
         </div>
 
+        {/* Directory Table with Clickable Sort Headers */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[#e5d8c5] text-left text-xs uppercase tracking-wider text-[#7c533f] font-bold">
-                <th className="py-3 pr-4">SUID</th>
-                <th className="py-3 pr-4">Student</th>
-                <th className="py-3 pr-4">Class</th>
-                <th className="py-3 pr-4">Room No</th>
-                <th className="py-3 pr-4">Fingerprints</th>
-                <th className="py-3 pr-4">Status</th>
-                <th className="py-3 pr-4 text-right">Actions</th>
+              <tr className="border-b border-[#e5d8c5] text-left text-xs uppercase tracking-wider font-bold">
+                {renderHeader("SUID", "suid")}
+                {renderHeader("Student", "name")}
+                {renderHeader("Class", "class")}
+                {renderHeader("Room No", "room")}
+                {renderHeader("Fingerprints", "fingers")}
+                {renderHeader("Status", "status")}
+                <th className="py-3 pr-4 text-right text-xs uppercase tracking-wider text-[#7c533f] font-bold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e5d8c5]/60 text-xs font-mono">
-              {studentList.map((s) => {
+              {filteredAndSortedStudents.map((s) => {
                 const biometrics = toBiometricRecords(s.fingerprints);
                 const faceRec = biometrics.find((b) => b.type === "face") as FaceRecord | undefined;
                 const fingerList = biometrics.filter((b) => b.type !== "face") as FingerRecord[];
@@ -656,7 +866,7 @@ function StudentsPage() {
                         <button
                           type="button"
                           onClick={() => openEdit(s)}
-                          className="p-1.5 rounded-lg text-[#7c533f] hover:text-[#8b2500] hover:bg-[#faf4eb] transition-colors"
+                          className="p-1.5 rounded-lg text-[#7c533f] hover:text-[#8b2500] hover:bg-[#faf4eb] transition-colors cursor-pointer"
                           title="Edit Student Profile & Biometrics"
                         >
                           <Pencil className="size-4" />
@@ -664,7 +874,7 @@ function StudentsPage() {
                         <button
                           type="button"
                           onClick={() => setDeleteId(s.id)}
-                          className="p-1.5 rounded-lg text-[#7c533f] hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          className="p-1.5 rounded-lg text-[#7c533f] hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                           title="Delete Student"
                         >
                           <Trash2 className="size-4" />
@@ -675,10 +885,12 @@ function StudentsPage() {
                 );
               })}
 
-              {studentList.length === 0 && (
+              {filteredAndSortedStudents.length === 0 && (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-sm font-sans text-[#7c533f]">
-                    No student records found. Add a student above or import an Excel file.
+                    {studentList.length === 0
+                      ? "No student records found. Add a student above or import an Excel file."
+                      : "No students match the current filters. Click 'Reset Filters' to view all."}
                   </td>
                 </tr>
               )}
