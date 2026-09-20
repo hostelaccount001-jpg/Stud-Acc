@@ -830,7 +830,7 @@ function StudentsPage() {
   );
 }
 
-function BiometricEnrollment({
+function BiometricEnroller({
   records,
   onChange,
   nfcNo,
