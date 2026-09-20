@@ -97,6 +97,9 @@ function Kiosk() {
   const [customService, setCustomService] = useState<ServiceItem | null>(null);
   const [customAmountStr, setCustomAmountStr] = useState<string>("0");
 
+  // Zero-Touch Auto-Detect Mode: device continuously listens for finger touch
+  const [autoDetect, setAutoDetect] = useState<boolean>(true);
+
   const getConfig = useServerFn(getKioskConfig);
   const punch = useServerFn(punchService);
   const getGallery = useServerFn(getStudentGallery);
@@ -139,7 +142,90 @@ function Kiosk() {
     setScanning(false);
   }
 
-  // STEP 1: Direct Fingerprint Scan & 1:N Identification
+  // AUTO-DETECT: Zero-Touch Continuous Biometric Sensing Loop
+  // The moment any student places their finger on the sensor glass, it auto-captures and verifies
+  useEffect(() => {
+    let cancelled = false;
+
+    if (step !== "scan" || !autoDetect || !isConnected || busy) {
+      return;
+    }
+
+    const runAutoSensing = async () => {
+      const gallery = galleryQuery.data || [];
+      if (gallery.length === 0) {
+        return;
+      }
+
+      while (!cancelled && step === "scan" && autoDetect) {
+        setScanning(true);
+        try {
+          // Listen on sensor for up to 5 seconds per sensing block
+          const capture = await captureFinger(45, 5);
+          if (cancelled) break;
+
+          if (capture.ok && capture.template) {
+            setScanning(false);
+            setBusy(true);
+
+            setCapturedScan({
+              template: capture.template,
+              quality: capture.quality,
+              serial: capture.serial,
+              at: new Date().toISOString(),
+            });
+
+            // Fast 1:N Hardware/Algorithm Match across enrolled students
+            const matched = await identify(capture.template, gallery);
+
+            if (matched) {
+              const verified: VerifiedStudent = {
+                id: matched.id,
+                suid: matched.suid,
+                name: matched.name,
+                class_name: matched.class_name,
+                room_no: matched.room_no,
+                nfc_no: matched.nfc_no,
+                templates: matched.templates || [],
+              };
+
+              setStudent(verified);
+              setSuccessBanner(`Biometric Verified: Welcome, ${verified.name}!`);
+              setStep("service");
+              setBusy(false);
+              break; // exit loop as student is now verified
+            } else {
+              setError("❌ ફિંગરપ્રિન્ટ ઓળખાઈ નથી. કૃપા કરીને નોંધાયેલ આંગળી બરાબર મૂકો.");
+              setBusy(false);
+              await new Promise((resolve) => setTimeout(resolve, 2500));
+              if (!cancelled) setError("");
+            }
+          } else {
+            // Normal timeout (no finger touched during 5s window)
+            // Pause 200ms and continue next sensing loop seamlessly
+            await new Promise((resolve) => setTimeout(resolve, 200));
+          }
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        } finally {
+          if (!cancelled && step === "scan") {
+            setScanning(false);
+          }
+        }
+      }
+    };
+
+    const timer = setTimeout(() => {
+      void runAutoSensing();
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [step, autoDetect, isConnected, busy, galleryQuery.data]);
+
+  // STEP 1: Direct Fingerprint Scan & 1:N Identification (Manual Button Fallback)
   async function startFingerScan() {
     if (scanning || busy) return;
     setScanning(true);
@@ -386,8 +472,8 @@ function Kiosk() {
         {/* STEP 1: Direct Fingerprint Scan on Mantra MFS100 */}
         {step === "scan" && (
           <Card className="w-full max-w-xl p-8 md:p-12 text-center bg-white/95 backdrop-blur-md border-2 border-[#e5d8c5] shadow-[0_20px_60px_-15px_rgba(74,28,20,0.15)] rounded-3xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            {/* Device Connectivity Badge */}
-            <div className="flex items-center justify-center gap-2">
+            {/* Device Connectivity & Auto-Sense Badges */}
+            <div className="flex flex-wrap items-center justify-center gap-2">
               <span
                 className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
                   isConnected
@@ -408,6 +494,13 @@ function Kiosk() {
                   ? "Checking Mantra Device..."
                   : "Mantra Scanner Not Connected"}
               </span>
+
+              {isConnected && autoDetect && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-[#8b2500] border border-amber-500/30 shadow-xs">
+                  <Sparkles className="size-3.5 text-amber-700 animate-spin" />
+                  Zero-Touch Auto-Sense ON
+                </span>
+              )}
             </div>
 
             {/* Glowing Biometric Scanner Ring */}
@@ -434,12 +527,12 @@ function Kiosk() {
 
             <div className="space-y-1.5">
               <h2 className="text-2xl md:text-3xl font-serif font-bold text-[#4a1c14]">
-                આંગળી સ્કેનર પર મૂકો
+                {scanning ? "સ્કેનર પર સીધી આંગળી મૂકો" : "ડિવાઇસ પર આંગળી મૂકો"}
               </h2>
-              <p className="text-sm md:text-base text-[#7c533f]">
+              <p className="text-sm md:text-base text-[#7c533f] font-medium">
                 {scanning
-                  ? "સ્કેનિંગ ચાલુ છે... કૃપા કરીને આંગળી સ્થિર રાખો."
-                  : "Place your registered finger firmly on the Mantra MFS100 scanner."}
+                  ? "🟢 સેન્સર ચાલુ છે! કોઈપણ બટન ક્લિક કર્યા વગર Mantra પર આંગળી મૂકો."
+                  : "Mantra MFS100 કાચ પર સીધી આંગળી મૂકો એટલે તરત જ ડિટેક્ટ થશે."}
               </p>
             </div>
 
@@ -450,22 +543,22 @@ function Kiosk() {
               </div>
             )}
 
-            <div className="pt-2">
+            <div className="pt-2 space-y-3">
               <Button
                 size="lg"
                 onClick={() => void startFingerScan()}
-                disabled={scanning || busy}
+                disabled={busy}
                 className="w-full h-15 text-lg font-bold text-white rounded-2xl shadow-[0_12px_28px_-6px_rgba(139,37,0,0.45)] transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] shimmer-btn cursor-pointer bg-gradient-to-r from-[#4a1c14] via-[#6d2518] to-[#8b2500] border border-amber-500/20"
               >
-                {scanning ? (
-                  <>
-                    <Loader2 className="size-5 animate-spin mr-2 text-amber-300" />
-                    Scanning Fingerprint...
-                  </>
-                ) : busy ? (
+                {busy ? (
                   <>
                     <Loader2 className="size-5 animate-spin mr-2 text-amber-300" />
                     Verifying Biometrics...
+                  </>
+                ) : scanning ? (
+                  <>
+                    <span className="size-3 rounded-full bg-emerald-400 animate-ping mr-2.5" />
+                    ઓટો-ડિટેક્ટ ચાલુ: ડિવાઇસ પર આંગળી મૂકો
                   </>
                 ) : (
                   <>
@@ -475,7 +568,21 @@ function Kiosk() {
                 )}
               </Button>
 
-              <div className="pt-4 flex items-center justify-center gap-2 text-[11px] font-semibold text-[#8b6553]">
+              <div className="flex items-center justify-between px-2 text-xs text-[#7c533f]">
+                <span className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                  <CheckCircle2 className="size-4 text-emerald-600" />
+                  Zero-Touch Auto-Sense Active
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setAutoDetect((prev) => !prev)}
+                  className="font-bold text-[#8b2500] hover:underline cursor-pointer"
+                >
+                  {autoDetect ? "Pause Auto-Sense" : "Enable Auto-Sense"}
+                </button>
+              </div>
+
+              <div className="pt-2 flex items-center justify-center gap-2 text-[11px] font-semibold text-[#8b6553]">
                 <ShieldCheck className="size-3.5 text-emerald-600" />
                 <span>Mantra MFS100 Hardware Biometric Verification</span>
               </div>
