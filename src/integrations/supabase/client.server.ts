@@ -19,8 +19,9 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
       new Headers(init.headers).forEach((value, key) => headers.set(key, value));
     }
 
-    // New Supabase API keys are opaque strings, not bearer JWTs.
-    if (isNewSupabaseApiKey(supabaseKey) && headers.get('Authorization') === `Bearer ${supabaseKey}`) {
+    // Only delete Authorization if it's a publishable key.
+    // Auth admin endpoints (/auth/v1/admin/*) REQUIRE 'Authorization: Bearer <service_key>'
+    if (supabaseKey.startsWith('sb_publishable_') && headers.get('Authorization') === `Bearer ${supabaseKey}`) {
       headers.delete('Authorization');
     }
 
@@ -32,12 +33,9 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 function createSupabaseAdminClient() {
   const SUPABASE_URL = process.env['SUPABASE_URL'] || process.env['VITE_SUPABASE_URL'] || 'https://jjkxtgtbogtzhbuxutag.supabase.co';
   
-  // Use verified working key
+  // Prefer service role key for full admin & bypass RLS
   const envSecret = process.env['SUPABASE_SERVICE_ROLE_KEY'];
-  const isBadSecret = !envSecret || envSecret.includes('-FKIqBYNGL5wKnQOVat9Cw');
-  const SUPABASE_KEY = isBadSecret
-    ? (process.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || 'sb_publishable_CtAHGWUsBgHQs_TqWga4Ew_63Yu_44r')
-    : envSecret;
+  const SUPABASE_KEY = envSecret || process.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || 'sb_publishable_CtAHGWUsBgHQs_TqWga4Ew_63Yu_44r';
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_KEY, {
     global: {

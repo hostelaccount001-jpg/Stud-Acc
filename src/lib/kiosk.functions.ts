@@ -382,3 +382,27 @@ export const punchService = createServerFn({ method: "POST" })
       },
     };
   });
+
+export const getStudentLedger = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({ studentId: z.string() }).parse(input))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const [txRes, studentRes] = await Promise.all([
+      supabaseAdmin
+        .from("transactions")
+        .select("id, receipt_no, amount, service_name, created_at, service_id")
+        .eq("student_id", data.studentId)
+        .order("created_at", { ascending: false })
+        .limit(30),
+      supabaseAdmin
+        .from("students")
+        .select("id, suid, name, class_name, room_no")
+        .eq("id", data.studentId)
+        .maybeSingle(),
+    ]);
+
+    return {
+      transactions: txRes.data ?? [],
+      student: studentRes.data,
+    };
+  });

@@ -517,3 +517,23 @@ div[role="alertdialog"],
   animation: shimmer-sweep 4s linear infinite;
 }
 
+/* Chrome/Safari/Edge Browser Autofill Fix for Dark & Luxury Inputs */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px rgba(35, 17, 12, 0.95) inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff !important;
+  border-radius: inherit !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+.input-luxury:-webkit-autofill,
+.input-luxury:-webkit-autofill:hover,
+.input-luxury:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  -webkit-text-fill-color: #2c1810 !important;
+  caret-color: #2c1810 !important;
+}
+
