@@ -3,6 +3,15 @@
 
 param([int]$Port = 8032)
 
+# MANTRA.MFS100.dll requires 32-bit process architecture
+if ([Environment]::Is64BitProcess) {
+    $syswow64PS = "C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+    if (Test-Path $syswow64PS) {
+        & $syswow64PS -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path -Port $Port
+        exit $LASTEXITCODE
+    }
+}
+
 $ErrorActionPreference = "Stop"
 
 $dllCandidates = @(

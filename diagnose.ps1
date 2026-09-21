@@ -1,3 +1,12 @@
+# MANTRA.MFS100.dll requires 32-bit process architecture
+if ([Environment]::Is64BitProcess) {
+    $syswow64PS = "C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+    if (Test-Path $syswow64PS) {
+        & $syswow64PS -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path @args
+        exit $LASTEXITCODE
+    }
+}
+
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "     MANTRA MFS100 SCANNER SETUP DIAGNOSIS" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
