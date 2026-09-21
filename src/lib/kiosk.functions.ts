@@ -388,24 +388,27 @@ export const getStudentLedger = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const [studentRes, txnRes] = await Promise.all([
-      supabaseAdmin
-        .from("students")
-        .select("id, suid, name, room_no, class_name, blocked")
-        .eq("id", data.studentId)
-        .maybeSingle(),
+    const { data: student } = await supabaseAdmin
+      .from("students")
+      .select("id, suid, name, room_no, class_name, blocked")
+      .eq("id", data.studentId)
+      .maybeSingle();
 
-      supabaseAdmin
-        .from("transactions")
-        .select("id, receipt_no, service_name, amount, created_at")
-        .eq("student_id", data.studentId)
-        .order("created_at", { ascending: false })
-        .limit(50),
-    ]);
+    if (!student) {
+      return { student: null, transactions: [] };
+    }
+
+    const { data: txns } = await supabaseAdmin
+      .from("transactions")
+      .select("id, receipt_no, service_name, amount, created_at, service_id, suid")
+      .or(`student_id.eq.${student.id},suid.eq.${student.suid}`)
+      .order("created_at", { ascending: false })
+      .limit(100);
 
     return {
-      student: studentRes.data,
-      transactions: txnRes.data ?? [],
+      student,
+      transactions: txns ?? [],
     };
   });
+
 

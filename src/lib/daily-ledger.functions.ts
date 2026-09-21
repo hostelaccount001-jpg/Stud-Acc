@@ -86,7 +86,7 @@ export const importDailyLedgerServer = createServerFn({ method: "POST" })
       const modeTag = row.mode ? ` (${row.mode})` : "";
       const baseComment = row.comment.trim() || (row.type === "CREDIT" ? "Daily Credit Deposit" : "Daily Debit");
 
-      const serviceName = `${typeTag} ${baseComment}${voucherTag}${modeTag}`.slice(0, 100);
+      const serviceName = `[Wallet] ${typeTag} ${baseComment}${voucherTag}${modeTag}`.slice(0, 100);
 
       // Parse date if valid DD/MM/YYYY or YYYY-MM-DD
       let createdAt = new Date().toISOString();
@@ -196,7 +196,7 @@ export const manualWalletTransactionServer = createServerFn({ method: "POST" })
     const typeTag = data.type === "CREDIT" ? "[Credit]" : "[Debit]";
     const modeTag = data.mode ? ` (${data.mode})` : " (Manual)";
     const comment = data.comment.trim() || (data.type === "CREDIT" ? "Manual Credit Deposit" : "Manual Debit Adjustment");
-    const serviceName = `${typeTag} ${comment}${modeTag}`.slice(0, 100);
+    const serviceName = `[Wallet] ${typeTag} ${comment}${modeTag}`.slice(0, 100);
 
     const { data: inserted, error } = await supabaseAdmin
       .from("transactions")

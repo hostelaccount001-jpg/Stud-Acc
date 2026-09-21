@@ -166,6 +166,42 @@ function Kiosk() {
   // Student Ledger & Wallet States (Synced with daily Excel report uploads)
   const [studentTransactions, setStudentTransactions] = useState<any[]>([]);
   const [loadingLedger, setLoadingLedger] = useState(false);
+  const [historyTab, setHistoryTab] = useState<"wallet" | "kiosk">("wallet");
+
+  // Separate uploaded Wallet entries (personal ledger entries) vs Kiosk ERP punches
+  const walletReportEntries = useMemo(() => {
+    return studentTransactions.filter((tx) => {
+      if (!tx.service_id) return true;
+      const sName = (tx.service_name || "").toLowerCase();
+      return (
+        sName.includes("[wallet]") ||
+        sName.includes("[credit]") ||
+        sName.includes("[debit]") ||
+        sName.includes("pocket") ||
+        sName.includes("deposit") ||
+        sName.includes("sbi") ||
+        sName.includes("voucher") ||
+        sName.includes("transfer")
+      );
+    });
+  }, [studentTransactions]);
+
+  const kioskServiceEntries = useMemo(() => {
+    return studentTransactions.filter((tx) => {
+      if (!tx.service_id) return false;
+      const sName = (tx.service_name || "").toLowerCase();
+      return (
+        !sName.includes("[wallet]") &&
+        !sName.includes("[credit]") &&
+        !sName.includes("[debit]") &&
+        !sName.includes("pocket") &&
+        !sName.includes("deposit") &&
+        !sName.includes("sbi") &&
+        !sName.includes("voucher") &&
+        !sName.includes("transfer")
+      );
+    });
+  }, [studentTransactions]);
 
   async function loadStudentLedger(studentId: string) {
     setLoadingLedger(true);
@@ -206,9 +242,9 @@ function Kiosk() {
       availableBalance: Math.max(0, balance),
       totalCredit: credit,
       totalUsed: used,
-      totalTransactions: studentTransactions.length,
+      totalTransactions: walletReportEntries.length,
     };
-  }, [studentTransactions]);
+  }, [studentTransactions, walletReportEntries]);
 
   // Live Mantra MFS100 device status
   const { device, checking: deviceChecking, isConnected } = useMantraDevice(3000);
@@ -882,27 +918,79 @@ function Kiosk() {
               {/* Left Column: Recent Transactions & Daily Report History (5 Cols) */}
               <div className="lg:col-span-5 space-y-3">
                 <Card className="p-4 bg-white border border-[#e5d8c5] rounded-3xl shadow-sm flex flex-col h-[400px]">
+                  {/* Header with Switcher Tabs */}
                   <div className="flex items-center justify-between border-b border-[#f2e7db] pb-2.5">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#8b2500] flex items-center gap-1.5">
-                      <History className="size-4" /> Daily Ledger History (હિસ્ટ્રી)
-                    </h4>
-                    <span className="text-[10px] font-mono text-[#7c533f]">
-                      {studentTransactions.length} Entries
+                    <div className="flex items-center gap-1 bg-[#faf5ee] p-0.5 rounded-xl border border-[#e5d8c5]">
+                      <button
+                        onClick={() => setHistoryTab("wallet")}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          historyTab === "wallet"
+                            ? "bg-[#8b2500] text-white shadow-xs"
+                            : "text-[#7c533f] hover:text-[#2d140d]"
+                        }`}
+                      >
+                        <Wallet className="size-3" />
+                        <span>Wallet Report</span>
+                        <span
+                          className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono ${
+                            historyTab === "wallet"
+                              ? "bg-white/20 text-white"
+                              : "bg-amber-100 text-[#8b2500]"
+                          }`}
+                        >
+                          {walletReportEntries.length}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => setHistoryTab("kiosk")}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          historyTab === "kiosk"
+                            ? "bg-[#8b2500] text-white shadow-xs"
+                            : "text-[#7c533f] hover:text-[#2d140d]"
+                        }`}
+                      >
+                        <Scissors className="size-3" />
+                        <span>Kiosk ERP</span>
+                        <span
+                          className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono ${
+                            historyTab === "kiosk"
+                              ? "bg-white/20 text-white"
+                              : "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {kioskServiceEntries.length}
+                        </span>
+                      </button>
+                    </div>
+
+                    <span className="text-[10px] font-mono text-[#7c533f] font-semibold">
+                      {historyTab === "wallet" ? "વોલેટ રિપોર્ટ" : "કિયોસ્ક સેવાઓ"}
                     </span>
                   </div>
 
+                  {/* Transaction Entries List */}
                   <div className="flex-1 overflow-y-auto space-y-2 pt-2 pr-1 custom-scrollbar">
                     {loadingLedger ? (
                       <div className="h-full flex items-center justify-center text-xs text-[#7c533f] gap-2 py-8">
                         <Loader2 className="size-4 animate-spin text-[#8b2500]" /> Loading transactions...
                       </div>
-                    ) : studentTransactions.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center text-xs text-[#7c533f] py-8 space-y-1">
-                        <Coins className="size-8 text-[#d8c5af]" />
-                        <p>No transactions found for this student.</p>
+                    ) : (historyTab === "wallet" ? walletReportEntries : kioskServiceEntries).length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-xs text-[#7c533f] py-8 space-y-2 text-center px-4">
+                        <Wallet className="size-8 text-[#d8c5af]" />
+                        <p className="font-bold text-[#3b190f]">
+                          {historyTab === "wallet"
+                            ? "કોઈ વોલેટ રિપોર્ટ એન્ટ્રી મળેલ નથી"
+                            : "કોઈ કિયોસ્ક સર્વિસ પંચ થયેલ નથી"}
+                        </p>
+                        <p className="text-[11px] text-[#8b6553]">
+                          {historyTab === "wallet"
+                            ? "Admin Console -> Wallet મોડ્યુલમાંથી આ વિદ્યાર્થીનો દૈનિક એક્સેલ રિપોર્ટ અપલોડ કરો."
+                            : "વિદ્યાર્થીએ હજુ સુધી કોઈ કેશલેસ સેવા લીધેલી નથી."}
+                        </p>
                       </div>
                     ) : (
-                      studentTransactions.map((tx) => {
+                      (historyTab === "wallet" ? walletReportEntries : kioskServiceEntries).map((tx) => {
                         const sName = (tx.service_name || "").toLowerCase();
                         const isCredit =
                           sName.includes("credit") ||
@@ -910,6 +998,11 @@ function Kiosk() {
                           sName.includes("pocket") ||
                           sName.includes("sbi") ||
                           tx.amount < 0;
+
+                        const displayTitle = (tx.service_name || "Transaction")
+                          .replace(/^\[Wallet\]\s*/i, "")
+                          .replace(/^\[Credit\]\s*/i, "")
+                          .replace(/^\[Debit\]\s*/i, "");
 
                         return (
                           <div
@@ -931,13 +1024,27 @@ function Kiosk() {
                                 )}
                               </div>
                               <div className="min-w-0">
-                                <p className="font-bold text-[#2d140d] truncate" title={tx.service_name}>
-                                  {tx.service_name}
-                                </p>
-                                <p className="text-[10px] text-[#7c533f] font-mono">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="font-bold text-[#2d140d] truncate" title={tx.service_name}>
+                                    {displayTitle}
+                                  </p>
+                                  {historyTab === "wallet" && (
+                                    <span
+                                      className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase ${
+                                        isCredit
+                                          ? "bg-emerald-100 text-emerald-800"
+                                          : "bg-rose-100 text-rose-800"
+                                      }`}
+                                    >
+                                      {isCredit ? "જમા" : "ઉધાર"}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-[#7c533f] font-mono mt-0.5">
                                   {new Date(tx.created_at).toLocaleDateString("en-IN", {
                                     day: "2-digit",
                                     month: "short",
+                                    year: "numeric",
                                   })}{" "}
                                   ·{" "}
                                   {new Date(tx.created_at).toLocaleTimeString("en-IN", {
