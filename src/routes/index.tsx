@@ -97,7 +97,7 @@ function getServiceMeta(name: string) {
   if (s.includes("store") || s.includes("shop") || s.includes("સ્ટોર")) {
     return {
       icon: ShoppingBag,
-      tag: "Store / સ્ટોર",
+      tag: "Campus Store",
       gradient: "from-amber-500/20 via-amber-500/5 to-transparent",
       iconBg: "bg-amber-100 text-amber-900 border-amber-300",
       accent: "text-amber-900",
@@ -106,7 +106,7 @@ function getServiceMeta(name: string) {
   if (s.includes("hair") || s.includes("salon") || s.includes("વાળ") || s.includes("cut")) {
     return {
       icon: Scissors,
-      tag: "Salon / વાળ કટિંગ",
+      tag: "Salon & Grooming",
       gradient: "from-sky-500/20 via-sky-500/5 to-transparent",
       iconBg: "bg-sky-100 text-sky-900 border-sky-300",
       accent: "text-sky-900",
@@ -115,7 +115,7 @@ function getServiceMeta(name: string) {
   if (s.includes("med") || s.includes("doctor") || s.includes("દવા") || s.includes("clinic")) {
     return {
       icon: HeartPulse,
-      tag: "Medical / દવાખાનું",
+      tag: "Healthcare & Clinic",
       gradient: "from-emerald-500/20 via-emerald-500/5 to-transparent",
       iconBg: "bg-emerald-100 text-emerald-900 border-emerald-300",
       accent: "text-emerald-900",
@@ -124,7 +124,7 @@ function getServiceMeta(name: string) {
   if (s.includes("hari") || s.includes("jayanti") || s.includes("utsav") || s.includes("ઉત્સવ")) {
     return {
       icon: Sparkles,
-      tag: "Event / ઉત્સવ",
+      tag: "Events & Festival",
       gradient: "from-purple-500/20 via-purple-500/5 to-transparent",
       iconBg: "bg-purple-100 text-purple-900 border-purple-300",
       accent: "text-purple-900",
@@ -867,21 +867,21 @@ function Kiosk() {
               <Card className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl shadow-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-                    Total Credit (જમા)
+                    Total Credit
                   </span>
                   <TrendingUp className="size-4 text-emerald-600" />
                 </div>
                 <p className="text-2xl font-bold font-sans text-emerald-700 mt-1.5">
                   ₹{walletMetrics.totalCredit.toFixed(2)}
                 </p>
-                <span className="text-[10px] text-emerald-600 block">Daily reports & deposits</span>
+                <span className="text-[10px] text-emerald-600 block">Daily deposits & vouchers</span>
               </Card>
 
               {/* Total Debit / Used */}
               <Card className="p-4 bg-rose-50/80 border border-rose-200 rounded-2xl shadow-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-rose-800">
-                    Total Used (વપરાશ)
+                    Total Debit / Used
                   </span>
                   <TrendingDown className="size-4 text-rose-600" />
                 </div>
@@ -965,7 +965,7 @@ function Kiosk() {
                     </div>
 
                     <span className="text-[10px] font-mono text-[#7c533f] font-semibold">
-                      {historyTab === "wallet" ? "વોલેટ રિપોર્ટ" : "કિયોસ્ક સેવાઓ"}
+                      {historyTab === "wallet" ? "Ledger Records" : "Campus Services"}
                     </span>
                   </div>
 
@@ -980,13 +980,13 @@ function Kiosk() {
                         <Wallet className="size-8 text-[#d8c5af]" />
                         <p className="font-bold text-[#3b190f]">
                           {historyTab === "wallet"
-                            ? "કોઈ વોલેટ રિપોર્ટ એન્ટ્રી મળેલ નથી"
-                            : "કોઈ કિયોસ્ક સર્વિસ પંચ થયેલ નથી"}
+                            ? "No Wallet Ledger Records Found"
+                            : "No Campus Services Recorded"}
                         </p>
                         <p className="text-[11px] text-[#8b6553]">
                           {historyTab === "wallet"
-                            ? "Admin Console -> Wallet મોડ્યુલમાંથી આ વિદ્યાર્થીનો દૈનિક એક્સેલ રિપોર્ટ અપલોડ કરો."
-                            : "વિદ્યાર્થીએ હજુ સુધી કોઈ કેશલેસ સેવા લીધેલી નથી."}
+                            ? "Upload student's daily ledger from Admin Console → Wallet."
+                            : "No cashless services punched for this student yet."}
                         </p>
                       </div>
                     ) : (
@@ -1036,7 +1036,7 @@ function Kiosk() {
                                           : "bg-rose-100 text-rose-800"
                                       }`}
                                     >
-                                      {isCredit ? "જમા" : "ઉધાર"}
+                                      {isCredit ? "Credit" : "Debit"}
                                     </span>
                                   )}
                                 </div>
@@ -1074,7 +1074,7 @@ function Kiosk() {
               <div className="lg:col-span-7 space-y-3">
                 <div className="flex items-center justify-between px-1">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-[#8b2500] flex items-center gap-1.5">
-                    <Tag className="size-4" /> Cashless Services (કેશલેસ સેવાઓ)
+                    <Tag className="size-4" /> Cashless Services
                   </h4>
                   <span className="text-[11px] text-[#7c533f]">
                     Tap service to pay & print receipt

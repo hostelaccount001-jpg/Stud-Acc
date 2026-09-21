@@ -464,7 +464,7 @@ export default function WalletPage() {
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-[#7c533f] mt-1 font-medium">
-            દૈનિક એક્સેલ રિપોર્ટ અપલોડ કરો, પ્રિવ્યુ જુઓ અને વિદ્યાર્થી વોલેટ બેલેન્સ મેનેજ કરો
+            Upload daily Excel ledger reports, preview entries in real-time, and manage student wallet balances.
           </p>
         </div>
 
@@ -500,7 +500,7 @@ export default function WalletPage() {
               : "bg-white/80 hover:bg-white text-[#7c533f] border border-[#e5d8c5]"
           }`}
         >
-          <Upload className="size-4" /> Upload Daily Report (રિપોર્ટ અપલોડ)
+          <Upload className="size-4" /> Upload Daily Report
         </button>
 
         <button
@@ -511,7 +511,7 @@ export default function WalletPage() {
               : "bg-white/80 hover:bg-white text-[#7c533f] border border-[#e5d8c5]"
           }`}
         >
-          <Coins className="size-4" /> Student Balances (વિદ્યાર્થી બેલેન્સ)
+          <Coins className="size-4" /> Student Balances
         </button>
 
         <button
@@ -522,7 +522,7 @@ export default function WalletPage() {
               : "bg-white/80 hover:bg-white text-[#7c533f] border border-[#e5d8c5]"
           }`}
         >
-          <History className="size-4" /> Transactions History (વ્યવહારો હિસ્ટ્રી)
+          <History className="size-4" /> Transaction History
         </button>
       </div>
 
@@ -537,11 +537,11 @@ export default function WalletPage() {
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="size-6 text-emerald-600 shrink-0" />
                 <div>
-                  <h4 className="font-bold text-sm">રિપોર્ટ સફળતાપૂર્વક અપલોડ થઈ ગયો!</h4>
+                  <h4 className="font-bold text-sm">Ledger Report Imported Successfully!</h4>
                   <p className="text-xs text-emerald-800">
-                    {importResult.totalInserted} વ્યવહારો વિદ્યાર્થીઓના વોલેટમાં જમા/ઉધાર થઈ ગયા છે.
+                    {importResult.totalInserted} ledger transactions updated in student wallets.
                     {importResult.newStudentsCreated > 0 &&
-                      ` (${importResult.newStudentsCreated} નવા વિદ્યાર્થી એકાઉન્ટ ઓટોમેટિક બન્યા)`}
+                      ` (${importResult.newStudentsCreated} new student accounts automatically registered)`}
                   </p>
                 </div>
               </div>
@@ -580,7 +580,7 @@ export default function WalletPage() {
 
                 <div className="space-y-1">
                   <h3 className="text-lg font-bold text-[#3b190f]">
-                    {isProcessing ? "Reading Excel File..." : "Upload Daily Report (દૈનિક રિપોર્ટ)"}
+                    {isProcessing ? "Reading Excel File..." : "Upload Daily Ledger Report"}
                   </h3>
                   <p className="text-xs text-[#7c533f]">
                     Drag and drop your Excel file here, or click the button below to browse. Supports{" "}
@@ -608,7 +608,7 @@ export default function WalletPage() {
 
                 {/* Column Format Helper */}
                 <div className="mt-4 pt-4 border-t border-[#f2e7db] text-[11px] text-[#7c533f] w-full text-left space-y-1">
-                  <p className="font-bold text-[#8b2500]">અપેક્ષિત એક્સેલ કોલમ્સ (Expected Columns):</p>
+                  <p className="font-bold text-[#8b2500]">Expected Excel Columns:</p>
                   <p className="font-mono text-[10px] text-[#8b6553] bg-[#faf5ee] p-2 rounded-lg border border-[#f0e4d4]">
                     UNIQUE/HR NO. | STUDENT NAME | GR NO. | CLASS | TYPE (Credit/Debit) | MODE | DATE | AMOUNT | COMMENT
                   </p>
@@ -672,7 +672,7 @@ export default function WalletPage() {
 
                 <Card className="p-4 bg-white border border-emerald-200 rounded-2xl shadow-xs">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 flex items-center justify-between">
-                    Total Credit (જમા) <TrendingUp className="size-3.5 text-emerald-600" />
+                    Total Credit <TrendingUp className="size-3.5 text-emerald-600" />
                   </span>
                   <p className="text-2xl font-black font-sans text-emerald-700 mt-1">
                     ₹{previewTotals.credit.toLocaleString("en-IN")}
@@ -682,7 +682,7 @@ export default function WalletPage() {
 
                 <Card className="p-4 bg-white border border-rose-200 rounded-2xl shadow-xs">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 flex items-center justify-between">
-                    Total Debit (ઉધાર) <TrendingDown className="size-3.5 text-rose-600" />
+                    Total Debit <TrendingDown className="size-3.5 text-rose-600" />
                   </span>
                   <p className="text-2xl font-black font-sans text-rose-700 mt-1">
                     ₹{previewTotals.debit.toLocaleString("en-IN")}
@@ -906,8 +906,8 @@ export default function WalletPage() {
                     <th className="p-3">GR No</th>
                     <th className="p-3">Student Name</th>
                     <th className="p-3">Class</th>
-                    <th className="p-3">Total Credit (જમા)</th>
-                    <th className="p-3">Total Used (ઉધાર)</th>
+                    <th className="p-3">Total Credit</th>
+                    <th className="p-3">Total Used / Debit</th>
                     <th className="p-3">Available Balance (₹)</th>
                     <th className="p-3">Actions</th>
                   </tr>
@@ -1070,7 +1070,7 @@ export default function WalletPage() {
                               ) : (
                                 <ArrowUpRight className="size-3" />
                               )}
-                              {isCredit ? "Credit (જમા)" : "Debit (ઉધાર)"}
+                              {isCredit ? "Credit" : "Debit"}
                             </span>
                           </td>
                           <td className="p-3 text-[#3b190f] max-w-sm truncate" title={tx.service_name}>
@@ -1119,7 +1119,7 @@ export default function WalletPage() {
                       : "border-gray-200 text-gray-500"
                   }`}
                 >
-                  <PlusCircle className="size-4 text-emerald-600" /> Credit (જમા)
+                  <PlusCircle className="size-4 text-emerald-600" /> Credit (Deposit)
                 </button>
                 <button
                   type="button"
@@ -1130,7 +1130,7 @@ export default function WalletPage() {
                       : "border-gray-200 text-gray-500"
                   }`}
                 >
-                  <MinusCircle className="size-4 text-rose-600" /> Debit (ઉધાર)
+                  <MinusCircle className="size-4 text-rose-600" /> Debit (Spend)
                 </button>
               </div>
             </div>
