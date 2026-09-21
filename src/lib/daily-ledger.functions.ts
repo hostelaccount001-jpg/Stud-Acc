@@ -151,3 +151,71 @@ export const importDailyLedgerServer = createServerFn({ method: "POST" })
       newStudentsCreated: missingStudents.length,
     };
   });
+
+export const getWalletLedgerDataServer = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const supabase = getSupabaseAdmin();
+
+    const [txRes, studentsRes] = await Promise.all([
+      supabase
+        .from("transactions")
+        .select("id, suid, student_name, service_name, amount, created_at, receipt_no")
+        .order("created_at", { ascending: false })
+        .limit(200),
+      supabase
+        .from("students")
+        .select("id, suid, name, class_name, room_no, blocked")
+        .order("name", { ascending: true })
+        .limit(1000),
+    ]);
+
+    return {
+      transactions: txRes.data ?? [],
+      students: studentsRes.data ?? [],
+    };
+  });
+
+export const manualWalletTransactionServer = createServerFn({ method: "POST" })
+  .validator((data: {
+    gr_no: string;
+    student_name?: string;
+    type: "CREDIT" | "DEBIT";
+    amount: number;
+    comment: string;
+    mode?: string;
+  }) => data)
+  .handler(async ({ data }) => {
+    const supabase = getSupabaseAdmin();
+    const gr = data.gr_no.trim();
+
+    const { data: student } = await supabase
+      .from("students")
+      .select("id, suid, name, nfc_no")
+      .eq("suid", gr)
+      .maybeSingle();
+
+    const typeTag = data.type === "CREDIT" ? "[Credit]" : "[Debit]";
+    const modeTag = data.mode ? ` (${data.mode})` : " (Manual)";
+    const comment = data.comment.trim() || (data.type === "CREDIT" ? "Manual Credit Deposit" : "Manual Debit Adjustment");
+    const serviceName = `${typeTag} ${comment}${modeTag}`.slice(0, 100);
+
+    const { data: inserted, error } = await supabase
+      .from("transactions")
+      .insert({
+        student_id: student?.id ?? null,
+        suid: gr,
+        student_name: student?.name ?? data.student_name ?? "Student",
+        service_name: serviceName,
+        amount: Math.abs(data.amount),
+        created_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to add manual transaction: ${error.message}`);
+    }
+
+    return { success: true, transaction: inserted };
+  });
+

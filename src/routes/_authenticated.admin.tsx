@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Database,
   FileUp,
+  Wallet,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -28,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
 const nav = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true, desc: "Live overview & transactions" },
   { to: "/admin/students", label: "Students", icon: Users, desc: "Biometric enrollment & profiles" },
-  { to: "/admin/daily-ledger", label: "Daily Ledger Import", icon: FileUp, desc: "Excel daily entry upload" },
+  { to: "/admin/wallet", label: "Wallet", icon: Wallet, desc: "Daily report upload & balances" },
   { to: "/admin/services", label: "Services", icon: Wrench, desc: "Pricing & receipt controls" },
   { to: "/admin/settings", label: "Limits & Messages", icon: SlidersHorizontal, desc: "Daily cap & kiosk headers" },
   { to: "/admin/reports", label: "Reports", icon: FileSpreadsheet, desc: "Excel exports & analytics" },
@@ -53,8 +54,10 @@ function AdminLayout() {
   const visibleNav = nav.filter((item) => {
     if (item.to === "/admin") return permissions.dashboard !== false;
     if (item.to === "/admin/students") return permissions.students;
+    if (item.to === "/admin/wallet") return permissions.reports || permissions.students || isSuperAdmin;
     if (item.to === "/admin/daily-ledger") return permissions.reports || permissions.students || isSuperAdmin;
     if (item.to === "/admin/services") return permissions.services;
+
     if (item.to === "/admin/settings") return permissions.settings;
     if (item.to === "/admin/reports") return permissions.reports;
     if (item.to === "/admin/staff") return permissions.users || isSuperAdmin;
