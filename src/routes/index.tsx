@@ -16,6 +16,12 @@ import {
   Search,
   User,
   Cpu,
+  ShoppingBag,
+  Scissors,
+  HeartPulse,
+  ChevronRight,
+  Tag,
+  Coins,
 } from "lucide-react";
 import {
   captureFinger,
@@ -79,6 +85,52 @@ type ServiceItem = {
   print_receipt: boolean;
 };
 
+function getServiceMeta(name: string) {
+  const s = name.toLowerCase();
+  if (s.includes("store") || s.includes("shop") || s.includes("સ્ટોર")) {
+    return {
+      icon: ShoppingBag,
+      tag: "Store / સ્ટોર",
+      gradient: "from-amber-500/20 via-amber-500/5 to-transparent",
+      iconBg: "bg-amber-100 text-amber-900 border-amber-300",
+      accent: "text-amber-900",
+    };
+  }
+  if (s.includes("hair") || s.includes("salon") || s.includes("વાળ") || s.includes("cut")) {
+    return {
+      icon: Scissors,
+      tag: "Salon / વાળ કટિંગ",
+      gradient: "from-sky-500/20 via-sky-500/5 to-transparent",
+      iconBg: "bg-sky-100 text-sky-900 border-sky-300",
+      accent: "text-sky-900",
+    };
+  }
+  if (s.includes("med") || s.includes("doctor") || s.includes("દવા") || s.includes("clinic")) {
+    return {
+      icon: HeartPulse,
+      tag: "Medical / દવાખાનું",
+      gradient: "from-emerald-500/20 via-emerald-500/5 to-transparent",
+      iconBg: "bg-emerald-100 text-emerald-900 border-emerald-300",
+      accent: "text-emerald-900",
+    };
+  }
+  if (s.includes("hari") || s.includes("jayanti") || s.includes("utsav") || s.includes("ઉત્સવ")) {
+    return {
+      icon: Sparkles,
+      tag: "Event / ઉત્સવ",
+      gradient: "from-purple-500/20 via-purple-500/5 to-transparent",
+      iconBg: "bg-purple-100 text-purple-900 border-purple-300",
+      accent: "text-purple-900",
+    };
+  }
+  return {
+    icon: Tag,
+    tag: "Campus Service",
+    gradient: "from-[#8b2500]/20 via-[#8b2500]/5 to-transparent",
+    iconBg: "bg-amber-100 text-[#8b2500] border-amber-300",
+    accent: "text-[#4a1c14]",
+  };
+}
 
 function Kiosk() {
   const [step, setStep] = useState<Step>("scan");
@@ -693,39 +745,82 @@ function Kiosk() {
               </div>
             )}
 
-            {/* Services Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-5">
-              {(config.data?.services ?? []).map((service) => (
-                <button
-                  key={service.id}
-                  disabled={busy}
-                  onClick={() => handleServiceClick(service)}
-                  className="p-6 rounded-2xl bg-white/95 border-2 border-[#e5d8c5] shadow-md hover:shadow-xl hover:border-[#8b2500] active:scale-95 transition-all text-left flex flex-col justify-between h-40 group relative overflow-hidden cursor-pointer"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold uppercase tracking-wider text-[#8b2500]">
-                        Service
-                      </span>
-                      {service.print_receipt && (
-                        <Printer className="size-4 text-[#7c533f] group-hover:text-[#8b2500]" />
-                      )}
-                    </div>
-                    <h4 className="text-lg md:text-xl font-serif font-bold text-[#4a1c14] group-hover:text-[#8b2500] line-clamp-2">
-                      {service.name}
-                    </h4>
-                  </div>
+            {/* Modern Touch Services Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+              {(config.data?.services ?? []).map((service) => {
+                const meta = getServiceMeta(service.name);
+                const IconComp = meta.icon;
 
-                  <div className="flex items-baseline justify-between pt-2 border-t border-[#f0e6d8]">
-                    <span className="text-2xl md:text-3xl font-mono font-black text-[#4a1c14]">
-                      {service.price === 0 ? "Manual Amount" : `₹${service.price}`}
-                    </span>
-                    <span className="text-xs font-bold text-[#8b2500] group-hover:translate-x-1 transition-transform">
-                      Select →
-                    </span>
-                  </div>
-                </button>
-              ))}
+                return (
+                  <button
+                    key={service.id}
+                    disabled={busy}
+                    onClick={() => handleServiceClick(service)}
+                    className="p-5 sm:p-6 rounded-3xl bg-white hover:bg-white/95 border-2 border-[#e6d8c6] hover:border-[#8b2500] shadow-[0_6px_20px_rgba(0,0,0,0.04)] hover:shadow-[0_14px_36px_rgba(139,37,0,0.12)] hover:-translate-y-1 active:translate-y-0 active:scale-[0.99] transition-all duration-300 text-left flex flex-col justify-between h-44 group relative overflow-hidden cursor-pointer"
+                  >
+                    {/* Top ambient highlight gradient */}
+                    <div
+                      className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${meta.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}
+                    />
+
+                    {/* Top Category & Printer Badges */}
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`size-8 rounded-xl flex items-center justify-center border shadow-xs transition-transform group-hover:scale-110 ${meta.iconBg}`}
+                          >
+                            <IconComp className="size-4" />
+                          </span>
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-[#8b2500] bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md">
+                            {meta.tag}
+                          </span>
+                        </div>
+
+                        {service.print_receipt && (
+                          <span
+                            title="Receipt will be printed"
+                            className="p-1.5 rounded-lg bg-[#f7efe6] text-[#7c533f] group-hover:text-[#8b2500] transition-colors"
+                          >
+                            <Printer className="size-3.5" />
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Service Title with Crisp Modern Sans Typography */}
+                      <h4 className="text-lg sm:text-xl font-bold tracking-tight text-[#2d140d] group-hover:text-[#8b2500] transition-colors line-clamp-2 leading-snug font-sans">
+                        {service.name}
+                      </h4>
+                    </div>
+
+                    {/* Bottom Pricing & Action Button */}
+                    <div className="flex items-center justify-between pt-3 border-t border-[#f2e7db] mt-2">
+                      {service.price === 0 ? (
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#7c533f]">
+                            Amount
+                          </span>
+                          <span className="text-base sm:text-lg font-extrabold text-[#8b2500] tracking-tight font-sans">
+                            Manual Amount
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-baseline gap-0.5">
+                          <span className="text-lg font-bold text-[#8b2500]">₹</span>
+                          <span className="text-3xl sm:text-4xl font-black tracking-tight text-[#2d140d] font-sans">
+                            {service.price}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-1 px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#8b2500] to-amber-700 text-white font-bold text-xs shadow-xs group-hover:shadow-md group-hover:from-[#a32c00] group-hover:to-amber-600 transition-all">
+                        <span>Select</span>
+                        <ChevronRight className="size-3.5 group-hover:translate-x-0.5 transition-transform" />
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -733,17 +828,17 @@ function Kiosk() {
 
       {/* Custom Amount Numpad Dialog */}
       <Dialog open={Boolean(customService)} onOpenChange={(open) => !open && setCustomService(null)}>
-        <DialogContent className="max-w-sm p-5 bg-[#fdfbf7] border-2 border-[#e5d8c5] rounded-3xl">
+        <DialogContent className="max-w-sm p-6 bg-[#fdfbf7] border-2 border-[#e5d8c5] rounded-3xl shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="text-center font-serif text-xl font-bold text-[#4a1c14]">
+            <DialogTitle className="text-center font-sans text-xl font-extrabold text-[#2d140d] tracking-tight">
               {customService?.name}
             </DialogTitle>
           </DialogHeader>
 
           {/* Amount Display */}
-          <div className="my-3 rounded-2xl bg-[#fbf6ee] border-2 border-[#d8c5af] p-4 text-center">
+          <div className="my-3 rounded-2xl bg-white border-2 border-[#d8c5af] p-4 text-center shadow-xs">
             <span className="text-xs font-bold text-[#7c533f] uppercase tracking-wider block">Total Amount</span>
-            <div className="text-4xl md:text-5xl font-mono font-extrabold text-[#4a1c14] mt-1">
+            <div className="text-4xl sm:text-5xl font-sans font-black text-[#2d140d] mt-1 tracking-tight">
               ₹ {customAmountStr}
             </div>
           </div>
@@ -755,7 +850,7 @@ function Kiosk() {
                 key={amt}
                 type="button"
                 onClick={() => handleAddChipAmount(amt)}
-                className="px-3 py-1 rounded-full text-xs font-bold bg-[#f2e5d5] hover:bg-[#8b2500] hover:text-white text-[#6b4a3a] border border-[#d8c5af] transition-all cursor-pointer"
+                className="px-3 py-1 rounded-full text-xs font-bold bg-[#f2e5d5] hover:bg-[#8b2500] hover:text-white text-[#6b4a3a] border border-[#d8c5af] transition-all cursor-pointer font-sans"
               >
                 +₹{amt}
               </button>
@@ -769,7 +864,7 @@ function Kiosk() {
                 key={num}
                 type="button"
                 onClick={() => handleKeypadDigit(num)}
-                className="h-14 rounded-2xl text-2xl font-bold font-mono bg-white hover:bg-[#f7ece0] active:scale-95 border-2 border-[#e5d8c5] shadow-sm text-[#4a1c14] transition-all flex items-center justify-center cursor-pointer"
+                className="h-14 rounded-2xl text-2xl font-bold font-sans bg-white hover:bg-[#f7ece0] active:scale-95 border-2 border-[#e5d8c5] shadow-sm text-[#2d140d] transition-all flex items-center justify-center cursor-pointer"
               >
                 {num}
               </button>
@@ -777,14 +872,14 @@ function Kiosk() {
             <button
               type="button"
               onClick={handleKeypadClear}
-              className="h-14 rounded-2xl text-lg font-bold bg-rose-50 hover:bg-rose-100 active:scale-95 border-2 border-rose-200 text-rose-700 transition-all flex items-center justify-center cursor-pointer"
+              className="h-14 rounded-2xl text-base font-bold font-sans bg-rose-50 hover:bg-rose-100 active:scale-95 border-2 border-rose-200 text-rose-700 transition-all flex items-center justify-center cursor-pointer"
             >
               Clear
             </button>
             <button
               type="button"
               onClick={() => handleKeypadDigit("0")}
-              className="h-14 rounded-2xl text-2xl font-bold font-mono bg-white hover:bg-[#f7ece0] active:scale-95 border-2 border-[#e5d8c5] shadow-sm text-[#4a1c14] transition-all flex items-center justify-center cursor-pointer"
+              className="h-14 rounded-2xl text-2xl font-bold font-sans bg-white hover:bg-[#f7ece0] active:scale-95 border-2 border-[#e5d8c5] shadow-sm text-[#2d140d] transition-all flex items-center justify-center cursor-pointer"
             >
               0
             </button>
