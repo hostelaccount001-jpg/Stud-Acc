@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -22,6 +22,12 @@ import {
   ChevronRight,
   Tag,
   Coins,
+  Wallet,
+  ArrowDownLeft,
+  ArrowUpRight,
+  TrendingUp,
+  TrendingDown,
+  History,
 } from "lucide-react";
 import {
   captureFinger,
@@ -32,6 +38,7 @@ import {
   getKioskConfig,
   punchService,
   getStudentGallery,
+  getStudentLedger,
 } from "@/lib/kiosk.functions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -154,6 +161,54 @@ function Kiosk() {
   const getConfig = useServerFn(getKioskConfig);
   const punch = useServerFn(punchService);
   const getGallery = useServerFn(getStudentGallery);
+  const getLedgerFn = useServerFn(getStudentLedger);
+
+  // Student Ledger & Wallet States (Synced with daily Excel report uploads)
+  const [studentTransactions, setStudentTransactions] = useState<any[]>([]);
+  const [loadingLedger, setLoadingLedger] = useState(false);
+
+  async function loadStudentLedger(studentId: string) {
+    setLoadingLedger(true);
+    try {
+      const res = await getLedgerFn({ data: { studentId } });
+      setStudentTransactions(res?.transactions || []);
+    } catch {
+      setStudentTransactions([]);
+    } finally {
+      setLoadingLedger(false);
+    }
+  }
+
+  const walletMetrics = useMemo(() => {
+    let credit = 0;
+    let used = 0;
+
+    studentTransactions.forEach((tx) => {
+      const sName = (tx.service_name || "").toLowerCase();
+      const isCredit =
+        sName.includes("credit") ||
+        sName.includes("deposit") ||
+        sName.includes("pocket") ||
+        sName.includes("sbi") ||
+        tx.amount < 0;
+
+      const amt = Math.abs(Number(tx.amount) || 0);
+      if (isCredit) {
+        credit += amt;
+      } else {
+        used += amt;
+      }
+    });
+
+    const balance = credit - used;
+
+    return {
+      availableBalance: Math.max(0, balance),
+      totalCredit: credit,
+      totalUsed: used,
+      totalTransactions: studentTransactions.length,
+    };
+  }, [studentTransactions]);
 
   // Live Mantra MFS100 device status
   const { device, checking: deviceChecking, isConnected } = useMantraDevice(3000);
@@ -191,6 +246,8 @@ function Kiosk() {
     setCustomService(null);
     setCustomAmountStr("0");
     setScanning(false);
+    setBusy(false);
+    setStudentTransactions([]);
   }
 
   // AUTO-DETECT: Zero-Touch Continuous Biometric Sensing Loop
@@ -240,6 +297,7 @@ function Kiosk() {
               };
 
               setStudent(verified);
+              void loadStudentLedger(verified.id);
               setSuccessBanner(`Biometric Verified: Welcome, ${verified.name}!`);
               setStep("service");
               setBusy(false);
@@ -326,6 +384,7 @@ function Kiosk() {
       };
 
       setStudent(verified);
+      void loadStudentLedger(verified.id);
       setSuccessBanner(`Biometric Verified: Welcome, ${verified.name}!`);
       setStep("service");
     } catch {
@@ -377,6 +436,17 @@ function Kiosk() {
             at: res.receipt.at,
           };
           setActiveReceipt(rData);
+
+          setStudentTransactions((prev) => [
+            {
+              id: `txn-${Date.now()}`,
+              receipt_no: res.receipt.receiptNo,
+              service_name: res.receipt.service,
+              amount: res.receipt.amount,
+              created_at: res.receipt.at,
+            },
+            ...prev,
+          ]);
 
           // Trigger thermal receipt print
           setTimeout(() => {
@@ -705,24 +775,24 @@ function Kiosk() {
           </Card>
         )}
 
-        {/* STEP 2: Service Selection Grid */}
+        {/* STEP 2: Student Wallet, Daily Ledger History & Cashless Services */}
         {step === "service" && student && (
-          <div className="w-full max-w-4xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
-            {/* Verified Student Banner */}
-            <Card className="p-5 bg-white/90 backdrop-blur-sm border-[#e5d8c5] shadow-lg rounded-2xl flex flex-wrap items-center justify-between gap-4">
+          <div className="w-full max-w-5xl space-y-5 animate-in fade-in zoom-in-95 duration-300">
+            {/* Verified Student Header Banner */}
+            <Card className="p-4 sm:p-5 bg-white/95 backdrop-blur-md border-[#e5d8c5] shadow-sm rounded-2xl flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className="size-14 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 flex items-center justify-center font-serif font-bold text-xl">
+                <div className="size-14 rounded-2xl bg-gradient-to-br from-[#8b2500] to-amber-600 text-white flex items-center justify-center font-serif font-bold text-2xl shadow-sm border border-amber-400/40 shrink-0">
                   {student.name[0]?.toUpperCase()}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-bold text-[#4a1c14]">{student.name}</h3>
+                    <h3 className="text-xl font-bold text-[#4a1c14] font-sans">{student.name}</h3>
                     <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-600/15 text-emerald-800 border border-emerald-500/30 flex items-center gap-1">
                       <CheckCircle2 className="size-3.5 text-emerald-600" /> Biometric Verified
                     </span>
                   </div>
-                  <p className="text-xs font-mono text-[#7c533f] mt-0.5">
-                    SUID: <span className="font-bold text-[#4a1c14]">{student.suid}</span>
+                  <p className="text-xs text-[#7c533f] mt-0.5 font-sans">
+                    GR No / SUID: <span className="font-bold text-[#8b2500] font-mono">{student.suid}</span>
                     {student.class_name ? ` • Class: ${student.class_name}` : ""}
                     {student.room_no ? ` • Room: ${student.room_no}` : ""}
                   </p>
@@ -734,9 +804,71 @@ function Kiosk() {
                 onClick={reset}
                 className="rounded-xl border-[#d8c5af] text-[#6b4a3a] hover:bg-[#f5ecdf] cursor-pointer"
               >
-                <RefreshCw className="size-4 mr-1.5" /> Cancel / Exit
+                <RefreshCw className="size-4 mr-1.5" /> Finish / Exit
               </Button>
             </Card>
+
+            {/* Student Wallet & Daily Report Summary (4 Key Metrics) */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              {/* Available Balance */}
+              <Card className="p-4 bg-gradient-to-br from-[#4a1c14] to-[#782414] text-white rounded-2xl border-2 border-amber-400/40 shadow-md relative overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
+                    Available Balance
+                  </span>
+                  <Wallet className="size-4 text-amber-300" />
+                </div>
+                <div className="flex items-baseline gap-1 mt-1.5">
+                  <span className="text-xl font-bold text-amber-400">₹</span>
+                  <span className="text-3xl font-black font-sans tracking-tight">
+                    {walletMetrics.availableBalance.toFixed(2)}
+                  </span>
+                </div>
+                <span className="text-[10px] text-amber-200/80 mt-0.5 block">Authorized balance</span>
+              </Card>
+
+              {/* Total Credit */}
+              <Card className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                    Total Credit (જમા)
+                  </span>
+                  <TrendingUp className="size-4 text-emerald-600" />
+                </div>
+                <p className="text-2xl font-bold font-sans text-emerald-700 mt-1.5">
+                  ₹{walletMetrics.totalCredit.toFixed(2)}
+                </p>
+                <span className="text-[10px] text-emerald-600 block">Daily reports & deposits</span>
+              </Card>
+
+              {/* Total Debit / Used */}
+              <Card className="p-4 bg-rose-50/80 border border-rose-200 rounded-2xl shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-rose-800">
+                    Total Used (વપરાશ)
+                  </span>
+                  <TrendingDown className="size-4 text-rose-600" />
+                </div>
+                <p className="text-2xl font-bold font-sans text-rose-700 mt-1.5">
+                  ₹{walletMetrics.totalUsed.toFixed(2)}
+                </p>
+                <span className="text-[10px] text-rose-600 block">Services & deductions</span>
+              </Card>
+
+              {/* Total Transactions */}
+              <Card className="p-4 bg-white border border-[#e5d8c5] rounded-2xl shadow-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#7c533f]">
+                    Transactions
+                  </span>
+                  <History className="size-4 text-[#8b2500]" />
+                </div>
+                <p className="text-2xl font-bold font-sans text-[#4a1c14] mt-1.5">
+                  {walletMetrics.totalTransactions}
+                </p>
+                <span className="text-[10px] text-[#8b6553] block">Total entries on record</span>
+              </Card>
+            </div>
 
             {error && (
               <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium flex items-center gap-3">
@@ -745,82 +877,170 @@ function Kiosk() {
               </div>
             )}
 
-            {/* Modern Touch Services Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
-              {(config.data?.services ?? []).map((service) => {
-                const meta = getServiceMeta(service.name);
-                const IconComp = meta.icon;
+            {/* Split Layout: Recent Transactions & Daily Ledger on Left (5 Cols), Services Grid on Right (7 Cols) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              {/* Left Column: Recent Transactions & Daily Report History (5 Cols) */}
+              <div className="lg:col-span-5 space-y-3">
+                <Card className="p-4 bg-white border border-[#e5d8c5] rounded-3xl shadow-sm flex flex-col h-[400px]">
+                  <div className="flex items-center justify-between border-b border-[#f2e7db] pb-2.5">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#8b2500] flex items-center gap-1.5">
+                      <History className="size-4" /> Daily Ledger History (હિસ્ટ્રી)
+                    </h4>
+                    <span className="text-[10px] font-mono text-[#7c533f]">
+                      {studentTransactions.length} Entries
+                    </span>
+                  </div>
 
-                return (
-                  <button
-                    key={service.id}
-                    disabled={busy}
-                    onClick={() => handleServiceClick(service)}
-                    className="p-5 sm:p-6 rounded-3xl bg-white hover:bg-white/95 border-2 border-[#e6d8c6] hover:border-[#8b2500] shadow-[0_6px_20px_rgba(0,0,0,0.04)] hover:shadow-[0_14px_36px_rgba(139,37,0,0.12)] hover:-translate-y-1 active:translate-y-0 active:scale-[0.99] transition-all duration-300 text-left flex flex-col justify-between h-44 group relative overflow-hidden cursor-pointer"
-                  >
-                    {/* Top ambient highlight gradient */}
-                    <div
-                      className={`absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r ${meta.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`}
-                    />
-
-                    {/* Top Category & Printer Badges */}
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`size-8 rounded-xl flex items-center justify-center border shadow-xs transition-transform group-hover:scale-110 ${meta.iconBg}`}
-                          >
-                            <IconComp className="size-4" />
-                          </span>
-                          <span className="text-[11px] font-bold uppercase tracking-wider text-[#8b2500] bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md">
-                            {meta.tag}
-                          </span>
-                        </div>
-
-                        {service.print_receipt && (
-                          <span
-                            title="Receipt will be printed"
-                            className="p-1.5 rounded-lg bg-[#f7efe6] text-[#7c533f] group-hover:text-[#8b2500] transition-colors"
-                          >
-                            <Printer className="size-3.5" />
-                          </span>
-                        )}
+                  <div className="flex-1 overflow-y-auto space-y-2 pt-2 pr-1 custom-scrollbar">
+                    {loadingLedger ? (
+                      <div className="h-full flex items-center justify-center text-xs text-[#7c533f] gap-2 py-8">
+                        <Loader2 className="size-4 animate-spin text-[#8b2500]" /> Loading transactions...
                       </div>
-
-                      {/* Service Title with Crisp Modern Sans Typography */}
-                      <h4 className="text-lg sm:text-xl font-bold tracking-tight text-[#2d140d] group-hover:text-[#8b2500] transition-colors line-clamp-2 leading-snug font-sans">
-                        {service.name}
-                      </h4>
-                    </div>
-
-                    {/* Bottom Pricing & Action Button */}
-                    <div className="flex items-center justify-between pt-3 border-t border-[#f2e7db] mt-2">
-                      {service.price === 0 ? (
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#7c533f]">
-                            Amount
-                          </span>
-                          <span className="text-base sm:text-lg font-extrabold text-[#8b2500] tracking-tight font-sans">
-                            Manual Amount
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-baseline gap-0.5">
-                          <span className="text-lg font-bold text-[#8b2500]">₹</span>
-                          <span className="text-3xl sm:text-4xl font-black tracking-tight text-[#2d140d] font-sans">
-                            {service.price}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-1 px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#8b2500] to-amber-700 text-white font-bold text-xs shadow-xs group-hover:shadow-md group-hover:from-[#a32c00] group-hover:to-amber-600 transition-all">
-                        <span>Select</span>
-                        <ChevronRight className="size-3.5 group-hover:translate-x-0.5 transition-transform" />
+                    ) : studentTransactions.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center text-xs text-[#7c533f] py-8 space-y-1">
+                        <Coins className="size-8 text-[#d8c5af]" />
+                        <p>No transactions found for this student.</p>
                       </div>
-                    </div>
-                  </button>
-                );
-              })}
+                    ) : (
+                      studentTransactions.map((tx) => {
+                        const sName = (tx.service_name || "").toLowerCase();
+                        const isCredit =
+                          sName.includes("credit") ||
+                          sName.includes("deposit") ||
+                          sName.includes("pocket") ||
+                          sName.includes("sbi") ||
+                          tx.amount < 0;
+
+                        return (
+                          <div
+                            key={tx.id}
+                            className="p-2.5 rounded-xl bg-[#faf5ee] hover:bg-[#f5ece0] border border-[#f0e4d4] transition-all flex items-center justify-between text-xs"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div
+                                className={`p-1.5 rounded-lg shrink-0 ${
+                                  isCredit
+                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                                    : "bg-rose-100 text-rose-800 border border-rose-200"
+                                }`}
+                              >
+                                {isCredit ? (
+                                  <ArrowDownLeft className="size-3.5" />
+                                ) : (
+                                  <ArrowUpRight className="size-3.5" />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-bold text-[#2d140d] truncate" title={tx.service_name}>
+                                  {tx.service_name}
+                                </p>
+                                <p className="text-[10px] text-[#7c533f] font-mono">
+                                  {new Date(tx.created_at).toLocaleDateString("en-IN", {
+                                    day: "2-digit",
+                                    month: "short",
+                                  })}{" "}
+                                  ·{" "}
+                                  {new Date(tx.created_at).toLocaleTimeString("en-IN", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+
+                            <span
+                              className={`font-mono font-black text-xs shrink-0 ${
+                                isCredit ? "text-emerald-700" : "text-[#8b2500]"
+                              }`}
+                            >
+                              {isCredit ? "+" : "-"}₹{Math.abs(Number(tx.amount)).toFixed(2)}
+                            </span>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </Card>
+              </div>
+
+              {/* Right Column: Campus Cashless Services (7 Cols) */}
+              <div className="lg:col-span-7 space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#8b2500] flex items-center gap-1.5">
+                    <Tag className="size-4" /> Cashless Services (કેશલેસ સેવાઓ)
+                  </h4>
+                  <span className="text-[11px] text-[#7c533f]">
+                    Tap service to pay & print receipt
+                  </span>
+                </div>
+
+                {/* Modern Touch Services Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {(config.data?.services ?? []).map((service) => {
+                    const meta = getServiceMeta(service.name);
+                    const IconComp = meta.icon;
+
+                    return (
+                      <button
+                        key={service.id}
+                        disabled={busy}
+                        onClick={() => handleServiceClick(service)}
+                        className="p-4 sm:p-5 rounded-3xl bg-white hover:bg-white/95 border-2 border-[#e6d8c6] hover:border-[#8b2500] shadow-[0_4px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_32px_rgba(139,37,0,0.12)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-300 text-left flex flex-col justify-between h-40 group relative overflow-hidden cursor-pointer"
+                      >
+                        {/* Top Category & Printer Badges */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`size-7 rounded-lg flex items-center justify-center border shadow-xs transition-transform group-hover:scale-110 ${meta.iconBg}`}
+                              >
+                                <IconComp className="size-3.5" />
+                              </span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-[#8b2500] bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md">
+                                {meta.tag}
+                              </span>
+                            </div>
+
+                            {service.print_receipt && (
+                              <span
+                                title="Receipt will be printed"
+                                className="p-1.5 rounded-lg bg-[#f7efe6] text-[#7c533f] group-hover:text-[#8b2500] transition-colors"
+                              >
+                                <Printer className="size-3" />
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 className="text-base sm:text-lg font-bold tracking-tight text-[#2d140d] group-hover:text-[#8b2500] transition-colors line-clamp-2 leading-snug font-sans">
+                            {service.name}
+                          </h4>
+                        </div>
+
+                        {/* Bottom Pricing & Action Button */}
+                        <div className="flex items-center justify-between pt-2.5 border-t border-[#f2e7db] mt-1">
+                          {service.price === 0 ? (
+                            <span className="text-sm font-extrabold text-[#8b2500] tracking-tight font-sans">
+                              Manual Amount
+                            </span>
+                          ) : (
+                            <div className="flex items-baseline gap-0.5">
+                              <span className="text-base font-bold text-[#8b2500]">₹</span>
+                              <span className="text-2xl sm:text-3xl font-black tracking-tight text-[#2d140d] font-sans">
+                                {service.price}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#8b2500] to-amber-700 text-white font-bold text-xs shadow-xs group-hover:shadow-md group-hover:from-[#a32c00] group-hover:to-amber-600 transition-all">
+                            <span>Pay</span>
+                            <ChevronRight className="size-3 group-hover:translate-x-0.5 transition-transform" />
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         )}
