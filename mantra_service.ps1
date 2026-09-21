@@ -5,14 +5,40 @@ param([int]$Port = 8032)
 
 $ErrorActionPreference = "Stop"
 
-$dllDir = "C:\Program Files\Mantra\MFS100\Driver\MFS100Test"
-if (-not (Test-Path $dllDir)) {
-    Write-Error "Mantra MFS100 Driver directory not found at: $dllDir"
+$dllCandidates = @(
+    "C:\Program Files\Mantra\MFS100\Driver\MFS100Test\MANTRA.MFS100.dll",
+    "C:\Program Files (x86)\Mantra\MFS100\Driver\MFS100Test\MANTRA.MFS100.dll",
+    "C:\Program Files\Mantra\MFS100\Driver\MANTRA.MFS100.dll",
+    "C:\Program Files (x86)\Mantra\MFS100\Driver\MANTRA.MFS100.dll"
+)
+
+$dllPath = $null
+foreach ($cand in $dllCandidates) {
+    if (Test-Path $cand) {
+        $dllPath = $cand
+        break
+    }
+}
+
+if (-not $dllPath) {
+    $found = Get-ChildItem -Path "C:\Program Files\Mantra", "C:\Program Files (x86)\Mantra" -Filter "MANTRA.MFS100.dll" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($found) {
+        $dllPath = $found.FullName
+    }
+}
+
+if (-not $dllPath) {
+    Write-Host "============================================================" -ForegroundColor Red
+    Write-Host "  [ERROR] Mantra MFS100 Driver not found on this computer!" -ForegroundColor Red
+    Write-Host "  Please install MFS100Driver_9.2.0.0.exe first." -ForegroundColor Yellow
+    Write-Host "============================================================" -ForegroundColor Red
+    Read-Host "Press Enter to exit..."
     exit 1
 }
 
+$dllDir = Split-Path $dllPath
 Set-Location $dllDir
-[System.Reflection.Assembly]::LoadFrom("$dllDir\MANTRA.MFS100.dll") > $null
+[System.Reflection.Assembly]::LoadFrom($dllPath) > $null
 
 $mfs = New-Object MANTRA.MFS100
 $initRes = $mfs.Init()

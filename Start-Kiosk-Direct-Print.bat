@@ -27,25 +27,18 @@ echo.
 :: -------------------------------------------------------------------
 :: 2. Auto-Start Mantra MFS100 Direct Web Bridge (Port 8032)
 :: -------------------------------------------------------------------
+set "PS_PATH=C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%PS_PATH%" (
+    set "PS_PATH=powershell.exe"
+)
+
 netstat -ano | findstr ":8032" >nul
 if errorlevel 1 (
     echo Starting Mantra MFS100 Native Direct Web Bridge (Port 8032)...
-    start "Mantra MFS100 Bridge" /min "C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" -ExecutionPolicy Bypass -File "%~dp0mantra_service.ps1"
-    timeout /t 1 /nobreak >nul
+    start "Mantra MFS100 Bridge" /min "%PS_PATH%" -ExecutionPolicy Bypass -File "%~dp0mantra_service.ps1"
+    timeout /t 2 /nobreak >nul
 ) else (
     echo Mantra MFS100 Native Web Bridge is already active on Port 8032.
-)
-
-:: -------------------------------------------------------------------
-:: 3. Auto-Start Python Local Biometric Matcher (Port 8005)
-:: -------------------------------------------------------------------
-netstat -ano | findstr ":8005" >nul
-if errorlevel 1 (
-    echo Starting Gurukul Biometric Matching Engine (Port 8005)...
-    start "Gurukul Biometric Engine" /min python "%~dp0biometric_service.py"
-    timeout /t 1 /nobreak >nul
-) else (
-    echo Gurukul Biometric Engine is already active on Port 8005.
 )
 
 echo.
