@@ -145,75 +145,25 @@ export const createStaffUserServer = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    let userId: string | null = null;
-    let authErrorMsg: string | null = null;
+    // 1. Create user in Supabase Auth
+    const { data: newUser, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+      email: data.email,
+      password: data.password,
+      email_confirm: true,
+      user_metadata: { full_name: data.fullName },
+    });
 
-    // 1. Attempt Admin Auth API first
-    try {
-      const { data: newUser, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-        email: data.email,
-        password: data.password,
-        email_confirm: true,
-        user_metadata: { full_name: data.fullName },
-      });
+    if (authErr) throw new Error(authErr.message);
+    const userId = newUser.user.id;
 
-      if (!authErr && newUser?.user?.id) {
-        userId = newUser.user.id;
-      } else if (authErr) {
-        authErrorMsg = authErr.message;
-      }
-    } catch (err) {
-      authErrorMsg = err instanceof Error ? err.message : String(err);
-    }
-
-    // 2. Resilient Fallback: If Admin Auth failed (e.g. missing service role Bearer token on Vercel),
-    // register via public auth signUp endpoint with isolated client
-    if (!userId) {
-      try {
-        const { createClient } = await import("@supabase/supabase-js");
-        const fallbackClient = createClient(
-          process.env["SUPABASE_URL"] || process.env["VITE_SUPABASE_URL"] || "https://jjkxtgtbogtzhbuxutag.supabase.co",
-          process.env["SUPABASE_PUBLISHABLE_KEY"] || process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] || "sb_publishable_CtAHGWUsBgHQs_TqWga4Ew_63Yu_44r",
-          {
-            auth: {
-              persistSession: false,
-              autoRefreshToken: false,
-            },
-          }
-        );
-
-        const { data: signUpData, error: signErr } = await fallbackClient.auth.signUp({
-          email: data.email,
-          password: data.password,
-          options: {
-            data: { full_name: data.fullName },
-          },
-        });
-
-        if (signErr) {
-          throw new Error(signErr.message);
-        }
-        if (!signUpData?.user?.id) {
-          throw new Error(authErrorMsg || "Unable to register user in authentication service.");
-        }
-        userId = signUpData.user.id;
-      } catch (fallbackErr) {
-        throw new Error(
-          fallbackErr instanceof Error
-            ? fallbackErr.message
-            : authErrorMsg || "Failed to create user account."
-        );
-      }
-    }
-
-    // 3. Upsert profile
+    // 2. Upsert profile
     await supabaseAdmin.from("profiles").upsert({
       id: userId,
       email: data.email,
       full_name: data.fullName,
     });
 
-    // 4. Set Role in user_roles
+    // 3. Set Role in user_roles
     if (data.role === "admin" || data.role === "super_admin") {
       await supabaseAdmin.from("user_roles").upsert(
         { user_id: userId, role: "admin" },
@@ -223,7 +173,7 @@ export const createStaffUserServer = createServerFn({ method: "POST" })
       await supabaseAdmin.from("user_roles").delete().eq("user_id", userId).eq("role", "admin");
     }
 
-    // 5. Save Granular Permissions
+    // 4. Save Granular Permissions
     const permissions: UserPermissions = data.permissions ||
       (data.role === "super_admin"
         ? defaultSuperAdminPermissions
@@ -297,12 +247,7 @@ export const deleteStaffUserServer = createServerFn({ method: "POST" })
     await supabaseAdmin.from("settings").delete().eq("key", `perms_${data.userId}`);
     await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId);
     await supabaseAdmin.from("profiles").delete().eq("id", data.userId);
-    
-    try {
-      await supabaseAdmin.auth.admin.deleteUser(data.userId);
-    } catch {
-      // Non-blocking if auth service role is unavailable
-    }
+    await supabaseAdmin.auth.admin.deleteUser(data.userId);
 
     return { success: true };
   });
@@ -311,17 +256,9 @@ export const resetStaffPasswordServer = createServerFn({ method: "POST" })
   .validator((input: unknown) => z.object({ userId: z.string(), newPassword: z.string().min(6) }).parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    try {
-      const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, {
-        password: data.newPassword,
-      });
-      if (error) throw new Error(error.message);
-      return { success: true };
-    } catch (err) {
-      throw new Error(
-        err instanceof Error
-          ? err.message
-          : "Password reset requires Supabase Service Role Key configuration."
-      );
-    }
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, {
+      password: data.newPassword,
+    });
+    if (error) throw new Error(error.message);
+    return { success: true };
   });

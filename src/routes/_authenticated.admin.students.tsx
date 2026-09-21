@@ -95,7 +95,7 @@ export const Route = createFileRoute("/_authenticated/admin/students")({
   head: () => ({
     meta: [
       { title: "Students & Biometrics — Gurukul Kiosk ERP" },
-      { name: "description", content: "Add, edit, or delete students, and enrol fingerprints on Mantra MFS 100." },
+      { name: "description", content: "Add, edit, or delete students, and enrol fingerprints on Mantra MFS100 / MFS110." },
     ],
   }),
   component: StudentsPage,
@@ -536,7 +536,7 @@ function StudentsPage() {
             <Users className="size-8 text-[#8b2500]" /> Students & Biometrics
           </h1>
           <p className="mt-1 text-sm text-[#7c533f] font-medium">
-            SUID and biometric enrollment, up to {MAX_FINGERS} fingerprints on Mantra MFS 100, plus temporary account blocking.
+            SUID and biometric enrollment, up to {MAX_FINGERS} fingerprints on Mantra MFS100 / MFS110, plus temporary account blocking.
           </p>
         </div>
 

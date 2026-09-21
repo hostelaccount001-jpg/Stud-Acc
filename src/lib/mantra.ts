@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 
 /**
- * Mantra MFS 100 fingerprint scanner hardware bridge (browser side).
+ * Mantra MFS110 / MFS100 fingerprint scanner hardware bridge (browser side).
  *
  * Supports:
- * 1. Mantra MFS 100 Web SDK / Client Service (Local JSON API on ports 8032, 8004, 8005, 8003)
- * 2. Mantra MFS 100 RD Service (UIDAI standard HTTP/HTTPS RD Service on ports 11100-11105)
+ * 1. Mantra MFS110 L1 RD Service (UIDAI standard HTTP RD Service on ports 11100-11105)
+ * 2. Mantra MFS100 / MFS110 Client Service (Local JSON API on ports 8004, 8005, 8003)
  *
  * Fully hardware-driven — simulation mode has been completely removed.
  */
@@ -53,8 +53,7 @@ type DiscoveredDevice = {
 };
 
 const RD_PORTS = [11100, 11101, 11102, 11103, 11104, 11105];
-const CLIENT_PORTS = [8032, 8004, 8005, 8031, 8003];
-const HOSTS = ["127.0.0.1", "localhost"];
+const CLIENT_PORTS = [8031, 8032, 8004, 8005, 8003];
 
 let cachedDevice: DiscoveredDevice | null = null;
 
@@ -95,7 +94,7 @@ async function probeRDServiceUrl(base: string, port: number, timeoutMs = 800): P
     const xml = await res.text();
     if (!xml.includes("DeviceInfo") && !xml.includes("RDService")) return null;
 
-    const mi = parseXmlAttribute(xml, "DeviceInfo", "mi") || "MFS100";
+    const mi = parseXmlAttribute(xml, "DeviceInfo", "mi") || "MFS110";
     const serial = parseParamValue(xml, "srno") || parseParamValue(xml, "SerialNo") || undefined;
 
     return {
@@ -112,18 +111,15 @@ async function probeRDServiceUrl(base: string, port: number, timeoutMs = 800): P
   }
 }
 
-/** Check if Mantra RD Service is available on a port (supports HTTPS and HTTP fallback across 127.0.0.1 and localhost) */
-async function probeRDService(port: number, timeoutMs = 700): Promise<DiscoveredDevice | null> {
+/** Check if Mantra RD Service is available on a port (supports HTTPS and HTTP fallback) */
+async function probeRDService(port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
   const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-  for (const host of HOSTS) {
-    if (isHttps) {
-      const httpsDev = await probeRDServiceUrl(`https://${host}:${port}`, port, timeoutMs);
-      if (httpsDev) return httpsDev;
-    }
-    const httpDev = await probeRDServiceUrl(`http://${host}:${port}`, port, timeoutMs);
-    if (httpDev) return httpDev;
+  if (isHttps) {
+    const httpsDev = await probeRDServiceUrl(`https://127.0.0.1:${port}`, port, timeoutMs);
+    if (httpsDev) return httpsDev;
+    return await probeRDServiceUrl(`http://127.0.0.1:${port}`, port, timeoutMs);
   }
-  return null;
+  return await probeRDServiceUrl(`http://127.0.0.1:${port}`, port, timeoutMs);
 }
 
 async function probeClientServiceUrl(base: string, port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
@@ -138,7 +134,7 @@ async function probeClientServiceUrl(base: string, port: number, timeoutMs = 800
     });
     if (!res.ok) return null;
     const info = (await res.json()) as Record<string, unknown>;
-    const model = typeof info["Model"] === "string" ? info["Model"] : "MFS100";
+    const model = typeof info["Model"] === "string" ? info["Model"] : "MFS110";
     const serial = typeof info["SerialNo"] === "string" ? info["SerialNo"] : undefined;
 
     return {
@@ -155,18 +151,15 @@ async function probeClientServiceUrl(base: string, port: number, timeoutMs = 800
   }
 }
 
-/** Check if Mantra Client JSON service is available on a port */
-async function probeClientService(port: number, timeoutMs = 700): Promise<DiscoveredDevice | null> {
+/** Check if Mantra Client JSON service is available on a port (supports HTTPS and HTTP fallback) */
+async function probeClientService(port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
   const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-  for (const host of HOSTS) {
-    if (isHttps) {
-      const httpsDev = await probeClientServiceUrl(`https://${host}:${port}`, port, timeoutMs);
-      if (httpsDev) return httpsDev;
-    }
-    const httpDev = await probeClientServiceUrl(`http://${host}:${port}`, port, timeoutMs);
-    if (httpDev) return httpDev;
+  if (isHttps) {
+    const httpsDev = await probeClientServiceUrl(`https://127.0.0.1:${port}`, port, timeoutMs);
+    if (httpsDev) return httpsDev;
+    return await probeClientServiceUrl(`http://127.0.0.1:${port}`, port, timeoutMs);
   }
-  return null;
+  return await probeClientServiceUrl(`http://127.0.0.1:${port}`, port, timeoutMs);
 }
 
 /** Finds the active Mantra scanner device with fast parallel probing */
@@ -187,8 +180,8 @@ export async function findDevice(): Promise<DiscoveredDevice | null> {
   }
 
   // 2. Parallel probe Client ports and RD Service ports
-  const clientPromises = CLIENT_PORTS.map((port) => probeClientService(port, 700));
-  const rdPromises = RD_PORTS.map((port) => probeRDService(port, 700));
+  const clientPromises = CLIENT_PORTS.map((port) => probeClientService(port, 800));
+  const rdPromises = RD_PORTS.map((port) => probeRDService(port, 800));
 
   const results = await Promise.all([...clientPromises, ...rdPromises]);
   const found = results.find((dev): dev is DiscoveredDevice => dev !== null) ?? null;
@@ -206,7 +199,7 @@ export async function deviceInfo(): Promise<DeviceInfo> {
 
   return {
     connected: true,
-    model: dev.model || "MFS100",
+    model: dev.model || "MFS110",
     serial: dev.serial,
     status: "READY",
     driverType: dev.type,
@@ -214,7 +207,7 @@ export async function deviceInfo(): Promise<DeviceInfo> {
   };
 }
 
-/** React Hook for live Mantra MFS 100 device status */
+/** React Hook for live Mantra MFS110 device status */
 export function useMantraDevice(pollIntervalMs = 3000) {
   const [device, setDevice] = useState<DeviceInfo | null>(null);
   const [checking, setChecking] = useState(true);
@@ -248,7 +241,7 @@ export function useMantraDevice(pollIntervalMs = 3000) {
 }
 
 /**
- * Real Fingerprint Capture on Mantra MFS 100 hardware.
+ * Real Fingerprint Capture on Mantra MFS110 / MFS100 hardware.
  * Strictly communicates with the connected device — no simulation mode.
  */
 export async function captureFinger(
@@ -259,7 +252,7 @@ export async function captureFinger(
   if (!dev) {
     return {
       ok: false,
-      error: "Mantra MFS 100 scanner is not connected. Please verify USB connection and RD Service.",
+      error: "Mantra MFS110 scanner is not connected. Please verify USB connection and RD Service.",
     };
   }
 
@@ -283,7 +276,7 @@ export async function captureFinger(
       });
 
       if (!res.ok) {
-        return { ok: false, error: `RD Service returned HTTP ${res.status}. Check MFS 100 driver.` };
+        return { ok: false, error: `RD Service returned HTTP ${res.status}. Check MFS110 driver.` };
       }
 
       const xml = await res.text();
@@ -292,7 +285,7 @@ export async function captureFinger(
       const qScore = Number(parseXmlAttribute(xml, "Resp", "qScore") ?? 0);
 
       if (errCode !== "0") {
-        return { ok: false, error: `Mantra MFS 100: ${errInfo} (Code ${errCode})` };
+        return { ok: false, error: `Mantra MFS110: ${errInfo} (Code ${errCode})` };
       }
 
       const dataTag = parseXmlTag(xml, "Data");
@@ -311,7 +304,7 @@ export async function captureFinger(
       if (err instanceof Error && err.name === "AbortError") {
         return { ok: false, error: "Scan timed out. Please place your finger firmly on the sensor." };
       }
-      return { ok: false, error: "Communication error with Mantra MFS 100 scanner." };
+      return { ok: false, error: "Communication error with Mantra MFS110 scanner." };
     } finally {
       clearTimeout(timer);
     }
