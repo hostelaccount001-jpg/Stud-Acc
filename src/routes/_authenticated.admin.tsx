@@ -55,7 +55,6 @@ function AdminLayout() {
     if (item.to === "/admin") return permissions.dashboard !== false;
     if (item.to === "/admin/students") return permissions.students;
     if (item.to === "/admin/wallet") return permissions.reports || permissions.students || isSuperAdmin;
-    if (item.to === "/admin/daily-ledger") return permissions.reports || permissions.students || isSuperAdmin;
     if (item.to === "/admin/services") return permissions.services;
 
     if (item.to === "/admin/settings") return permissions.settings;

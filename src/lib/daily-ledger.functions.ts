@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { getSupabaseAdmin } from "@/integrations/supabase/client.server";
 
 export const dailyLedgerRowSchema = z.object({
   unique_no: z.string().default(""),
@@ -24,7 +23,7 @@ const importDailyLedgerInput = z.object({
 export const importDailyLedgerServer = createServerFn({ method: "POST" })
   .validator((data: z.infer<typeof importDailyLedgerInput>) => data)
   .handler(async ({ data }) => {
-    const supabase = getSupabaseAdmin();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const rows = data.rows;
 
     if (!rows || rows.length === 0) {
@@ -35,7 +34,7 @@ export const importDailyLedgerServer = createServerFn({ method: "POST" })
     const uniqueGrNos = Array.from(new Set(rows.map((r) => r.gr_no.trim())));
 
     // 2. Fetch existing students by suid in bulk
-    const { data: existingStudents, error: fetchErr } = await supabase
+    const { data: existingStudents, error: fetchErr } = await supabaseAdmin
       .from("students")
       .select("id, suid, name, class_name, nfc_no, blocked")
       .in("suid", uniqueGrNos);
@@ -64,7 +63,7 @@ export const importDailyLedgerServer = createServerFn({ method: "POST" })
         };
       });
 
-      const { data: createdStudents, error: createErr } = await supabase
+      const { data: createdStudents, error: createErr } = await supabaseAdmin
         .from("students")
         .insert(newStudentsPayload)
         .select("id, suid, name, class_name, nfc_no, blocked");
@@ -133,7 +132,7 @@ export const importDailyLedgerServer = createServerFn({ method: "POST" })
 
     for (let i = 0; i < transactionsToInsert.length; i += CHUNK_SIZE) {
       const chunk = transactionsToInsert.slice(i, i + CHUNK_SIZE);
-      const { data: inserted, error: insertErr } = await supabase
+      const { data: inserted, error: insertErr } = await supabaseAdmin
         .from("transactions")
         .insert(chunk)
         .select("id");
@@ -154,15 +153,15 @@ export const importDailyLedgerServer = createServerFn({ method: "POST" })
 
 export const getWalletLedgerDataServer = createServerFn({ method: "GET" })
   .handler(async () => {
-    const supabase = getSupabaseAdmin();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const [txRes, studentsRes] = await Promise.all([
-      supabase
+      supabaseAdmin
         .from("transactions")
         .select("id, suid, student_name, service_name, amount, created_at, receipt_no")
         .order("created_at", { ascending: false })
         .limit(200),
-      supabase
+      supabaseAdmin
         .from("students")
         .select("id, suid, name, class_name, room_no, blocked")
         .order("name", { ascending: true })
@@ -185,10 +184,10 @@ export const manualWalletTransactionServer = createServerFn({ method: "POST" })
     mode?: string;
   }) => data)
   .handler(async ({ data }) => {
-    const supabase = getSupabaseAdmin();
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const gr = data.gr_no.trim();
 
-    const { data: student } = await supabase
+    const { data: student } = await supabaseAdmin
       .from("students")
       .select("id, suid, name, nfc_no")
       .eq("suid", gr)
@@ -199,7 +198,7 @@ export const manualWalletTransactionServer = createServerFn({ method: "POST" })
     const comment = data.comment.trim() || (data.type === "CREDIT" ? "Manual Credit Deposit" : "Manual Debit Adjustment");
     const serviceName = `${typeTag} ${comment}${modeTag}`.slice(0, 100);
 
-    const { data: inserted, error } = await supabase
+    const { data: inserted, error } = await supabaseAdmin
       .from("transactions")
       .insert({
         student_id: student?.id ?? null,
@@ -218,4 +217,3 @@ export const manualWalletTransactionServer = createServerFn({ method: "POST" })
 
     return { success: true, transaction: inserted };
   });
-
