@@ -18,9 +18,6 @@ import {
   HeartPulse,
   ChevronRight,
   Tag,
-  Building2,
-  Key,
-  Bed,
 } from "lucide-react";
 import {
   captureFinger,
@@ -710,7 +707,7 @@ function Kiosk() {
                   {student.name}
                 </h2>
                 <p className="text-xs sm:text-sm font-semibold tracking-wider text-amber-200/90 font-mono uppercase">
-                  UNIQUE/HR NO.: <span className="font-bold text-white">{student.suid}</span> • {student.class_name || "12 COMMERCE - B"}
+                  UNIQUE/HR NO.: <span className="font-bold text-white">{student.suid}</span>
                 </p>
               </div>
 
@@ -724,25 +721,6 @@ function Kiosk() {
                   <RefreshCw className="size-4 mr-1.5 text-amber-300" /> Exit
                 </Button>
               </div>
-            </div>
-
-            {/* Student Location & Details Chips */}
-            <div className="flex flex-wrap items-center gap-2 px-1 select-none">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e5d8c5] text-xs font-bold text-[#4a1c14] shadow-xs">
-                <Building2 className="size-3.5 text-[#8b2500]" />
-                {student.class_name || "11-12 COMMERCE"}
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e5d8c5] text-xs font-bold text-[#4a1c14] shadow-xs">
-                Floor: {student.room_no ? `${student.room_no.slice(0, 1)}ND FLOOR` : "2ND FLOOR"}
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e5d8c5] text-xs font-bold text-[#4a1c14] shadow-xs">
-                <Key className="size-3.5 text-[#8b2500]" />
-                Room {student.room_no || "206"}
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e5d8c5] text-xs font-bold text-[#4a1c14] shadow-xs">
-                <Bed className="size-3.5 text-[#8b2500]" />
-                Bed {student.room_no ? student.room_no.slice(-2) : "58"}
-              </span>
             </div>
 
             {error && (
