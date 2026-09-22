@@ -201,27 +201,53 @@ export const createStaffUserServer = createServerFn({ method: "POST" })
     let userId: string | null = null;
     let lastError: string | null = null;
 
-    // Strategy 1: Call secure database RPC (bypasses service_role bearer token requirements)
+    // Strategy 1: Standard Supabase Auth signUp (GoTrue natively handles password hashing, auth.users AND auth.identities)
     try {
-      const { data: rpcId, error: rpcErr } = await (supabaseAdmin as any).rpc("admin_create_staff_user", {
-        p_email: data.email.trim(),
-        p_password: data.password,
-        p_full_name: data.fullName.trim(),
+      const { data: signUpData, error: signErr } = await supabaseAdmin.auth.signUp({
+        email: data.email.trim(),
+        password: data.password,
+        options: {
+          data: { full_name: data.fullName.trim() },
+        },
       });
-      if (!rpcErr && rpcId) {
-        userId = rpcId;
-      } else if (rpcErr && !rpcErr.message?.includes("function") && !rpcErr.message?.includes("not found")) {
-        // If it's a real business error like "User with this email already exists"
-        if (rpcErr.message?.toLowerCase().includes("already exists")) {
-          throw new Error(`A user with email "${data.email}" already exists.`);
+
+      if (!signErr && signUpData?.user?.id) {
+        userId = signUpData.user.id;
+      } else if (signErr) {
+        const msg = signErr.message?.toLowerCase() || "";
+        if (msg.includes("already registered") || msg.includes("already exists") || msg.includes("user already exists")) {
+          throw new Error(`A user with email "${data.email}" is already registered.`);
         }
+        lastError = signErr.message;
       }
     } catch (e: any) {
-      if (e?.message?.toLowerCase().includes("already exists")) throw e;
-      // RPC might not be deployed yet, fall through to Strategy 2
+      if (e?.message?.toLowerCase().includes("already")) throw e;
+      lastError = e?.message;
     }
 
-    // Strategy 2: Supabase Auth Admin createUser (if service_role key is valid)
+    // Strategy 2: Call secure database RPC (with complete auth.identities support)
+    if (!userId) {
+      try {
+        const { data: rpcId, error: rpcErr } = await (supabaseAdmin as any).rpc("admin_create_staff_user", {
+          p_email: data.email.trim(),
+          p_password: data.password,
+          p_full_name: data.fullName.trim(),
+        });
+        if (!rpcErr && rpcId) {
+          userId = rpcId;
+        } else if (rpcErr && !rpcErr.message?.includes("function") && !rpcErr.message?.includes("not found")) {
+          if (rpcErr.message?.toLowerCase().includes("already exists")) {
+            throw new Error(`A user with email "${data.email}" already exists.`);
+          }
+          lastError = rpcErr.message;
+        }
+      } catch (e: any) {
+        if (e?.message?.toLowerCase().includes("already")) throw e;
+        lastError = e?.message;
+      }
+    }
+
+    // Strategy 3: Supabase Auth Admin createUser (if service_role key is valid)
     if (!userId) {
       try {
         const { data: newUser, error: authErr } = await supabaseAdmin.auth.admin.createUser({
@@ -241,29 +267,15 @@ export const createStaffUserServer = createServerFn({ method: "POST" })
       }
     }
 
-    // Strategy 3: Standard Supabase Auth signUp (works with publishable/anon key, zero bearer token issues)
-    if (!userId) {
-      try {
-        const { data: signUpData, error: signErr } = await supabaseAdmin.auth.signUp({
-          email: data.email.trim(),
-          password: data.password,
-          options: {
-            data: { full_name: data.fullName.trim() },
-          },
-        });
-
-        if (!signErr && signUpData?.user?.id) {
-          userId = signUpData.user.id;
-        } else if (signErr) {
-          throw new Error(signErr.message);
-        }
-      } catch (e: any) {
-        throw new Error(e?.message || lastError || "Failed to create user account. Please check credentials or run the provided Supabase SQL.");
-      }
-    }
-
     if (!userId) {
       throw new Error(lastError || "Failed to create user account.");
+    }
+
+    // Attempt to invoke repair RPC in background to keep all users in auth.identities consistent
+    try {
+      await (supabaseAdmin as any).rpc("admin_repair_auth_identities");
+    } catch {
+      // Ignore if function not yet applied
     }
 
     // 2. Upsert profile
