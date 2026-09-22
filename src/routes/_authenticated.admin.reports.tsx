@@ -146,13 +146,18 @@ function ReportsPage() {
       const end = new Date(`${to}T23:59:59.999`);
       const { data, error } = await supabase
         .from("transactions")
-        .select("id, receipt_no, nfc_no, suid, student_name, service_name, amount, created_at")
+        .select("id, receipt_no, nfc_no, suid, student_name, service_name, amount, created_at, service_id")
+        .not("service_id", "is", null)
+        .not("service_name", "ilike", "[Wallet]%")
         .gte("created_at", start.toISOString())
         .lte("created_at", end.toISOString())
         .order("created_at", { ascending: false })
         .limit(5000);
       if (error) throw error;
-      return data as TransactionRow[];
+      const cleanRows = (data ?? []).filter(
+        (r: any) => r.service_id !== null && !r.service_name?.startsWith("[Wallet]")
+      );
+      return cleanRows as TransactionRow[];
     },
   });
 

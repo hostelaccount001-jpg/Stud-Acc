@@ -42,4 +42,5 @@ scratch/
 react-kiosk/
 python-backend/
 supabase_*.sql
+!SUPABASE_COMPLETE_MASTER_SETUP.sql
 assets/

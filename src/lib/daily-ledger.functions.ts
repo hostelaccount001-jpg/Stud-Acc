@@ -179,14 +179,15 @@ export const getWalletLedgerDataServer = createServerFn({ method: "GET" })
     const [txRes, studentsRes] = await Promise.all([
       supabaseAdmin
         .from("transactions")
-        .select("id, suid, student_name, service_name, amount, created_at, receipt_no")
+        .select("id, suid, student_name, service_name, amount, created_at, receipt_no, service_id")
+        .or("service_id.is.null,service_name.ilike.[Wallet]%")
         .order("created_at", { ascending: false })
-        .limit(200),
+        .limit(10000),
       supabaseAdmin
         .from("students")
         .select("id, suid, name, class_name, room_no, blocked")
         .order("name", { ascending: true })
-        .limit(1000),
+        .limit(5000),
     ]);
 
     return {

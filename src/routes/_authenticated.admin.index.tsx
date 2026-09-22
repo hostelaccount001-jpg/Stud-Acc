@@ -41,13 +41,18 @@ function Dashboard() {
       const [tx, students, blocked] = await Promise.all([
         supabase
           .from("transactions")
-          .select("amount, service_name, student_name, suid, created_at, receipt_no")
+          .select("amount, service_name, student_name, suid, created_at, receipt_no, service_id")
+          .not("service_id", "is", null)
+          .not("service_name", "ilike", "[Wallet]%")
           .gte("created_at", startOfToday())
           .order("created_at", { ascending: false }),
         supabase.from("students").select("id", { count: "exact", head: true }),
         supabase.from("students").select("id", { count: "exact", head: true }).eq("blocked", true),
       ]);
-      const rows = tx.data ?? [];
+      const rawRows = tx.data ?? [];
+      const rows = rawRows.filter(
+        (r: any) => r.service_id !== null && !r.service_name?.startsWith("[Wallet]")
+      );
       const byService = new Map<string, { count: number; total: number }>();
       for (const r of rows) {
         const cur = byService.get(r.service_name) ?? { count: 0, total: 0 };
