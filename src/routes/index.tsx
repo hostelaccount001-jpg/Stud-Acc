@@ -561,7 +561,7 @@ function Kiosk() {
       setSuccessBanner(`Biometric Verified: Welcome, ${verified.name}!`);
       setStep("service");
     } catch {
-      setError("Communication error with Mantra MFS100 scanner. Check USB connection and driver.");
+      setError("Communication error with Mantra scanner. Check USB connection and driver.");
     } finally {
       setScanning(false);
       setBusy(false);
@@ -878,7 +878,7 @@ function Kiosk() {
                   />
                 ))}
                 <span className="text-[10px] font-mono font-bold text-emerald-700 ml-1">
-                  MFS100 ACTIVE
+                  MANTRA ACTIVE
                 </span>
               </div>
             </div>
@@ -890,7 +890,7 @@ function Kiosk() {
               <p className="text-sm md:text-base text-[#7c533f] font-medium">
                 {scanning
                   ? "🟢 Optical sensor active. Place registered finger directly on Mantra glass."
-                  : "Mantra MFS100 optical biometric sensor is armed and ready."}
+                  : "Mantra optical biometric sensor is armed and ready."}
               </p>
             </div>
 
@@ -908,42 +908,37 @@ function Kiosk() {
                 disabled={busy}
                 className="w-full h-15 text-lg font-bold text-white rounded-2xl shadow-[0_12px_28px_-6px_rgba(139,37,0,0.45)] transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] shimmer-btn cursor-pointer bg-gradient-to-r from-[#4a1c14] via-[#6d2518] to-[#8b2500] border border-amber-500/20"
               >
-                {busy ? (
+                {scanning ? (
                   <>
-                    <Loader2 className="size-5 animate-spin mr-2 text-amber-300" />
-                    Verifying Biometrics...
-                  </>
-                ) : scanning ? (
-                  <>
-                    <span className="size-3 rounded-full bg-emerald-400 animate-ping mr-2.5" />
-                    Auto-Sense Active: Touch Sensor
+                    <Loader2 className="size-6 animate-spin mr-2" />
+                    Scanning Fingerprint...
                   </>
                 ) : (
                   <>
-                    <Fingerprint className="size-5 mr-2 text-amber-300" />
+                    <Fingerprint className="size-6 mr-2 animate-pulse text-amber-300" />
                     Touch to Scan Fingerprint
                   </>
                 )}
               </Button>
 
-              <div className="flex items-center justify-between px-2 text-xs text-[#7c533f]">
-                <span className="flex items-center gap-1.5 font-semibold text-emerald-800">
-                  <CheckCircle2 className="size-4 text-emerald-600" />
-                  Zero-Touch Auto-Sense Active
-                </span>
+              <div className="flex items-center justify-between px-2 text-xs font-semibold">
+                <div className="flex items-center gap-1.5 text-emerald-700">
+                  <CheckCircle2 className="size-3.5" />
+                  <span>Zero-Touch Auto-Sense Active</span>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setAutoDetect((prev) => !prev)}
-                  className="font-bold text-[#8b2500] hover:underline cursor-pointer"
+                  onClick={() => setAutoSensePaused(!autoSensePaused)}
+                  className="text-[#7c533f] hover:text-[#8b2500] hover:underline transition-colors cursor-pointer"
                 >
-                  {autoDetect ? "Pause Auto-Sense" : "Enable Auto-Sense"}
+                  {autoSensePaused ? "Resume Auto-Sense" : "Pause Auto-Sense"}
                 </button>
               </div>
+            </div>
 
-              <div className="pt-2 flex items-center justify-center gap-2 text-[11px] font-semibold text-[#8b6553]">
-                <ShieldCheck className="size-3.5 text-emerald-600" />
-                <span>Mantra MFS100 Hardware Biometric Verification</span>
-              </div>
+            <div className="pt-4 border-t border-[#e5d8c5]/70 flex items-center justify-center gap-2 text-xs text-[#7c533f]">
+              <ShieldCheck className="size-4 text-emerald-600" />
+              <span>Mantra Hardware Biometric Verification</span>
             </div>
           </Card>
         )}
@@ -1442,7 +1437,7 @@ function Kiosk() {
       <footer className="text-center text-xs font-medium text-[#8f6853] py-2 flex flex-col sm:flex-row items-center justify-center gap-2">
         <span>Shree Swaminarayan Gurukul, Rajkot · Cashless Biometric Terminal</span>
         <span className="hidden sm:inline">|</span>
-        <span className="font-semibold text-[#6b4a3a]">Mantra MFS100 STQC Optical Scanner</span>
+        <span className="font-semibold text-[#6b4a3a]">Mantra Optical Biometric Scanner</span>
       </footer>
 
       {/* Hidden Thermal Slip - Active During window.print() */}

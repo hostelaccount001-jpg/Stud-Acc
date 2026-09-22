@@ -252,7 +252,7 @@ export async function captureFinger(
   if (!dev) {
     return {
       ok: false,
-      error: "Mantra MFS100 scanner is not connected. Please verify USB connection and RD Service.",
+      error: "Mantra scanner is not connected. Please verify USB connection and RD Service.",
     };
   }
 
@@ -276,7 +276,7 @@ export async function captureFinger(
       });
 
       if (!res.ok) {
-        return { ok: false, error: `RD Service returned HTTP ${res.status}. Check MFS100 driver.` };
+        return { ok: false, error: `RD Service returned HTTP ${res.status}. Check Mantra driver.` };
       }
 
       const xml = await res.text();
@@ -285,7 +285,7 @@ export async function captureFinger(
       const qScore = Number(parseXmlAttribute(xml, "Resp", "qScore") ?? 0);
 
       if (errCode !== "0") {
-        return { ok: false, error: `Mantra MFS100: ${errInfo} (Code ${errCode})` };
+        return { ok: false, error: `Mantra: ${errInfo} (Code ${errCode})` };
       }
 
       const dataTag = parseXmlTag(xml, "Data");
