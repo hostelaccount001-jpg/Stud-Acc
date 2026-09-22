@@ -644,26 +644,52 @@ export default function WalletPage() {
         <div className="space-y-6">
           {/* Success Banner after import */}
           {importResult && (
-            <div className="p-4 rounded-2xl bg-emerald-50 border-2 border-emerald-200 text-emerald-900 flex items-center justify-between gap-4 animate-in fade-in">
-              <div className="flex items-center gap-3">
-                <CheckCircle2 className="size-6 text-emerald-600 shrink-0" />
-                <div>
-                  <h4 className="font-bold text-sm">Ledger Report Imported Successfully!</h4>
-                  <p className="text-xs text-emerald-800">
-                    {importResult.totalInserted} ledger transactions updated in student wallets.
-                    {importResult.newStudentsCreated > 0 &&
-                      ` (${importResult.newStudentsCreated} new student accounts automatically registered)`}
+            <div className="p-6 md:p-8 rounded-3xl bg-gradient-to-br from-emerald-50 via-white to-emerald-50/70 border-2 border-emerald-400 shadow-xl space-y-4 animate-in fade-in zoom-in-95 duration-300 text-center">
+              <div className="size-16 rounded-full bg-emerald-500/20 text-emerald-700 flex items-center justify-center mx-auto shadow-inner border border-emerald-500/30">
+                <CheckCircle2 className="size-9 text-emerald-600 animate-bounce" />
+              </div>
+              <div>
+                <h3 className="text-xl md:text-2xl font-serif font-extrabold text-[#3b190f]">
+                  🎉 Daily Ledger Report Uploaded Successfully!
+                </h3>
+                <p className="text-xs sm:text-sm text-[#7c533f] mt-1.5 font-medium max-w-lg mx-auto">
+                  All <strong className="font-mono text-emerald-800 text-base">{importResult.totalInserted.toLocaleString()}</strong> transactions have been safely processed and updated in the student accounts database.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 max-w-md mx-auto gap-3 pt-2">
+                <div className="p-4 rounded-2xl bg-white border border-emerald-200 shadow-xs">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Transactions Saved</p>
+                  <p className="text-2xl font-black font-mono text-emerald-700 mt-1">
+                    {importResult.totalInserted.toLocaleString()}
+                  </p>
+                </div>
+                <div className="p-4 rounded-2xl bg-white border border-emerald-200 shadow-xs">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#7c533f]">New Students Added</p>
+                  <p className="text-2xl font-black font-mono text-[#8b2500] mt-1">
+                    {importResult.newStudentsCreated.toLocaleString()}
                   </p>
                 </div>
               </div>
-              <Button
-                size="sm"
-                onClick={() => setImportResult(null)}
-                variant="outline"
-                className="border-emerald-300 text-emerald-800 hover:bg-emerald-100 rounded-xl text-xs"
-              >
-                Dismiss
-              </Button>
+
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
+                <Button
+                  onClick={() => {
+                    setImportResult(null);
+                    setActiveTab("balances");
+                  }}
+                  className="bg-[#8b2500] hover:bg-[#a32c00] text-white font-bold text-xs px-5 py-2.5 rounded-xl cursor-pointer shadow-md"
+                >
+                  <Wallet className="size-4 mr-1.5" /> View Student Balances
+                </Button>
+                <Button
+                  onClick={() => setImportResult(null)}
+                  variant="outline"
+                  className="border-emerald-300 text-emerald-800 hover:bg-emerald-50 text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer"
+                >
+                  Upload Another Report
+                </Button>
+              </div>
             </div>
           )}
 

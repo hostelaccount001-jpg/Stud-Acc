@@ -924,14 +924,14 @@ function Kiosk() {
               <div className="flex items-center justify-between px-2 text-xs font-semibold">
                 <div className="flex items-center gap-1.5 text-emerald-700">
                   <CheckCircle2 className="size-3.5" />
-                  <span>Zero-Touch Auto-Sense Active</span>
+                  <span>{autoDetect ? "Zero-Touch Auto-Sense Active" : "Auto-Sense Paused"}</span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setAutoSensePaused(!autoSensePaused)}
+                  onClick={() => setAutoDetect((prev) => !prev)}
                   className="text-[#7c533f] hover:text-[#8b2500] hover:underline transition-colors cursor-pointer"
                 >
-                  {autoSensePaused ? "Resume Auto-Sense" : "Pause Auto-Sense"}
+                  {autoDetect ? "Pause Auto-Sense" : "Resume Auto-Sense"}
                 </button>
               </div>
             </div>
