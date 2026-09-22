@@ -139,7 +139,22 @@ function StudentsPage() {
   const [editFingers, setEditFingers] = useState<any[]>([]);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
+  const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
+  const [inlineRoomVal, setInlineRoomVal] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  async function saveInlineRoom(id: string, room: string) {
+    try {
+      const clean = room.trim();
+      const { error } = await supabase.from("students").update({ room_no: clean || null }).eq("id", id);
+      if (error) throw error;
+      setEditingRoomId(null);
+      qc.invalidateQueries({ queryKey: ["students"] });
+      toast.success(clean ? `Room set to ${clean}` : "Room cleared");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update room");
+    }
+  }
 
   function copySuid(suid: string) {
     void navigator.clipboard.writeText(suid);
@@ -304,12 +319,12 @@ function StudentsPage() {
 
   function downloadSample() {
     const ws = XLSX.utils.json_to_sheet([
-      { SUID: "GR1001", NAME: "STUDENT NAME 1", CLASS: "10th A", ROOM: "101" },
-      { SUID: "GR1002", NAME: "STUDENT NAME 2", CLASS: "10th B", ROOM: "102" },
-      { SUID: "GR1003", NAME: "STUDENT NAME 3", CLASS: "11th Science", ROOM: "201" },
-      { SUID: "GR1004", NAME: "STUDENT NAME 4", CLASS: "12th Commerce", ROOM: "205" },
+      { SUID: "30787", NAME: "AARAV ASHOKBHAI PATEL", CLASS: "GM 9 (Hostel) - F", ROOM: "101" },
+      { SUID: "30721", NAME: "ABHAY MERAMANBHAI CHAVDA", CLASS: "GM 9 (Hostel) - E", ROOM: "102" },
+      { SUID: "30100", NAME: "ANAND RAMNIKBHAI MORI", CLASS: "GM 10 (Hostel) - A", ROOM: "205" },
+      { SUID: "30704", NAME: "RITESH RAKESHSINH DIKHIT", CLASS: "GM 9 (Hostel) - D", ROOM: "206" },
     ]);
-    ws["!cols"] = [{ wch: 14 }, { wch: 28 }, { wch: 18 }, { wch: 14 }];
+    ws["!cols"] = [{ wch: 14 }, { wch: 32 }, { wch: 24 }, { wch: 14 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Students");
     XLSX.writeFile(wb, "Gurukul-Students-Sample.xlsx");
@@ -371,74 +386,110 @@ function StudentsPage() {
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName]!, { defval: "" });
       if (rows.length === 0) throw new Error("Excel file is empty");
 
-      function getVal(r: Record<string, unknown>, aliases: string[]): string {
-        const cleanAliases = aliases.map((a) => a.trim().toLowerCase().replace(/[^a-z0-9]/g, ""));
-        // Pass 1: exact match on cleaned alphanumeric key
+      function normalizeKey(k: string): string {
+        return String(k || "")
+          .trim()
+          .toLowerCase()
+          .replace(/[\s\-_./\\()[\]{}:;,\t\r\n]+/g, "");
+      }
+
+      function getValWithKey(
+        r: Record<string, unknown>,
+        aliases: string[],
+      ): { val: string; key: string } {
+        const cleanAliases = aliases.map(normalizeKey);
+        // Pass 1: exact match
         for (const cleanA of cleanAliases) {
           for (const k of Object.keys(r)) {
-            const cleanK = k.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+            const cleanK = normalizeKey(k);
             if (cleanK === cleanA) {
               const val = r[k];
               if (val !== undefined && val !== null) {
                 const s = String(val).trim();
-                if (s !== "" && s !== "-") return s;
+                if (s !== "" && s !== "-" && s !== "null" && s !== "undefined") {
+                  return { val: s, key: cleanK };
+                }
               }
             }
           }
         }
-        // Pass 2: substring match (for long or combined column headers like "Class / Std", "Room Number")
+        // Pass 2: substring match (minimum 3 characters)
         for (const cleanA of cleanAliases) {
           if (cleanA.length < 3) continue;
           for (const k of Object.keys(r)) {
-            const cleanK = k.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+            const cleanK = normalizeKey(k);
             if (cleanK.includes(cleanA) || cleanA.includes(cleanK)) {
               const val = r[k];
               if (val !== undefined && val !== null) {
                 const s = String(val).trim();
-                if (s !== "" && s !== "-") return s;
+                if (s !== "" && s !== "-" && s !== "null" && s !== "undefined") {
+                  return { val: s, key: cleanK };
+                }
               }
             }
           }
         }
-        return "";
+        return { val: "", key: "" };
       }
+
+      const roomAliases = [
+        "room", "roomno", "roomnumber", "roomnum", "room#",
+        "rno", "r_no", "r.no", "r.no.", "r no", "rm", "rmno", "rm_no", "rm.no", "rm no",
+        "bed", "bedno", "bed_no", "bednumber", "bed#", "bno", "b_no", "b.no", "b no",
+        "roombed", "roomandbed", "bedroom", "room/bed", "room-bed", "room_bed",
+        "hostelroom", "hostelroomno", "hostel_room",
+        "bhavan", "bhavanno", "building", "buildingno",
+        "block", "blockno", "wing", "wingno",
+        "floor", "floorno", "floorroom",
+        "dorm", "dormitory", "dormno",
+        "allotment", "roomallotment", "allottedroom", "allocatedroom",
+        "accommodation", "lodging", "residence",
+        "રૂમ", "રૂમનંબર", "રૂમનં", "રૂમનં.",
+        "બેડ", "બેડનંબર", "બેડનં", "બેડનં.",
+        "ઓરડો", "ઓરડાનંબર", "હોસ્ટેલરૂમ", "હોસ્ટેલ", "બ્લોક", "ભવન",
+      ];
 
       const payload = rows
         .map((r, index) => {
-          const suid =
-            getVal(r, ["suid", "grno", "gr_no", "gr", "rollno", "roll_no", "id", "enrollment", "student_id", "suidgrno", "admissionno"]) ||
-            `SUID${String(index + 1).padStart(3, "0")}`;
-          const name = getVal(r, ["name", "student_name", "fullname", "student", "studentname", "full_name"]) || `Student ${suid}`;
+          const suidObj = getValWithKey(r, [
+            "suid", "grno", "gr_no", "gr", "rollno", "roll_no", "id", "enrollment", "student_id", "suidgrno", "admissionno", "જીઆર", "જીઆરનંબર"
+          ]);
+          const suid = suidObj.val || `SUID${String(index + 1).padStart(3, "0")}`;
+
+          const nameObj = getValWithKey(r, [
+            "name", "student_name", "fullname", "student", "studentname", "full_name", "નામ", "વિદ્યાર્થી"
+          ]);
+          const name = nameObj.val || `Student ${suid}`;
           const nfc_no = suid;
-          const class_name =
-            getVal(r, [
-              "class",
-              "class_name",
-              "classname",
-              "std",
-              "standard",
-              "grade",
-              "classstd",
-              "stdclass",
-              "dhoran",
-              "section",
-              "division",
-              "stddiv",
-            ]) || null;
-          const room_no =
-            getVal(r, [
-              "room",
-              "room_no",
-              "roomno",
-              "hostel_room",
-              "room_number",
-              "roomnumber",
-              "hostel",
-              "hostelroom",
-              "roombed",
-              "bed",
-              "bed_no",
-            ]) || null;
+
+          const classObj = getValWithKey(r, [
+            "class", "class_name", "classname", "std", "standard", "grade", "classstd", "stdclass", "dhoran", "section", "division", "stddiv", "ધોરણ", "વર્ગ"
+          ]);
+          const class_name = classObj.val || null;
+
+          // Find room_no using aliases
+          const roomObj = getValWithKey(r, roomAliases);
+          let room_no = roomObj.val || null;
+
+          // Fallback: If room_no still not found, check remaining non-empty columns
+          if (!room_no) {
+            const usedKeys = new Set([suidObj.key, nameObj.key, classObj.key].filter(Boolean));
+            const ignoreKeys = new Set([
+              "srno", "slno", "serial", "no", "date", "amount", "comments", "remarks", "status", "type", "mode", "fee", "paid"
+            ]);
+            for (const k of Object.keys(r)) {
+              const cleanK = normalizeKey(k);
+              if (usedKeys.has(cleanK) || ignoreKeys.has(cleanK)) continue;
+              const val = r[k];
+              if (val !== undefined && val !== null) {
+                const s = String(val).trim();
+                if (s !== "" && s !== "-" && s !== "null" && s !== "undefined") {
+                  room_no = s;
+                  break;
+                }
+              }
+            }
+          }
 
           return { suid, name, nfc_no, class_name, room_no };
         })
@@ -928,12 +979,60 @@ function StudentsPage() {
                       )}
                     </td>
                     <td className="py-3.5 pr-4 font-sans font-medium text-[#7c533f]">
-                      {s.room_no ? (
-                        <span className="px-2.5 py-1 rounded-lg bg-[#faf6ef] border border-[#d8c5af] font-mono font-bold text-[#4a1c14]">
-                          {s.room_no}
-                        </span>
+                      {editingRoomId === s.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={inlineRoomVal}
+                            autoFocus
+                            placeholder="Room e.g. 101"
+                            onChange={(e) => setInlineRoomVal(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                void saveInlineRoom(s.id, inlineRoomVal);
+                              } else if (e.key === "Escape") {
+                                setEditingRoomId(null);
+                              }
+                            }}
+                            className="w-24 px-2 py-1 text-xs font-mono font-bold rounded-lg border-2 border-[#8b2500] bg-white text-[#4a1c14] focus:outline-hidden shadow-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void saveInlineRoom(s.id, inlineRoomVal)}
+                            className="p-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors cursor-pointer"
+                            title="Save Room"
+                          >
+                            <Check className="size-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingRoomId(null)}
+                            className="p-1 rounded-md bg-zinc-200 text-zinc-700 hover:bg-zinc-300 transition-colors cursor-pointer"
+                            title="Cancel"
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </div>
                       ) : (
-                        <span className="text-zinc-400">—</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingRoomId(s.id);
+                            setInlineRoomVal(s.room_no || "");
+                          }}
+                          className="group/rm inline-flex items-center gap-1.5 cursor-pointer text-left"
+                          title="Click to edit Room No"
+                        >
+                          {s.room_no ? (
+                            <span className="px-2.5 py-1 rounded-lg bg-[#faf6ef] border border-[#d8c5af] font-mono font-bold text-[#4a1c14] group-hover/rm:border-[#8b2500] transition-colors shadow-2xs">
+                              {s.room_no}
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-lg bg-zinc-50 border border-dashed border-zinc-300 text-zinc-400 text-xs font-medium group-hover/rm:text-[#8b2500] group-hover/rm:border-[#8b2500] transition-colors">
+                              + Set Room
+                            </span>
+                          )}
+                        </button>
                       )}
                     </td>
                     <td className="py-3.5 pr-4">
