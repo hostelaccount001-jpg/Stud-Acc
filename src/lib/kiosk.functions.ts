@@ -383,43 +383,5 @@ export const punchService = createServerFn({ method: "POST" })
     };
   });
 
-export const getStudentLedger = createServerFn({ method: "POST" })
-  .validator((data: { studentId: string }) => data)
-  .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const { data: student } = await supabaseAdmin
-      .from("students")
-      .select("id, suid, name, room_no, class_name, blocked, nfc_no")
-      .eq("id", data.studentId)
-      .maybeSingle();
-
-    if (!student) {
-      return { student: null, transactions: [] };
-    }
-
-    // Build matching identifier list for this student
-    const idFilters = [`student_id.eq.${student.id}`];
-    if (student.suid) idFilters.push(`suid.eq.${student.suid}`);
-    if (student.nfc_no && student.nfc_no !== student.suid) idFilters.push(`suid.eq.${student.nfc_no}`);
-
-    const { data: txns } = await supabaseAdmin
-      .from("transactions")
-      .select("id, receipt_no, service_name, amount, created_at, service_id, suid, student_id")
-      .or(idFilters.join(","))
-      .or("service_id.is.null,service_name.ilike.[Wallet]%")
-      .order("created_at", { ascending: false })
-      .limit(1000);
-
-    // Strictly filter in JS: ONLY uploaded wallet ledger entries, ZERO service receipts
-    const walletOnlyTxns = (txns ?? []).filter(
-      (tx) => tx.service_id === null || (tx.service_name && tx.service_name.startsWith("[Wallet]"))
-    );
-
-    return {
-      student,
-      transactions: walletOnlyTxns,
-    };
-  });
 
 
