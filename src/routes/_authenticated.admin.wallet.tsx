@@ -74,6 +74,13 @@ export default function WalletPage() {
   const [filterType, setFilterType] = useState<"ALL" | "CREDIT" | "DEBIT">("ALL");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{
+    current: number;
+    total: number;
+    percent: number;
+    batch: number;
+    totalBatches: number;
+  } | null>(null);
   const [importResult, setImportResult] = useState<{
     totalInserted: number;
     newStudentsCreated: number;
@@ -354,22 +361,46 @@ export default function WalletPage() {
     }
 
     setIsImporting(true);
+    const BATCH_SIZE = 500;
+    const totalRows = parsedRows.length;
+    const totalBatches = Math.ceil(totalRows / BATCH_SIZE);
+    let totalInserted = 0;
+    let newStudentsCreated = 0;
+
     try {
-      const res = await importFn({
-        data: {
-          rows: parsedRows,
-          batchNote: `Uploaded on ${new Date().toLocaleDateString("en-IN")} via Admin Wallet`,
-        },
-      });
+      for (let i = 0; i < totalRows; i += BATCH_SIZE) {
+        const batch = parsedRows.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        const currentProgress = Math.min(i + batch.length, totalRows);
+        const percent = Math.round((currentProgress / totalRows) * 100);
+
+        setImportProgress({
+          current: currentProgress,
+          total: totalRows,
+          percent,
+          batch: batchNum,
+          totalBatches,
+        });
+
+        const res = await importFn({
+          data: {
+            rows: batch,
+            batchNote: `Uploaded batch ${batchNum}/${totalBatches} on ${new Date().toLocaleDateString("en-IN")}`,
+          },
+        });
+
+        totalInserted += res.totalInserted ?? 0;
+        newStudentsCreated += res.newStudentsCreated ?? 0;
+      }
 
       setImportResult({
-        totalInserted: res.totalInserted,
-        newStudentsCreated: res.newStudentsCreated,
+        totalInserted,
+        newStudentsCreated,
       });
 
-      toast.success(`Wallet updated! ${res.totalInserted} ledger transactions saved.`);
-      if (res.newStudentsCreated > 0) {
-        toast.info(`${res.newStudentsCreated} new student accounts automatically registered.`);
+      toast.success(`Wallet successfully updated! All ${totalInserted.toLocaleString()} ledger transactions saved.`);
+      if (newStudentsCreated > 0) {
+        toast.info(`${newStudentsCreated.toLocaleString()} new student accounts automatically registered.`);
       }
 
       setParsedRows([]);
@@ -379,6 +410,7 @@ export default function WalletPage() {
       toast.error(err?.message || "Failed to import ledger entries into database.");
     } finally {
       setIsImporting(false);
+      setImportProgress(null);
     }
   };
 
@@ -726,16 +758,42 @@ export default function WalletPage() {
                   >
                     {isImporting ? (
                       <>
-                        <Loader2 className="size-3.5 animate-spin" /> Saving to Database...
+                        <Loader2 className="size-3.5 animate-spin" />
+                        {importProgress
+                          ? `Uploading ${importProgress.percent}% (${importProgress.current.toLocaleString()}/${importProgress.total.toLocaleString()})...`
+                          : "Saving to Database..."}
                       </>
                     ) : (
                       <>
-                        <CheckCircle2 className="size-3.5" /> Confirm & Upload to Wallet ({parsedRows.length})
+                        <CheckCircle2 className="size-3.5" /> Confirm & Upload to Wallet ({parsedRows.length.toLocaleString()})
                       </>
                     )}
                   </Button>
                 </div>
               </div>
+
+              {/* Live Batch Upload Progress Bar */}
+              {importProgress && (
+                <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-400/60 space-y-2 shadow-sm animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between text-xs font-bold text-[#4a1c14]">
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="size-4 animate-spin text-[#8b2500]" />
+                      Uploading Batch {importProgress.batch} of {importProgress.totalBatches} ({importProgress.current.toLocaleString()} / {importProgress.total.toLocaleString()} rows)
+                    </span>
+                    <span className="font-mono text-[#8b2500] text-sm font-extrabold">{importProgress.percent}%</span>
+                  </div>
+                  <div className="h-3.5 w-full rounded-full bg-amber-200/80 overflow-hidden p-0.5 border border-amber-300">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#8b2500] via-amber-600 to-emerald-600 rounded-full transition-all duration-300 shadow-sm"
+                      style={{ width: `${importProgress.percent}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-[#7c533f]">
+                    <span>Chunking {importProgress.total.toLocaleString()} records into safe 500-entry batches to prevent server payload limits.</span>
+                    <span className="font-bold text-[#8b2500]">Please wait, uploading in progress...</span>
+                  </div>
+                </div>
+              )}
 
               {/* 4 Summary KPI Cards */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -933,7 +991,10 @@ export default function WalletPage() {
                     >
                       {isImporting ? (
                         <>
-                          <Loader2 className="size-3.5 animate-spin" /> Saving to Database...
+                          <Loader2 className="size-3.5 animate-spin" />
+                          {importProgress
+                            ? `Uploading ${importProgress.percent}% (${importProgress.current.toLocaleString()}/${importProgress.total.toLocaleString()})...`
+                            : "Saving to Database..."}
                         </>
                       ) : (
                         <>
