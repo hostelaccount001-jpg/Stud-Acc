@@ -143,6 +143,17 @@ function StudentsPage() {
   const [inlineRoomVal, setInlineRoomVal] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [uploadState, setUploadState] = useState<{
+    isOpen: boolean;
+    fileName: string;
+    totalRows: number;
+    processedRows: number;
+    percent: number;
+    stage: "reading" | "parsing" | "saving" | "completed" | "error";
+    statusText: string;
+    errorText?: string;
+  } | null>(null);
+
   async function saveInlineRoom(id: string, room: string) {
     try {
       const clean = room.trim();
@@ -379,12 +390,35 @@ function StudentsPage() {
 
   async function handleUpload(file: File) {
     try {
+      setUploadState({
+        isOpen: true,
+        fileName: file.name,
+        totalRows: 0,
+        processedRows: 0,
+        percent: 10,
+        stage: "reading",
+        statusText: "Reading Excel file...",
+      });
+      await new Promise((r) => setTimeout(r, 120));
+
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: "array" });
       const sheetName = wb.SheetNames[0];
       if (!sheetName) throw new Error("Excel file has no sheets");
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName]!, { defval: "" });
       if (rows.length === 0) throw new Error("Excel file is empty");
+
+      setUploadState((prev) =>
+        prev
+          ? {
+              ...prev,
+              percent: 25,
+              stage: "parsing",
+              statusText: "Mapping SUID, Name, Class & Room columns...",
+            }
+          : null,
+      );
+      await new Promise((r) => setTimeout(r, 100));
 
       function normalizeKey(k: string): string {
         return String(k || "")
@@ -497,31 +531,88 @@ function StudentsPage() {
 
       if (payload.length === 0) throw new Error("No valid student rows found in file");
 
-      try {
-        const res = await bulkUploadFn({ data: payload });
-        toast.success(`${res.count} students imported successfully`);
-      } catch (err) {
-        console.warn("Server bulk upload failed, fallback client:", err);
-        // Fallback: upsert directly via Supabase client, preserving biometrics
-        for (const p of payload) {
-          const { error } = await supabase.from("students").upsert(
-            {
-              suid: p.suid,
-              name: p.name,
-              nfc_no: p.nfc_no,
-              class_name: p.class_name,
-              room_no: p.room_no,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "suid" },
-          );
-          if (error) console.error("Client upsert error for", p.suid, error);
+      setUploadState((prev) =>
+        prev
+          ? {
+              ...prev,
+              totalRows: payload.length,
+              percent: 35,
+              stage: "saving",
+              statusText: `Uploading 0 of ${payload.length} students...`,
+            }
+          : null,
+      );
+
+      // Upload in chunks of 25 with real-time animated upload line progress
+      const chunkSize = 25;
+      let totalImported = 0;
+      for (let i = 0; i < payload.length; i += chunkSize) {
+        const chunk = payload.slice(i, i + chunkSize);
+        try {
+          const res = await bulkUploadFn({ data: chunk });
+          totalImported += res.count;
+        } catch (err) {
+          console.warn("Server bulk upload failed for chunk, fallback client:", err);
+          for (const p of chunk) {
+            const { error } = await supabase.from("students").upsert(
+              {
+                suid: p.suid,
+                name: p.name,
+                nfc_no: p.nfc_no,
+                class_name: p.class_name,
+                room_no: p.room_no,
+                updated_at: new Date().toISOString(),
+              },
+              { onConflict: "suid" },
+            );
+            if (!error) totalImported++;
+          }
         }
-        toast.success(`${payload.length} students imported successfully`);
+        const currentProcessed = Math.min(i + chunkSize, payload.length);
+        const percent = Math.min(95, 35 + Math.round((currentProcessed / payload.length) * 60));
+        setUploadState((prev) =>
+          prev
+            ? {
+                ...prev,
+                processedRows: currentProcessed,
+                percent,
+                stage: "saving",
+                statusText: `Uploading ${currentProcessed} of ${payload.length} students to ERP...`,
+              }
+            : null,
+        );
+        await new Promise((r) => setTimeout(r, 80));
       }
+
+      setUploadState((prev) =>
+        prev
+          ? {
+              ...prev,
+              processedRows: payload.length,
+              percent: 100,
+              stage: "completed",
+              statusText: `Successfully imported ${payload.length} students with Class & Room!`,
+            }
+          : null,
+      );
+      toast.success(`${payload.length} students imported successfully`);
       qc.invalidateQueries({ queryKey: ["students"] });
+      setTimeout(() => {
+        setUploadState(null);
+      }, 1600);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Import failed");
+      const msg = e instanceof Error ? e.message : "Import failed";
+      toast.error(msg);
+      setUploadState((prev) =>
+        prev
+          ? {
+              ...prev,
+              stage: "error",
+              statusText: "Import failed",
+              errorText: msg,
+            }
+          : null,
+      );
     } finally {
       if (fileRef.current) fileRef.current.value = "";
     }
@@ -701,9 +792,20 @@ function StudentsPage() {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="btn-luxury-secondary px-4 py-2.5 text-xs gap-2 text-[#4a1c14] border-[#d8c5af] hover:bg-[#faf4eb] cursor-pointer transition-transform hover:scale-102"
+            disabled={uploadState?.isOpen}
+            className="btn-luxury-secondary px-4 py-2.5 text-xs gap-2 text-[#4a1c14] border-[#d8c5af] hover:bg-[#faf4eb] cursor-pointer transition-transform hover:scale-102 disabled:opacity-60"
           >
-            <Upload className="size-4 text-[#8b2500]" /> Bulk Upload (.xlsx)
+            {uploadState?.isOpen ? (
+              <>
+                <Loader2 className="size-4 animate-spin text-[#8b2500]" />
+                <span>Uploading ({uploadState.percent}%)...</span>
+              </>
+            ) : (
+              <>
+                <Upload className="size-4 text-[#8b2500]" />
+                <span>Bulk Upload (.xlsx)</span>
+              </>
+            )}
           </button>
 
           <button
@@ -727,6 +829,72 @@ function StudentsPage() {
           />
         </div>
       </header>
+
+      {/* TOP GLOWING UPLOAD LINE BANNER */}
+      {uploadState?.isOpen && (
+        <div className="w-full bg-[#fdfbf7] border-2 border-amber-400/80 rounded-2xl p-4 sm:p-5 shadow-xl shadow-amber-900/10 space-y-3 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="size-9 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-[#8b2500] shrink-0 shadow-xs">
+                {uploadState.stage === "completed" ? (
+                  <CheckCircle2 className="size-5 text-emerald-600" />
+                ) : uploadState.stage === "error" ? (
+                  <AlertTriangle className="size-5 text-rose-600" />
+                ) : (
+                  <Loader2 className="size-5 animate-spin text-[#8b2500]" />
+                )}
+              </div>
+              <div>
+                <p className="font-serif font-black text-sm text-[#4a1c14] flex items-center gap-2">
+                  <span>{uploadState.statusText}</span>
+                  {uploadState.stage === "saving" && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-200/60 font-sans text-amber-900 font-bold animate-pulse">
+                      Syncing
+                    </span>
+                  )}
+                </p>
+                <p className="text-[11px] font-mono text-[#7c533f]">
+                  File: {uploadState.fileName} {uploadState.totalRows ? `• ${uploadState.processedRows} of ${uploadState.totalRows} students` : ""}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-2xl font-black text-[#8b2500]">
+                {uploadState.percent}%
+              </span>
+              {(uploadState.stage === "completed" || uploadState.stage === "error") && (
+                <button
+                  type="button"
+                  onClick={() => setUploadState(null)}
+                  className="p-1 rounded-lg hover:bg-black/5 text-[#7c533f] cursor-pointer"
+                  title="Close"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* THE LIVE UPLOAD PROGRESS LINE */}
+          <div className="relative h-3 w-full bg-[#f0e4d2] rounded-full overflow-hidden border border-[#d8c5af] shadow-inner">
+            <div
+              className={`h-full transition-all duration-300 ease-out rounded-full relative overflow-hidden ${
+                uploadState.stage === "error"
+                  ? "bg-rose-600"
+                  : uploadState.stage === "completed"
+                    ? "bg-emerald-600"
+                    : "bg-gradient-to-r from-[#8b2500] via-amber-600 to-emerald-500 shadow-md"
+              }`}
+              style={{ width: `${uploadState.percent}%` }}
+            >
+              {uploadState.stage !== "completed" && uploadState.stage !== "error" && (
+                <div className="absolute inset-0 bg-white/30 animate-[pulse_1s_infinite]" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TOP KPI CARDS STRIP */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1116,6 +1284,146 @@ function StudentsPage() {
           </table>
         </div>
       </Card>
+
+      {/* BULK UPLOAD LINE & PROGRESS DIALOG */}
+      <Dialog
+        open={Boolean(uploadState?.isOpen)}
+        onOpenChange={(open) => {
+          if (!open && (uploadState?.stage === "completed" || uploadState?.stage === "error")) {
+            setUploadState(null);
+          }
+        }}
+      >
+        <DialogContent className="modal-luxury max-w-lg bg-[#fdfbf7] border-2 border-[#e5d8c5] rounded-3xl shadow-2xl p-6 sm:p-7">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`size-11 rounded-2xl flex items-center justify-center shadow-xs ${
+                    uploadState?.stage === "completed"
+                      ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
+                      : uploadState?.stage === "error"
+                        ? "bg-rose-100 text-rose-700 border border-rose-300"
+                        : "bg-amber-100 text-amber-800 border border-amber-300 animate-pulse"
+                  }`}
+                >
+                  {uploadState?.stage === "completed" ? (
+                    <CheckCircle2 className="size-6 text-emerald-600" />
+                  ) : uploadState?.stage === "error" ? (
+                    <AlertTriangle className="size-6 text-rose-600" />
+                  ) : (
+                    <Upload className="size-6 text-[#8b2500] animate-bounce" />
+                  )}
+                </div>
+                <div>
+                  <DialogTitle className="font-serif text-xl text-[#4a1c14] flex items-center gap-2">
+                    {uploadState?.stage === "completed"
+                      ? "Upload Completed!"
+                      : uploadState?.stage === "error"
+                        ? "Upload Failed"
+                        : "Uploading Student Records"}
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-[#7c533f] font-medium truncate max-w-[260px]">
+                    {uploadState?.fileName || "Gurukul-Students.xlsx"}
+                  </DialogDescription>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="font-mono text-2xl font-black text-[#8b2500]">
+                  {uploadState?.percent || 0}%
+                </span>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-3">
+            {/* THE UPLOAD PROGRESS LINE */}
+            <div className="space-y-1.5">
+              <div className="relative h-3.5 w-full bg-[#f0e4d2] rounded-full overflow-hidden border border-[#d8c5af] shadow-inner">
+                <div
+                  className={`h-full transition-all duration-300 ease-out rounded-full relative overflow-hidden ${
+                    uploadState?.stage === "error"
+                      ? "bg-rose-600"
+                      : uploadState?.stage === "completed"
+                        ? "bg-emerald-600"
+                        : "bg-gradient-to-r from-[#8b2500] via-amber-600 to-emerald-500 shadow-md"
+                  }`}
+                  style={{ width: `${uploadState?.percent || 0}%` }}
+                >
+                  {uploadState?.stage !== "completed" && uploadState?.stage !== "error" && (
+                    <div className="absolute inset-0 bg-white/30 animate-[pulse_1s_infinite]" />
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs font-sans">
+                <span className="font-bold text-[#4a1c14] flex items-center gap-1.5">
+                  {uploadState?.stage === "saving" && <Loader2 className="size-3.5 animate-spin text-[#8b2500]" />}
+                  {uploadState?.statusText}
+                </span>
+                {uploadState?.totalRows ? (
+                  <span className="font-mono font-bold text-[#7c533f]">
+                    {uploadState.processedRows} / {uploadState.totalRows}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Error view */}
+            {uploadState?.errorText && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs">
+                <p className="font-bold">Error:</p>
+                <p>{uploadState.errorText}</p>
+              </div>
+            )}
+
+            {/* Stage tracker pills */}
+            <div className="grid grid-cols-3 gap-2 pt-1 text-[10px] font-bold text-center">
+              <div
+                className={`py-1.5 px-2 rounded-lg border transition-all ${
+                  uploadState?.percent && uploadState.percent >= 25
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                    : "bg-[#faf6ef] text-[#7c533f]/60 border-[#e5d8c5]"
+                }`}
+              >
+                1. Read Excel
+              </div>
+              <div
+                className={`py-1.5 px-2 rounded-lg border transition-all ${
+                  uploadState?.percent && uploadState.percent >= 35
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                    : "bg-[#faf6ef] text-[#7c533f]/60 border-[#e5d8c5]"
+                }`}
+              >
+                2. Map Class & Room
+              </div>
+              <div
+                className={`py-1.5 px-2 rounded-lg border transition-all ${
+                  uploadState?.stage === "completed"
+                    ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                    : uploadState?.percent && uploadState.percent >= 35
+                      ? "bg-amber-50 text-amber-800 border-amber-300 animate-pulse"
+                      : "bg-[#faf6ef] text-[#7c533f]/60 border-[#e5d8c5]"
+                }`}
+              >
+                3. Save to ERP
+              </div>
+            </div>
+
+            {(uploadState?.stage === "completed" || uploadState?.stage === "error") && (
+              <div className="pt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setUploadState(null)}
+                  className="btn-luxury-primary px-6 py-2 text-xs font-bold cursor-pointer"
+                >
+                  {uploadState.stage === "completed" ? "Done" : "Close"}
+                </button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ADD STUDENT DIALOG MODAL */}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
