@@ -168,7 +168,7 @@ export const importDailyLedgerServer = createServerFn({ method: "POST" })
       success: true,
       totalProcessed: rows.length,
       totalInserted,
-      newStudentsCreated: missingStudents.length,
+      newStudentsCreated: missingRows.length,
     };
   });
 
