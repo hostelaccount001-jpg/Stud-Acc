@@ -215,7 +215,11 @@ function Kiosk() {
     setLoadingLedger(true);
     try {
       const res = await getLedgerFn({ data: { studentId } });
-      setStudentTransactions(res?.transactions || []);
+      const raw = res?.transactions || [];
+      const walletOnly = raw.filter(
+        (tx: any) => tx.service_id === null || (tx.service_name && tx.service_name.startsWith("[Wallet]"))
+      );
+      setStudentTransactions(walletOnly);
     } catch {
       setStudentTransactions([]);
     } finally {
@@ -274,8 +278,8 @@ function Kiosk() {
     };
   }, [studentTransactions]);
 
-  // Tab switch for student view: "services" vs "history"
-  const [studentTab, setStudentTab] = useState<"services" | "history">("services");
+  // Tab switch for student view: defaults directly to Student Passbook & History
+  const [studentTab, setStudentTab] = useState<"services" | "history">("history");
   const [historySearchTerm, setHistorySearchTerm] = useState("");
   const [historyTypeFilter, setHistoryTypeFilter] = useState<"ALL" | "CREDIT" | "DEBIT">("ALL");
 
@@ -557,6 +561,7 @@ function Kiosk() {
       };
 
       setStudent(verified);
+      setStudentTab("history");
       void loadStudentLedger(verified.id);
       setSuccessBanner(`Biometric Verified: Welcome, ${verified.name}!`);
       setStep("service");
@@ -1318,16 +1323,6 @@ function Kiosk() {
                                     Bal: ₹ {tx.runningBalance.toFixed(2)}
                                   </div>
                                 </div>
-
-                                {/* Reprint Receipt Button */}
-                                <button
-                                  type="button"
-                                  onClick={() => printSingleHistoryReceipt(tx)}
-                                  title="Print Receipt"
-                                  className="p-2 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 hover:text-[#8b2500] transition-colors cursor-pointer shadow-xs active:scale-95"
-                                >
-                                  <Printer className="size-4" />
-                                </button>
                               </div>
                             </div>
                           ))}
