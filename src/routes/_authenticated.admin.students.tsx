@@ -66,6 +66,7 @@ import {
   RotateCcw,
   Copy,
   Check,
+  ShieldCheck,
 } from "lucide-react";
 import { z } from "zod";
 import {
@@ -303,9 +304,12 @@ function StudentsPage() {
 
   function downloadSample() {
     const ws = XLSX.utils.json_to_sheet([
-      { SUID: "GR1001", NAME: "STUDENT NAME 1", CLASS: "Class 10", ROOM: "101" },
-      { SUID: "GR1002", NAME: "STUDENT NAME 2", CLASS: "Class 10", ROOM: "102" },
+      { SUID: "GR1001", NAME: "STUDENT NAME 1", CLASS: "10th A", ROOM: "101" },
+      { SUID: "GR1002", NAME: "STUDENT NAME 2", CLASS: "10th B", ROOM: "102" },
+      { SUID: "GR1003", NAME: "STUDENT NAME 3", CLASS: "11th Science", ROOM: "201" },
+      { SUID: "GR1004", NAME: "STUDENT NAME 4", CLASS: "12th Commerce", ROOM: "205" },
     ]);
+    ws["!cols"] = [{ wch: 14 }, { wch: 28 }, { wch: 18 }, { wch: 14 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Students");
     XLSX.writeFile(wb, "Gurukul-Students-Sample.xlsx");
@@ -364,18 +368,34 @@ function StudentsPage() {
       const wb = XLSX.read(buf, { type: "array" });
       const sheetName = wb.SheetNames[0];
       if (!sheetName) throw new Error("Excel file has no sheets");
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName]!);
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName]!, { defval: "" });
       if (rows.length === 0) throw new Error("Excel file is empty");
 
       function getVal(r: Record<string, unknown>, aliases: string[]): string {
-        for (const a of aliases) {
+        const cleanAliases = aliases.map((a) => a.trim().toLowerCase().replace(/[^a-z0-9]/g, ""));
+        // Pass 1: exact match on cleaned alphanumeric key
+        for (const cleanA of cleanAliases) {
           for (const k of Object.keys(r)) {
             const cleanK = k.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-            const cleanA = a.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
             if (cleanK === cleanA) {
               const val = r[k];
-              if (val !== undefined && val !== null && String(val).trim() !== "") {
-                return String(val).trim();
+              if (val !== undefined && val !== null) {
+                const s = String(val).trim();
+                if (s !== "" && s !== "-") return s;
+              }
+            }
+          }
+        }
+        // Pass 2: substring match (for long or combined column headers like "Class / Std", "Room Number")
+        for (const cleanA of cleanAliases) {
+          if (cleanA.length < 3) continue;
+          for (const k of Object.keys(r)) {
+            const cleanK = k.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+            if (cleanK.includes(cleanA) || cleanA.includes(cleanK)) {
+              const val = r[k];
+              if (val !== undefined && val !== null) {
+                const s = String(val).trim();
+                if (s !== "" && s !== "-") return s;
               }
             }
           }
@@ -386,12 +406,39 @@ function StudentsPage() {
       const payload = rows
         .map((r, index) => {
           const suid =
-            getVal(r, ["suid", "grno", "gr_no", "gr", "rollno", "roll_no", "id", "enrollment", "student_id"]) ||
+            getVal(r, ["suid", "grno", "gr_no", "gr", "rollno", "roll_no", "id", "enrollment", "student_id", "suidgrno", "admissionno"]) ||
             `SUID${String(index + 1).padStart(3, "0")}`;
-          const name = getVal(r, ["name", "student_name", "fullname", "student"]) || `Student ${suid}`;
+          const name = getVal(r, ["name", "student_name", "fullname", "student", "studentname", "full_name"]) || `Student ${suid}`;
           const nfc_no = suid;
-          const class_name = getVal(r, ["class_name", "classname", "class", "std", "standard", "grade"]) || null;
-          const room_no = getVal(r, ["room_no", "roomno", "room", "hostel_room", "room_number"]) || null;
+          const class_name =
+            getVal(r, [
+              "class",
+              "class_name",
+              "classname",
+              "std",
+              "standard",
+              "grade",
+              "classstd",
+              "stdclass",
+              "dhoran",
+              "section",
+              "division",
+              "stddiv",
+            ]) || null;
+          const room_no =
+            getVal(r, [
+              "room",
+              "room_no",
+              "roomno",
+              "hostel_room",
+              "room_number",
+              "roomnumber",
+              "hostel",
+              "hostelroom",
+              "roombed",
+              "bed",
+              "bed_no",
+            ]) || null;
 
           return { suid, name, nfc_no, class_name, room_no };
         })
@@ -404,17 +451,21 @@ function StudentsPage() {
         toast.success(`${res.count} students imported successfully`);
       } catch (err) {
         console.warn("Server bulk upload failed, fallback client:", err);
-        const { error } = await supabase.from("students").upsert(
-          payload.map((p) => ({
-            suid: p.suid,
-            name: p.name,
-            nfc_no: p.nfc_no,
-            class_name: p.class_name,
-            room_no: p.room_no,
-          })),
-          { onConflict: "suid" },
-        );
-        if (error) throw error;
+        // Fallback: upsert directly via Supabase client, preserving biometrics
+        for (const p of payload) {
+          const { error } = await supabase.from("students").upsert(
+            {
+              suid: p.suid,
+              name: p.name,
+              nfc_no: p.nfc_no,
+              class_name: p.class_name,
+              room_no: p.room_no,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "suid" },
+          );
+          if (error) console.error("Client upsert error for", p.suid, error);
+        }
         toast.success(`${payload.length} students imported successfully`);
       }
       qc.invalidateQueries({ queryKey: ["students"] });

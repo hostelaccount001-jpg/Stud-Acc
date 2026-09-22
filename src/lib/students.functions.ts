@@ -91,24 +91,40 @@ export const toggleBlockServer = createServerFn({ method: "POST" })
   });
 
 export const bulkUploadStudentsServer = createServerFn({ method: "POST" })
-  .validator((input: unknown) => z.array(studentInputSchema).parse(input))
+  .validator((input: unknown) => {
+    if (input && typeof input === "object" && "data" in input && Array.isArray((input as any).data)) {
+      return z.array(studentInputSchema).parse((input as any).data);
+    }
+    return z.array(studentInputSchema).parse(input);
+  })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let count = 0;
     for (const d of data) {
+      // Check for existing student to preserve existing biometrics and NFC credentials
+      const { data: existing } = await supabaseAdmin
+        .from("students")
+        .select("id, fingerprints, nfc_no")
+        .eq("suid", d.suid)
+        .maybeSingle();
+
       const { error } = await supabaseAdmin.from("students").upsert(
         {
           suid: d.suid,
           name: d.name,
-          nfc_no: d.nfc_no || d.suid,
-          class_name: d.class_name || null,
-          room_no: d.room_no || null,
-          fingerprints: d.fingerprints || [],
+          nfc_no: d.nfc_no || existing?.nfc_no || d.suid,
+          class_name: d.class_name ? String(d.class_name).trim() : null,
+          room_no: d.room_no ? String(d.room_no).trim() : null,
+          fingerprints: (d.fingerprints && d.fingerprints.length > 0) ? d.fingerprints : (existing?.fingerprints || []),
           updated_at: new Date().toISOString(),
         },
         { onConflict: "suid" },
       );
-      if (!error) count++;
+      if (!error) {
+        count++;
+      } else {
+        console.error("Bulk upload error for suid", d.suid, error);
+      }
     }
     return { count };
   });
