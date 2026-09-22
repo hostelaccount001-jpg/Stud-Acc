@@ -15,6 +15,49 @@ export const dailyLedgerRowSchema = z.object({
 
 export type DailyLedgerRow = z.infer<typeof dailyLedgerRowSchema>;
 
+export function parseLedgerDate(dateVal: any): string {
+  if (!dateVal) return new Date().toISOString();
+  if (dateVal instanceof Date && !isNaN(dateVal.getTime())) return dateVal.toISOString();
+
+  // Excel serial date number
+  if (typeof dateVal === "number" || (!isNaN(Number(dateVal)) && Number(dateVal) > 30000 && Number(dateVal) < 70000)) {
+    const num = Number(dateVal);
+    const dateObj = new Date(Math.round((num - 25569) * 86400 * 1000));
+    if (!isNaN(dateObj.getTime())) return dateObj.toISOString();
+  }
+
+  const str = String(dateVal).trim();
+  if (!str) return new Date().toISOString();
+
+  // YYYY-MM-DD or YYYY/MM/DD
+  if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(str)) {
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+
+  // DD-MM-YYYY or DD/MM/YYYY with optional time
+  const match = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (match) {
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10) - 1;
+    const year = parseInt(match[3], 10);
+    const hours = match[4] ? parseInt(match[4], 10) : 12;
+    const minutes = match[5] ? parseInt(match[5], 10) : 0;
+    const seconds = match[6] ? parseInt(match[6], 10) : 0;
+    const dateObj = new Date(Date.UTC(year, month, day, hours, minutes, seconds));
+    if (!isNaN(dateObj.getTime())) {
+      return dateObj.toISOString();
+    }
+  }
+
+  const fallback = new Date(str);
+  if (!isNaN(fallback.getTime())) {
+    return fallback.toISOString();
+  }
+
+  return new Date().toISOString();
+}
+
 const importDailyLedgerInput = z.object({
   rows: z.array(dailyLedgerRowSchema),
   batchNote: z.string().optional(),
@@ -109,31 +152,8 @@ export const importDailyLedgerServer = createServerFn({ method: "POST" })
 
       const serviceName = `[Wallet] ${typeTag} ${baseComment}${voucherTag}${modeTag}`.slice(0, 100);
 
-      // Parse date if valid DD/MM/YYYY or YYYY-MM-DD
-      let createdAt = new Date().toISOString();
-      if (row.date) {
-        try {
-          if (row.date.includes("/")) {
-            const parts = row.date.split("/");
-            if (parts.length === 3) {
-              const d = parseInt(parts[0], 10);
-              const m = parseInt(parts[1], 10) - 1;
-              const y = parseInt(parts[2], 10);
-              const parsed = new Date(Date.UTC(y, m, d, 12, 0, 0));
-              if (!isNaN(parsed.getTime())) {
-                createdAt = parsed.toISOString();
-              }
-            }
-          } else {
-            const parsed = new Date(row.date);
-            if (!isNaN(parsed.getTime())) {
-              createdAt = parsed.toISOString();
-            }
-          }
-        } catch {
-          // fallback to current time
-        }
-      }
+      // Parse date accurately from DD-MM-YYYY, DD/MM/YYYY, or ISO formats
+      const createdAt = parseLedgerDate(row.date);
 
       return {
         student_id: student ? student.id : null,

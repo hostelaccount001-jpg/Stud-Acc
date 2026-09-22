@@ -251,7 +251,7 @@ function Kiosk() {
     const balance = credit - used;
 
     return {
-      availableBalance: Math.max(0, balance),
+      availableBalance: balance,
       totalCredit: credit,
       totalUsed: used,
       creditCount: studentTransactions.filter((tx) => {
@@ -283,14 +283,17 @@ function Kiosk() {
   const [historySearchTerm, setHistorySearchTerm] = useState("");
   const [historyTypeFilter, setHistoryTypeFilter] = useState<"ALL" | "CREDIT" | "DEBIT">("ALL");
 
-  // Cumulative running balance computation for passbook matching Image 3
+  // Cumulative running balance computation for passbook:
+  // Starts chronologically from the OLDEST entry at the bottom, accumulating credits/debits,
+  // up to the NEWEST entry at the top, whose running balance will equal available balance.
   const historyWithRunningBalance = useMemo(() => {
-    const sorted = [...studentTransactions].sort(
+    // 1. Sort strictly OLDEST first (ascending by timestamp)
+    const chronological = [...studentTransactions].sort(
       (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     );
 
     let running = 0;
-    const items = sorted.map((tx) => {
+    const withRunning = chronological.map((tx) => {
       const sName = (tx.service_name || "").toLowerCase();
       const isCredit =
         sName.includes("credit") ||
@@ -306,21 +309,28 @@ function Kiosk() {
         running -= amt;
       }
 
-      const cleanTitle = (tx.service_name || "Service")
+      const rawName = tx.service_name || "Wallet Transaction";
+      const modeMatch = rawName.match(/\(([^)]+)\)$/);
+      const modeLabel = modeMatch ? modeMatch[1].toUpperCase() : "CASH";
+
+      const cleanTitle = rawName
         .replace(/^\[Wallet\]\s*/i, "")
         .replace(/^\[Credit\]\s*/i, "")
-        .replace(/^\[Debit\]\s*/i, "");
+        .replace(/^\[Debit\]\s*/i, "")
+        .replace(/\s*\([^)]*\)$/, "");
 
       return {
         ...tx,
         isCredit,
         amountVal: amt,
-        runningBalance: Math.max(0, running),
+        runningBalance: running,
         cleanTitle,
+        modeLabel,
       };
     });
 
-    return items.reverse();
+    // 2. Reverse so NEWEST entry is at the TOP (descending by timestamp)
+    return withRunning.reverse();
   }, [studentTransactions]);
 
   const filteredStudentHistory = useMemo(() => {
@@ -341,31 +351,52 @@ function Kiosk() {
   }, [historyWithRunningBalance, historySearchTerm, historyTypeFilter]);
 
   const groupedStudentHistory = useMemo(() => {
-    const groups: Record<string, typeof filteredStudentHistory> = {};
+    const groups: Record<string, { dateStr: string; timestamp: number; items: typeof filteredStudentHistory }> = {};
+
     filteredStudentHistory.forEach((tx) => {
       const d = new Date(tx.created_at);
-      const dateKey = isNaN(d.getTime())
-        ? "Other Records"
-        : d.toLocaleDateString("en-GB", {
+      const valid = !isNaN(d.getTime());
+      const dateKey = valid ? d.toISOString().slice(0, 10) : "0000-00-00";
+      const dateStr = valid
+        ? d.toLocaleDateString("en-GB", {
             weekday: "short",
             day: "numeric",
             month: "short",
             year: "numeric",
-          });
-      if (!groups[dateKey]) groups[dateKey] = [];
-      groups[dateKey].push(tx);
+          })
+        : "Other Records";
+
+      if (!groups[dateKey]) {
+        groups[dateKey] = {
+          dateStr,
+          timestamp: valid ? d.getTime() : 0,
+          items: [],
+        };
+      }
+      groups[dateKey].items.push(tx);
     });
 
-    return Object.entries(groups).map(([dateStr, items]) => {
-      const firstDate = new Date(items[0].created_at);
-      const diffDays = Math.floor((Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+    // Sort groups strictly by date DESCENDING (newest date, e.g. 8 Sep, at top; older, e.g. 21 Aug, below)
+    const sortedGroups = Object.values(groups).sort((a, b) => b.timestamp - a.timestamp);
+
+    return sortedGroups.map((g) => {
+      const diffDays = Math.floor((Date.now() - g.timestamp) / (1000 * 60 * 60 * 24));
       let relBadge = "TODAY";
       if (diffDays === 1) relBadge = "YESTERDAY";
       else if (diffDays > 1 && diffDays < 7) relBadge = `${diffDays}D AGO`;
       else if (diffDays >= 7 && diffDays < 30) relBadge = `${Math.floor(diffDays / 7)}W AGO`;
       else if (diffDays >= 30) relBadge = `${Math.floor(diffDays / 30)}M AGO`;
 
-      return { dateStr, relBadge, items };
+      // Keep items inside each day's group sorted newest first
+      const sortedItems = [...g.items].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+
+      return {
+        dateStr: g.dateStr,
+        relBadge,
+        items: sortedItems,
+      };
     });
   }, [filteredStudentHistory]);
 
@@ -1007,8 +1038,47 @@ function Kiosk() {
               </span>
             </div>
 
-            {/* 3 Metrics Cards (Exact match to Image 3) */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 select-none">
+            {/* 4 Metrics Cards: Featuring prominent AVAILABLE BALANCE card */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 select-none">
+              {/* AVAILABLE BALANCE */}
+              <div
+                className={`p-4 sm:p-5 rounded-2xl border shadow-xs space-y-1 transition-all ${
+                  walletMetrics.availableBalance >= 0
+                    ? "bg-gradient-to-br from-emerald-50 to-teal-50/50 border-emerald-300"
+                    : "bg-gradient-to-br from-rose-50 to-red-50/50 border-rose-300"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div
+                    className={`flex items-center gap-1.5 text-xs font-black uppercase tracking-wider ${
+                      walletMetrics.availableBalance >= 0 ? "text-emerald-800" : "text-rose-800"
+                    }`}
+                  >
+                    <Wallet className="size-4 text-[#8b2500]" />
+                    <span>AVAILABLE BALANCE</span>
+                  </div>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md uppercase ${
+                      walletMetrics.availableBalance >= 0
+                        ? "bg-emerald-200/70 text-emerald-900"
+                        : "bg-rose-200/70 text-rose-900"
+                    }`}
+                  >
+                    {walletMetrics.availableBalance >= 0 ? "Active" : "Due"}
+                  </span>
+                </div>
+                <div
+                  className={`text-2xl sm:text-3xl font-black font-sans tracking-tight ${
+                    walletMetrics.availableBalance >= 0 ? "text-emerald-800" : "text-rose-700"
+                  }`}
+                >
+                  ₹ {walletMetrics.availableBalance.toFixed(2)}
+                </div>
+                <div className="text-xs text-zinc-500 font-medium">
+                  Current Net Balance
+                </div>
+              </div>
+
               {/* TOTAL CREDIT */}
               <div className="p-4 sm:p-5 bg-white border border-[#e5d8c5] rounded-2xl shadow-xs space-y-1">
                 <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-600">
@@ -1299,7 +1369,7 @@ function Kiosk() {
                                     </span>
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 font-bold uppercase">
                                       <CreditCard className="size-3 text-zinc-500" />
-                                      CASH
+                                      {tx.modeLabel || "CASH"}
                                     </span>
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 font-semibold truncate max-w-[180px]">
                                       <User className="size-3 text-zinc-500" />
