@@ -64,6 +64,8 @@ import {
   ArrowUpAZ,
   Filter,
   RotateCcw,
+  Copy,
+  Check,
 } from "lucide-react";
 import { z } from "zod";
 import {
@@ -125,9 +127,10 @@ function StudentsPage() {
   const [sortKey, setSortKey] = useState<StudentSortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
   const [filterClass, setFilterClass] = useState("all");
-  const [filterFinger, setFilterFinger] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
+  const [activeTab, setActiveTab] = useState<"all" | "enrolled" | "missing" | "active" | "blocked">("all");
+  const [copiedSuid, setCopiedSuid] = useState<string | null>(null);
 
+  const [showAddModal, setShowAddModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [newFingers, setNewFingers] = useState<any[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
@@ -136,6 +139,13 @@ function StudentsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  function copySuid(suid: string) {
+    void navigator.clipboard.writeText(suid);
+    setCopiedSuid(suid);
+    toast.success(`Copied ${suid} to clipboard!`);
+    setTimeout(() => setCopiedSuid(null), 2000);
+  }
 
   const students = useQuery({
     queryKey: ["students", search],
@@ -180,6 +190,7 @@ function StudentsPage() {
       toast.success("Student enrolled successfully!");
       setForm(emptyForm);
       setNewFingers([]);
+      setShowAddModal(false);
       qc.invalidateQueries({ queryKey: ["students"] });
     },
     onError: (e: Error) => toast.error(e.message || "Failed to add student"),
@@ -442,17 +453,33 @@ function StudentsPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }, [studentList]);
 
+  const totalCount = studentList.length;
+  const enrolledCount = useMemo(() => {
+    return studentList.filter((s) => {
+      const biometrics = toBiometricRecords(s.fingerprints);
+      return biometrics.filter((b) => b.type !== "face").length > 0;
+    }).length;
+  }, [studentList]);
+  const missingCount = Math.max(0, totalCount - enrolledCount);
+  const activeCount = useMemo(() => studentList.filter((s) => !s.blocked).length, [studentList]);
+  const blockedCount = Math.max(0, totalCount - activeCount);
+
   const filteredAndSortedStudents = useMemo(() => {
     const filtered = studentList.filter((s) => {
-      if (filterClass !== "all" && (s.class_name || "").trim() !== filterClass) return false;
-      if (filterStatus === "active" && s.blocked) return false;
-      if (filterStatus === "blocked" && !s.blocked) return false;
+      // Tab filter
+      if (activeTab === "enrolled") {
+        const biometrics = toBiometricRecords(s.fingerprints);
+        if (biometrics.filter((b) => b.type !== "face").length === 0) return false;
+      } else if (activeTab === "missing") {
+        const biometrics = toBiometricRecords(s.fingerprints);
+        if (biometrics.filter((b) => b.type !== "face").length > 0) return false;
+      } else if (activeTab === "active" && s.blocked) {
+        return false;
+      } else if (activeTab === "blocked" && !s.blocked) {
+        return false;
+      }
 
-      const biometrics = toBiometricRecords(s.fingerprints);
-      const fingerList = biometrics.filter((b) => b.type !== "face");
-      const hasFingers = fingerList.length > 0;
-      if (filterFinger === "enrolled" && !hasFingers) return false;
-      if (filterFinger === "missing" && hasFingers) return false;
+      if (filterClass !== "all" && (s.class_name || "").trim() !== filterClass) return false;
 
       return true;
     });
@@ -482,13 +509,12 @@ function StudentsPage() {
           return 0;
       }
     });
-  }, [studentList, filterClass, filterFinger, filterStatus, sortKey, sortAsc]);
+  }, [studentList, activeTab, filterClass, sortKey, sortAsc]);
 
   function resetDirectoryFilters() {
     setSearch("");
+    setActiveTab("all");
     setFilterClass("all");
-    setFilterFinger("all");
-    setFilterStatus("all");
     setSortKey("name");
     setSortAsc(true);
   }
@@ -496,7 +522,7 @@ function StudentsPage() {
   function renderHeader(label: string, key: StudentSortKey) {
     const isActive = sortKey === key;
     return (
-      <th className="py-3 pr-4">
+      <th className="py-3.5 pr-4">
         <button
           type="button"
           onClick={() => {
@@ -528,23 +554,35 @@ function StudentsPage() {
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in zoom-in-98 duration-300">
-      {/* Page Header with Animated Luxury Action Buttons */}
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e5d8c5] pb-6">
+    <div className="space-y-6 animate-in fade-in zoom-in-98 duration-300">
+      {/* Page Header with Primary Action & Utility Controls */}
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e5d8c5] pb-5">
         <div>
-          <h1 className="text-3xl md:text-4xl font-serif font-bold text-[#4a1c14] tracking-tight flex items-center gap-2.5">
-            <Users className="size-8 text-[#8b2500]" /> Students & Biometrics
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100/80 text-[#8b2500] text-xs font-bold tracking-wider uppercase mb-1.5 border border-amber-200">
+            <Sparkles className="size-3 text-amber-700 animate-spin" style={{ animationDuration: "6s" }} />
+            <span>Biometric Master Register</span>
+          </div>
+          <h1 className="text-3xl md:text-4xl font-serif font-black text-[#4a1c14] tracking-tight flex items-center gap-3">
+            <Users className="size-9 text-[#8b2500]" /> Students & Biometrics
           </h1>
           <p className="mt-1 text-sm text-[#7c533f] font-medium">
-            SUID and biometric enrollment, up to {MAX_FINGERS} fingerprints on Mantra MFS100, plus temporary account blocking.
+            Manage student records, live Mantra MFS100 optical fingerprint enrolment, and kiosk access permissions.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setShowAddModal(true)}
+            className="btn-luxury-primary px-5 py-2.5 text-xs font-bold gap-2 shadow-lg shadow-[#8b2500]/25 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
+          >
+            <UserPlus className="size-4" /> Enrol New Student
+          </button>
+
           <button
             type="button"
             onClick={downloadSample}
-            className="btn-luxury-secondary px-4 py-2.5 text-xs gap-2"
+            className="btn-luxury-secondary px-4 py-2.5 text-xs gap-2 cursor-pointer transition-transform hover:scale-102"
           >
             <Download className="size-4 text-[#8b2500]" /> Sample Excel
           </button>
@@ -553,7 +591,7 @@ function StudentsPage() {
             type="button"
             onClick={exportStudents}
             disabled={studentList.length === 0}
-            className="btn-luxury-secondary px-4 py-2.5 text-xs gap-2 text-emerald-800 border-emerald-300 hover:bg-emerald-50 shadow-sm"
+            className="btn-luxury-secondary px-4 py-2.5 text-xs gap-2 text-emerald-800 border-emerald-300 hover:bg-emerald-50 shadow-xs cursor-pointer transition-transform hover:scale-102"
           >
             <Download className="size-4 text-emerald-600" /> Export Excel ({studentList.length})
           </button>
@@ -561,16 +599,16 @@ function StudentsPage() {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="btn-luxury-primary px-4 py-2.5 text-xs gap-2"
+            className="btn-luxury-secondary px-4 py-2.5 text-xs gap-2 text-[#4a1c14] border-[#d8c5af] hover:bg-[#faf4eb] cursor-pointer transition-transform hover:scale-102"
           >
-            <Upload className="size-4" /> Bulk Upload (.xlsx)
+            <Upload className="size-4 text-[#8b2500]" /> Bulk Upload (.xlsx)
           </button>
 
           <button
             type="button"
             onClick={() => setShowDeleteAllDialog(true)}
             disabled={deleteAllStudents.isPending || studentList.length === 0}
-            className="btn-luxury-danger px-4 py-2.5 text-xs gap-2 disabled:opacity-50"
+            className="btn-luxury-danger px-4 py-2.5 text-xs gap-2 disabled:opacity-50 cursor-pointer transition-transform hover:scale-102"
           >
             <Trash2 className="size-4" /> Delete All ({studentList.length})
           </button>
@@ -588,146 +626,119 @@ function StudentsPage() {
         </div>
       </header>
 
-      {/* ADD STUDENT LUXURY FORM CARD */}
-      <Card className="card-luxury p-6 md:p-8 space-y-6">
-        <div className="flex items-center gap-2 border-b border-[#e5d8c5] pb-4">
-          <div className="size-9 rounded-2xl bg-gradient-to-tr from-[#8b2500] to-amber-600 flex items-center justify-center text-white shadow-md">
-            <UserPlus className="size-5" />
+      {/* TOP KPI CARDS STRIP */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Students */}
+        <div className="card-luxury p-5 flex items-center justify-between group hover:-translate-y-0.5 transition-all duration-300">
+          <div className="space-y-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#7c533f]">Total Students</span>
+            <div className="text-3xl font-black font-sans text-[#4a1c14]">{totalCount}</div>
+            <p className="text-[11px] text-[#7c533f]">Registered in Gurukul ERP</p>
           </div>
-          <div>
-            <h2 className="text-lg font-serif font-bold text-[#4a1c14]">Add New Student Record</h2>
-            <p className="text-xs text-[#7c533f]">Register student profile with SUID and live Mantra biometrics</p>
+          <div className="size-12 rounded-2xl bg-gradient-to-br from-[#8b2500] to-amber-700 flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform">
+            <Users className="size-6" />
           </div>
         </div>
 
-        <form
-          className="space-y-6"
-          onSubmit={(e) => {
-            e.preventDefault();
-            addStudent.mutate(form);
-          }}
-        >
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="suid" className="text-xs font-bold text-[#7c533f]">SUID / GR No *</Label>
-              <Input
-                id="suid"
-                required
-                placeholder="Enter SUID / GR No"
-                value={form.suid}
-                onChange={(e) => setForm({ ...form, suid: e.target.value })}
-                className="input-luxury h-10 px-3 font-mono text-sm font-semibold"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-xs font-bold text-[#7c533f]">Full Student Name *</Label>
-              <Input
-                id="name"
-                required
-                placeholder="Enter Full Student Name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="input-luxury h-10 px-3 text-sm font-semibold uppercase"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="class_name" className="text-xs font-bold text-[#7c533f]">Class / Std</Label>
-              <Input
-                id="class_name"
-                placeholder="Enter Class / Standard"
-                value={form.class_name}
-                onChange={(e) => setForm({ ...form, class_name: e.target.value })}
-                className="input-luxury h-10 px-3 text-sm"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="room_no" className="text-xs font-bold text-[#7c533f]">Room No / Hostel</Label>
-              <Input
-                id="room_no"
-                placeholder="Enter Room No (e.g. 101, B-12)"
-                value={form.room_no}
-                onChange={(e) => setForm({ ...form, room_no: e.target.value })}
-                className="input-luxury h-10 px-3 text-sm font-mono font-semibold"
-              />
-            </div>
-          </div>
-
-          {/* Unified Mantra Fingerprint Enroller */}
-          <BiometricEnroller
-            records={newFingers}
-            onChange={setNewFingers}
-            suid={form.suid}
-          />
-
-          <div className="flex justify-end pt-2">
-            <button
-              type="submit"
-              disabled={addStudent.isPending}
-              className="btn-luxury-primary px-8 py-3 text-sm gap-2"
-            >
-              {addStudent.isPending ? <Loader2 className="size-4 animate-spin mr-1.5" /> : <Plus className="size-4" />}
-              Save & Enrol Student
-            </button>
-          </div>
-        </form>
-      </Card>
-
-      {/* STUDENTS DIRECTORY TABLE CARD */}
-      <Card className="card-luxury p-6 md:p-8 space-y-6">
-        {/* Header & Quick Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e5d8c5] pb-4">
-          <div>
-            <h2 className="text-xl font-serif font-bold text-[#4a1c14] flex items-center gap-2">
-              <Users className="size-5 text-[#8b2500]" /> Student Directory & Enrollment Ledger
-            </h2>
-            <p className="text-xs text-[#7c533f] mt-0.5">
-              Click any column header to sort (A → Z Name, SUID, Class, Room, Biometrics).
+        {/* Biometrics Complete */}
+        <div className="card-luxury p-5 flex items-center justify-between group hover:-translate-y-0.5 transition-all duration-300">
+          <div className="space-y-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Biometrics Complete</span>
+            <div className="text-3xl font-black font-sans text-emerald-800">{enrolledCount}</div>
+            <p className="text-[11px] text-emerald-700 font-semibold">
+              {totalCount > 0 ? Math.round((enrolledCount / totalCount) * 100) : 0}% MFS100 enrolled
             </p>
           </div>
+          <div className="size-12 rounded-2xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800 shadow-md group-hover:scale-110 transition-transform">
+            <Fingerprint className="size-6 text-emerald-700" />
+          </div>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Quick One-Click A to Z / Z to A Toggle Button */}
-            <button
-              type="button"
-              onClick={() => {
-                if (sortKey === "name") {
-                  setSortAsc(!sortAsc);
-                } else {
-                  setSortKey("name");
-                  setSortAsc(true);
-                }
-              }}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer ${
-                sortKey === "name"
-                  ? "bg-[#8b2500] text-white shadow-amber-900/20"
-                  : "bg-[#faf6ef] text-[#4a1c14] border border-[#d8c5af] hover:bg-[#8b2500] hover:text-white"
-              }`}
-              title="Click to toggle Name A to Z / Z to A sort"
-            >
-              {sortKey === "name" && !sortAsc ? (
-                <>
-                  <ArrowDownAZ className="size-4" />
-                  <span>Name: Z → A</span>
-                </>
+        {/* Missing Biometrics */}
+        <div
+          onClick={() => setActiveTab(activeTab === "missing" ? "all" : "missing")}
+          className={`card-luxury p-5 flex items-center justify-between group hover:-translate-y-0.5 transition-all duration-300 cursor-pointer ${
+            activeTab === "missing" ? "ring-2 ring-amber-600 bg-amber-50/50" : ""
+          }`}
+          title="Click to view students without fingerprints"
+        >
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-900">
+              <span>Missing Biometrics</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-amber-200 text-amber-900 font-semibold">
+                Filter
+              </span>
+            </div>
+            <div className="text-3xl font-black font-sans text-amber-900">{missingCount}</div>
+            <p className="text-[11px] text-amber-800">Pending finger enrolment</p>
+          </div>
+          <div className="size-12 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-900 shadow-md group-hover:scale-110 transition-transform">
+            <AlertTriangle className="size-6 text-amber-700" />
+          </div>
+        </div>
+
+        {/* Account Status */}
+        <div className="card-luxury p-5 flex items-center justify-between group hover:-translate-y-0.5 transition-all duration-300">
+          <div className="space-y-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#7c533f]">Active Accounts</span>
+            <div className="text-3xl font-black font-sans text-teal-900">{activeCount}</div>
+            <p className="text-[11px] text-[#7c533f]">
+              {blockedCount > 0 ? (
+                <span className="text-rose-700 font-bold">{blockedCount} Blocked</span>
               ) : (
-                <>
-                  <ArrowUpAZ className="size-4" />
-                  <span>Name: A → Z</span>
-                </>
+                <span className="text-emerald-700 font-bold">100% Kiosk Authorized</span>
               )}
-            </button>
+            </p>
+          </div>
+          <div className="size-12 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-800 shadow-md group-hover:scale-110 transition-transform">
+            <ShieldCheck className="size-6 text-teal-700" />
+          </div>
+        </div>
+      </div>
 
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-[#faf6ef] text-[#4a1c14] border border-[#d8c5af]">
-              Showing: <strong className="font-mono text-[#8b2500]">{filteredAndSortedStudents.length}</strong> of {studentList.length}
+      {/* STUDENTS DIRECTORY TABLE CARD */}
+      <Card className="card-luxury p-5 sm:p-7 space-y-5">
+        {/* Quick Tabs Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5d8c5] pb-4">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {[
+              { id: "all", label: "All Students", count: totalCount },
+              { id: "enrolled", label: "Biometric Enrolled", count: enrolledCount },
+              { id: "missing", label: "Missing Biometrics", count: missingCount },
+              { id: "active", label: "Active", count: activeCount },
+              { id: "blocked", label: "Blocked", count: blockedCount },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === tab.id
+                    ? "bg-[#8b2500] text-white shadow-md shadow-[#8b2500]/20"
+                    : "bg-[#faf6ef] text-[#7c533f] hover:bg-[#f3e9dc] border border-[#d8c5af]/60"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    activeTab === tab.id ? "bg-white/25 text-white" : "bg-black/5 text-[#4a1c14]"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-[#7c533f]">
+              Showing <strong className="text-[#8b2500] font-mono">{filteredAndSortedStudents.length}</strong> of {totalCount}
             </span>
           </div>
         </div>
 
         {/* Query & Filter Bar */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 items-end bg-[#faf6ef]/70 p-4 rounded-2xl border border-[#e5d8c5]">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 items-end bg-[#faf6ef]/70 p-3.5 rounded-2xl border border-[#e5d8c5]">
           {/* Search Box */}
           <div className="space-y-1 sm:col-span-2 lg:col-span-2">
             <Label htmlFor="search-students" className="text-[11px] font-bold text-[#7c533f]">Search Student</Label>
@@ -738,8 +749,17 @@ function StudentsPage() {
                 placeholder="Search by SUID, Name, Class, or Room..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="input-luxury pl-9 h-10 text-xs w-full"
+                className="input-luxury pl-9 pr-8 h-10 text-xs w-full"
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-2.5 text-[#7c533f]/60 hover:text-[#4a1c14] cursor-pointer"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -761,19 +781,30 @@ function StudentsPage() {
             </Select>
           </div>
 
-          {/* Biometrics Filter */}
+          {/* Sort Key Selector */}
           <div className="space-y-1">
-            <Label className="text-[11px] font-bold text-[#7c533f]">Biometrics Status</Label>
-            <Select value={filterFinger} onValueChange={setFilterFinger}>
-              <SelectTrigger className="input-luxury h-10 text-xs font-semibold">
-                <SelectValue placeholder="All Biometrics" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Biometrics</SelectItem>
-                <SelectItem value="enrolled">Enrolled Only (Fingers Added)</SelectItem>
-                <SelectItem value="missing">Missing Fingerprints</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label className="text-[11px] font-bold text-[#7c533f]">Sort Order</Label>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  if (sortKey === "name") {
+                    setSortAsc(!sortAsc);
+                  } else {
+                    setSortKey("name");
+                    setSortAsc(true);
+                  }
+                }}
+                className={`flex-1 h-10 inline-flex items-center justify-center gap-1 px-3 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                  sortKey === "name"
+                    ? "bg-[#8b2500] text-white border-[#8b2500] shadow-xs"
+                    : "bg-white text-[#7c533f] border-[#d8c5af] hover:bg-[#faf4eb]"
+                }`}
+              >
+                {sortAsc ? <ArrowUpAZ className="size-4" /> : <ArrowDownAZ className="size-4" />}
+                <span>Name ({sortAsc ? "A→Z" : "Z→A"})</span>
+              </button>
+            </div>
           </div>
 
           {/* Reset Filters */}
@@ -781,7 +812,7 @@ function StudentsPage() {
             <button
               type="button"
               onClick={resetDirectoryFilters}
-              className="btn-luxury-secondary h-10 px-4 text-xs gap-1.5 w-full justify-center"
+              className="btn-luxury-secondary h-10 px-4 text-xs gap-1.5 w-full justify-center cursor-pointer"
               title="Reset all filters and sort to Name A-Z"
             >
               <RotateCcw className="size-3.5" /> Reset Filters
@@ -794,39 +825,56 @@ function StudentsPage() {
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-[#faf6ef] z-10 shadow-xs border-b border-[#e5d8c5]">
               <tr className="text-left text-xs uppercase tracking-wider font-bold">
-                {renderHeader("SUID", "suid")}
-                {renderHeader("Student", "name")}
+                {renderHeader("SUID / GR", "suid")}
+                {renderHeader("Student Name", "name")}
                 {renderHeader("Class", "class")}
-                {renderHeader("Room No", "room")}
-                {renderHeader("Fingerprints", "fingers")}
-                {renderHeader("Status", "status")}
-                <th className="py-3 pr-4 text-right text-xs uppercase tracking-wider text-[#7c533f] font-bold">Actions</th>
+                {renderHeader("Room", "room")}
+                {renderHeader("Biometrics (MFS100)", "fingers")}
+                {renderHeader("Kiosk Access", "status")}
+                <th className="py-3.5 pr-4 text-right text-xs uppercase tracking-wider text-[#7c533f] font-bold">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e5d8c5]/60 text-xs font-mono">
               {filteredAndSortedStudents.map((s) => {
                 const biometrics = toBiometricRecords(s.fingerprints);
-                const faceRec = biometrics.find((b) => b.type === "face") as FaceRecord | undefined;
                 const fingerList = biometrics.filter((b) => b.type !== "face") as FingerRecord[];
                 const fingerCount = fingerList.length;
 
                 return (
-                  <tr key={s.id} className="table-row-luxury hover:bg-[#faf4eb]">
+                  <tr key={s.id} className="table-row-luxury hover:bg-[#faf4eb] transition-colors">
                     <td className="py-3.5 pr-4 font-bold text-[#8b2500]">
-                      <span className="px-2.5 py-1 rounded-lg bg-[#faf6ef] border border-[#d8c5af]">
-                        {s.suid}
-                      </span>
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#faf6ef] border border-[#d8c5af] group/suid">
+                        <span className="font-mono text-xs font-bold text-[#8b2500]">{s.suid}</span>
+                        <button
+                          type="button"
+                          onClick={() => copySuid(s.suid)}
+                          className="text-[#7c533f]/60 hover:text-[#8b2500] transition-colors cursor-pointer"
+                          title="Copy SUID"
+                        >
+                          {copiedSuid === s.suid ? (
+                            <Check className="size-3 text-emerald-600" />
+                          ) : (
+                            <Copy className="size-3 opacity-60 group-hover/suid:opacity-100" />
+                          )}
+                        </button>
+                      </div>
                     </td>
                     <td className="py-3.5 pr-4 font-sans font-bold text-sm text-[#2c1810]">
                       <div className="flex items-center gap-2.5">
-                        <span className="size-8 rounded-full bg-[#e5d8c5] flex items-center justify-center text-[#7c533f] font-bold shrink-0">
-                          {s.name.charAt(0)}
+                        <span className="size-8 rounded-full bg-gradient-to-tr from-[#8b2500] to-amber-700 flex items-center justify-center text-white font-bold text-xs shrink-0 shadow-xs">
+                          {s.name.charAt(0).toUpperCase()}
                         </span>
-                        <span>{s.name}</span>
+                        <span className="font-semibold text-zinc-900">{s.name}</span>
                       </div>
                     </td>
                     <td className="py-3.5 pr-4 font-sans text-[#4a1c14]">
-                      {s.class_name ?? "—"}
+                      {s.class_name ? (
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 text-xs font-semibold">
+                          {s.class_name}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400">—</span>
+                      )}
                     </td>
                     <td className="py-3.5 pr-4 font-sans font-medium text-[#7c533f]">
                       {s.room_no ? (
@@ -834,16 +882,25 @@ function StudentsPage() {
                           {s.room_no}
                         </span>
                       ) : (
-                        "—"
+                        <span className="text-zinc-400">—</span>
                       )}
                     </td>
                     <td className="py-3.5 pr-4">
                       {fingerCount > 0 ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-800 border border-amber-500/30">
-                          <Fingerprint className="size-3.5" /> {fingerCount} Fingers
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-xs">
+                          <Fingerprint className="size-3.5 text-emerald-600" />
+                          <span>{fingerCount} {fingerCount === 1 ? "Finger" : "Fingers"}</span>
                         </span>
                       ) : (
-                        <span className="text-[11px] text-zinc-400 italic">No Fingerprint</span>
+                        <button
+                          type="button"
+                          onClick={() => openEdit(s)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-colors shadow-xs cursor-pointer"
+                          title="Click to enrol fingerprint now"
+                        >
+                          <Plus className="size-3 text-amber-700" />
+                          <span>Enrol Finger</span>
+                        </button>
                       )}
                     </td>
                     <td className="py-3.5 pr-4">
@@ -852,7 +909,7 @@ function StudentsPage() {
                           checked={!s.blocked}
                           onCheckedChange={(active) => toggleBlock.mutate({ id: s.id, blocked: !active })}
                         />
-                        <span className={`text-[10px] font-sans font-extrabold px-2.5 py-0.5 rounded-full border shadow-sm ${
+                        <span className={`text-[10px] font-sans font-extrabold px-2.5 py-0.5 rounded-full border shadow-xs ${
                           !s.blocked
                             ? "bg-emerald-500/20 text-emerald-900 border-emerald-500/40"
                             : "bg-rose-500/20 text-rose-900 border-rose-500/40"
@@ -866,7 +923,7 @@ function StudentsPage() {
                         <button
                           type="button"
                           onClick={() => openEdit(s)}
-                          className="p-1.5 rounded-lg text-[#7c533f] hover:text-[#8b2500] hover:bg-[#faf4eb] transition-colors cursor-pointer"
+                          className="p-1.5 rounded-lg text-[#7c533f] hover:text-[#8b2500] hover:bg-[#faf4eb] transition-all hover:scale-110 active:scale-95 cursor-pointer"
                           title="Edit Student Profile & Biometrics"
                         >
                           <Pencil className="size-4" />
@@ -874,7 +931,7 @@ function StudentsPage() {
                         <button
                           type="button"
                           onClick={() => setDeleteId(s.id)}
-                          className="p-1.5 rounded-lg text-[#7c533f] hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-lg text-[#7c533f] hover:text-rose-600 hover:bg-rose-50 transition-all hover:scale-110 active:scale-95 cursor-pointer"
                           title="Delete Student"
                         >
                           <Trash2 className="size-4" />
@@ -887,10 +944,21 @@ function StudentsPage() {
 
               {filteredAndSortedStudents.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-sm font-sans text-[#7c533f]">
-                    {studentList.length === 0
-                      ? "No student records found. Add a student above or import an Excel file."
-                      : "No students match the current filters. Click 'Reset Filters' to view all."}
+                  <td colSpan={7} className="py-12 text-center text-sm font-sans text-[#7c533f]">
+                    {studentList.length === 0 ? (
+                      <div className="space-y-3">
+                        <p className="font-semibold text-base text-[#4a1c14]">No student records in database yet</p>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddModal(true)}
+                          className="btn-luxury-primary px-5 py-2 text-xs font-bold gap-2 cursor-pointer"
+                        >
+                          <UserPlus className="size-4" /> Enrol First Student
+                        </button>
+                      </div>
+                    ) : (
+                      "No students match the current filters. Click 'Reset Filters' to view all."
+                    )}
                   </td>
                 </tr>
               )}
@@ -898,6 +966,101 @@ function StudentsPage() {
           </table>
         </div>
       </Card>
+
+      {/* ADD STUDENT DIALOG MODAL */}
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent className="modal-luxury max-w-2xl bg-[#fdfbf7] border-2 border-[#e5d8c5] rounded-3xl shadow-2xl p-6 sm:p-8">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-2xl text-[#4a1c14] flex items-center gap-2.5">
+              <UserPlus className="size-6 text-[#8b2500]" /> Enrol New Student
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#7c533f]">
+              Register new student profile with SUID and live Mantra MFS100 optical fingerprints.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              addStudent.mutate(form);
+            }}
+            className="space-y-5 pt-3"
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="modal-suid" className="text-xs font-bold text-[#7c533f]">SUID / GR No *</Label>
+                <Input
+                  id="modal-suid"
+                  required
+                  placeholder="e.g. GR1001 or 202401"
+                  value={form.suid}
+                  onChange={(e) => setForm({ ...form, suid: e.target.value })}
+                  className="input-luxury h-11 px-3.5 font-mono text-sm font-semibold"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="modal-name" className="text-xs font-bold text-[#7c533f]">Student Full Name *</Label>
+                <Input
+                  id="modal-name"
+                  required
+                  placeholder="Enter Full Name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="input-luxury h-11 px-3.5 text-sm font-semibold uppercase"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="modal-class" className="text-xs font-bold text-[#7c533f]">Class / Standard</Label>
+                <Input
+                  id="modal-class"
+                  placeholder="e.g. 10th A, 12th Commerce"
+                  value={form.class_name}
+                  onChange={(e) => setForm({ ...form, class_name: e.target.value })}
+                  className="input-luxury h-11 px-3.5 text-sm"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="modal-room" className="text-xs font-bold text-[#7c533f]">Room No / Hostel</Label>
+                <Input
+                  id="modal-room"
+                  placeholder="e.g. 101, B-205"
+                  value={form.room_no}
+                  onChange={(e) => setForm({ ...form, room_no: e.target.value })}
+                  className="input-luxury h-11 px-3.5 text-sm font-mono font-semibold"
+                />
+              </div>
+            </div>
+
+            {/* Unified Mantra Fingerprint Enroller */}
+            <BiometricEnroller
+              records={newFingers}
+              onChange={setNewFingers}
+              suid={form.suid}
+            />
+
+            <DialogFooter className="gap-2.5 pt-4 border-t border-[#e5d8c5]">
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="btn-luxury-secondary px-5 py-2.5 text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={addStudent.isPending}
+                className="btn-luxury-primary px-7 py-2.5 text-xs font-bold gap-2 shadow-md cursor-pointer"
+              >
+                {addStudent.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                Save & Enrol Student
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* EDIT STUDENT DIALOG */}
       <Dialog open={Boolean(editId)} onOpenChange={(open) => !open && setEditId(null)}>

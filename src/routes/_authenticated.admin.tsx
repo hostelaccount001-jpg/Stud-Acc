@@ -214,7 +214,7 @@ function AdminLayout() {
 
       {/* MAIN CONTENT AREA - INDEPENDENTLY SCROLLABLE & USER-FRIENDLY */}
       <div className="flex-1 flex flex-col h-full overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar">
-        <main className="flex-1 p-6 md:p-10 pt-20 lg:pt-8 max-w-7xl mx-auto w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 pt-20 lg:pt-8 w-full max-w-[1720px] mx-auto animate-in fade-in slide-in-from-bottom-2 duration-300">
           <Outlet />
         </main>
       </div>
