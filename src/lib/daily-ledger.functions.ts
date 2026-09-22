@@ -30,14 +30,18 @@ export const importDailyLedgerServer = createServerFn({ method: "POST" })
       throw new Error("No ledger rows provided to import.");
     }
 
-    // 1. Fetch all unique GR numbers (suid) from the input rows
-    const uniqueGrNos = Array.from(new Set(rows.map((r) => r.gr_no.trim())));
+    // 1. Collect all unique identifiers (Student ID / unique_no, and GR No)
+    const allIdentifiers = Array.from(
+      new Set([
+        ...rows.map((r) => r.unique_no.trim()).filter(Boolean),
+        ...rows.map((r) => r.gr_no.trim()).filter(Boolean),
+      ])
+    );
 
-    // 2. Fetch existing students by suid in bulk
+    // 2. Fetch existing students by suid or nfc_no in bulk
     const { data: existingStudents, error: fetchErr } = await supabaseAdmin
       .from("students")
-      .select("id, suid, name, class_name, nfc_no, blocked")
-      .in("suid", uniqueGrNos);
+      .select("id, suid, name, class_name, nfc_no, blocked");
 
     if (fetchErr) {
       throw new Error(`Failed to check existing students: ${fetchErr.message}`);
@@ -45,19 +49,32 @@ export const importDailyLedgerServer = createServerFn({ method: "POST" })
 
     const studentMap = new Map<string, any>();
     (existingStudents ?? []).forEach((s) => {
-      studentMap.set(s.suid.trim().toLowerCase(), s);
+      if (s.suid) studentMap.set(s.suid.trim().toLowerCase(), s);
+      if (s.nfc_no) studentMap.set(s.nfc_no.trim().toLowerCase(), s);
+      if (s.name) studentMap.set(s.name.trim().toLowerCase(), s);
     });
 
-    // 3. For any GR No not found in students, automatically create student record
-    const missingStudents = uniqueGrNos.filter((gr) => !studentMap.has(gr.toLowerCase()));
-    if (missingStudents.length > 0) {
-      const newStudentsPayload = missingStudents.map((gr) => {
-        const sampleRow = rows.find((r) => r.gr_no.trim().toLowerCase() === gr.toLowerCase())!;
+    // 3. For any student not found, automatically create student record
+    const missingRows: DailyLedgerRow[] = [];
+    rows.forEach((r) => {
+      const uKey = r.unique_no.trim().toLowerCase();
+      const gKey = r.gr_no.trim().toLowerCase();
+      const nKey = r.student_name.trim().toLowerCase();
+      if (!studentMap.has(uKey) && !studentMap.has(gKey) && !studentMap.has(nKey)) {
+        if (!missingRows.some((m) => (m.unique_no && m.unique_no === r.unique_no) || (m.gr_no && m.gr_no === r.gr_no))) {
+          missingRows.push(r);
+        }
+      }
+    });
+
+    if (missingRows.length > 0) {
+      const newStudentsPayload = missingRows.map((sampleRow) => {
+        const primaryId = sampleRow.unique_no.trim() || sampleRow.gr_no.trim();
         return {
-          suid: gr,
+          suid: primaryId,
           name: sampleRow.student_name.trim(),
           class_name: sampleRow.class_name.trim() || null,
-          nfc_no: gr,
+          nfc_no: sampleRow.gr_no.trim() || primaryId,
           fingerprints: [],
           blocked: false,
         };
@@ -70,15 +87,19 @@ export const importDailyLedgerServer = createServerFn({ method: "POST" })
 
       if (!createErr && createdStudents) {
         createdStudents.forEach((s) => {
-          studentMap.set(s.suid.trim().toLowerCase(), s);
+          if (s.suid) studentMap.set(s.suid.trim().toLowerCase(), s);
+          if (s.nfc_no) studentMap.set(s.nfc_no.trim().toLowerCase(), s);
+          if (s.name) studentMap.set(s.name.trim().toLowerCase(), s);
         });
       }
     }
 
     // 4. Prepare transactions to batch insert
     const transactionsToInsert = rows.map((row) => {
-      const grKey = row.gr_no.trim().toLowerCase();
-      const student = studentMap.get(grKey);
+      const uKey = row.unique_no.trim().toLowerCase();
+      const gKey = row.gr_no.trim().toLowerCase();
+      const nKey = row.student_name.trim().toLowerCase();
+      const student = studentMap.get(uKey) || studentMap.get(gKey) || studentMap.get(nKey);
 
       // Construct descriptive service name so it shows cleanly in kiosk ledger
       const typeTag = row.type === "CREDIT" ? "[Credit]" : "[Debit]";

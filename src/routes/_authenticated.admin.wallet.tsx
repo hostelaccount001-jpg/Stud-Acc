@@ -122,57 +122,61 @@ export default function WalletPage() {
   const downloadSampleTemplate = () => {
     const sampleData = [
       {
-        "UNIQUE/HR NO.": "249388",
-        "STUDENT NAME": "SHUBH CHANDRAKANTBHAI GAJERA",
-        "GR NO.": "3319",
-        CLASS: "11 COMMERCE-C",
-        TYPE: "Credit",
-        MODE: "SBI BANK TRANSFER",
-        DATE: "15/09/2026",
-        AMOUNT: 500,
-        COMMENT: "credit by shubh -500",
+        "Sl.No": 18228,
+        Date: "23-06-2026 17:43",
+        Type: "Debit",
+        Mode: "Cash",
+        "Student ID": "250674",
+        "Student Name": "NILKANTH JAGJIVANBHAI MATHOLIYA",
+        "GR No": "30431",
+        Class: "GM 10 (Hostel) · B",
+        Amount: -20.0,
+        Comments: "Harijayanti",
       },
       {
-        "UNIQUE/HR NO.": "249389",
-        "STUDENT NAME": "MEET RAJESHBHAI PATEL",
-        "GR NO.": "4102",
-        CLASS: "10-A",
-        TYPE: "Credit",
-        MODE: "CASH",
-        DATE: "15/09/2026",
-        AMOUNT: 200,
-        COMMENT: "Pocket money deposit",
+        "Sl.No": 18229,
+        Date: "23-06-2026 17:43",
+        Type: "Credit",
+        Mode: "Cash",
+        "Student ID": "250634",
+        "Student Name": "OM SHIRISHBHAI MARADIYA",
+        "GR No": "30202",
+        Class: "GM 10 (Hostel) · B",
+        Amount: 500.0,
+        Comments: "Pocket money deposit",
       },
       {
-        "UNIQUE/HR NO.": "249390",
-        "STUDENT NAME": "DHRUV HARESHBHAI SHAH",
-        "GR NO.": "3820",
-        CLASS: "12 SCIENCE-B",
-        TYPE: "Debit",
-        MODE: "VOUCHER",
-        DATE: "15/09/2026",
-        AMOUNT: 90,
-        COMMENT: "Pocket money-90 Harijayanti",
+        "Sl.No": 18230,
+        Date: "23-06-2026 17:43",
+        Type: "Debit",
+        Mode: "Cash",
+        "Student ID": "250877",
+        "Student Name": "JASH MAHESHBHAI AMIPARA",
+        "GR No": "30362",
+        Class: "GM 10 (Hostel) · E",
+        Amount: -50.0,
+        Comments: "Stationery / Books",
       },
     ];
 
     const worksheet = XLSX.utils.json_to_sheet(sampleData);
     worksheet["!cols"] = [
-      { wch: 16 }, // UNIQUE/HR NO.
-      { wch: 32 }, // STUDENT NAME
-      { wch: 12 }, // GR NO.
-      { wch: 18 }, // CLASS
-      { wch: 12 }, // TYPE
-      { wch: 20 }, // MODE
-      { wch: 14 }, // DATE
-      { wch: 12 }, // AMOUNT
-      { wch: 32 }, // COMMENT
+      { wch: 10 }, // Sl.No
+      { wch: 18 }, // Date
+      { wch: 10 }, // Type
+      { wch: 10 }, // Mode
+      { wch: 14 }, // Student ID
+      { wch: 34 }, // Student Name
+      { wch: 12 }, // GR No
+      { wch: 22 }, // Class
+      { wch: 12 }, // Amount
+      { wch: 30 }, // Comments
     ];
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Daily_Report");
-    XLSX.writeFile(workbook, "Gurukul_Daily_Ledger_Template.xlsx");
-    toast.success("Sample template downloaded (Gurukul_Daily_Ledger_Template.xlsx)");
+    XLSX.writeFile(workbook, "Gurukul_Wallet_Report_Template.xlsx");
+    toast.success("Sample template downloaded (Gurukul_Wallet_Report_Template.xlsx)");
   };
 
   // --------------------------------------------------------------------------
@@ -206,19 +210,94 @@ export default function WalletPage() {
         let skippedCount = 0;
 
         rawJson.forEach((row) => {
-          const uniqueNo = String(row["UNIQUE/HR NO."] || row["UNIQUE NO"] || row["VOUCHER NO"] || row["HR NO"] || "").trim();
-          const studentName = String(row["STUDENT NAME"] || row["NAME"] || row["STUDENT"] || "").trim();
-          const grNo = String(row["GR NO."] || row["GR NO"] || row["GR"] || row["ROLL NO"] || "").trim();
-          const className = String(row["CLASS"] || row["STD"] || row["DIVISION"] || "").trim();
-          const rawType = String(row["TYPE"] || row["TRANSACTION TYPE"] || "Credit").trim().toUpperCase();
-          const type: "CREDIT" | "DEBIT" = rawType.includes("DEBIT") || rawType === "DR" ? "DEBIT" : "CREDIT";
-          const mode = String(row["MODE"] || row["PAYMENT MODE"] || "Cash").trim();
-          const date = String(row["DATE"] || "").trim();
-          const rawAmt = String(row["AMOUNT"] || row["TOTAL AMOUNT"] || row["RS"] || "0").replace(/[^0-9.]/g, "");
-          const amount = parseFloat(rawAmt);
-          const comment = String(row["COMMENT"] || row["REMARK"] || row["PARTICULAR"] || "").trim();
+          // Robust column extraction supporting user's exact Excel layout (Image 2)
+          const uniqueNo = String(
+            row["Student ID"] ||
+            row["STUDENT ID"] ||
+            row["Student Id"] ||
+            row["UNIQUE/HR NO."] ||
+            row["UNIQUE NO"] ||
+            row["VOUCHER NO"] ||
+            row["HR NO"] ||
+            ""
+          ).trim();
 
-          if (!grNo && !studentName) {
+          const studentName = String(
+            row["Student Name"] ||
+            row["STUDENT NAME"] ||
+            row["NAME"] ||
+            row["Student"] ||
+            row["STUDENT"] ||
+            ""
+          ).trim();
+
+          const grNo = String(
+            row["GR No"] ||
+            row["GR NO"] ||
+            row["GR NO."] ||
+            row["Gr No"] ||
+            row["GR"] ||
+            row["ROLL NO"] ||
+            ""
+          ).trim();
+
+          const className = String(
+            row["Class"] ||
+            row["CLASS"] ||
+            row["STD"] ||
+            row["DIVISION"] ||
+            ""
+          ).trim();
+
+          const rawType = String(
+            row["Type"] ||
+            row["TYPE"] ||
+            row["TRANSACTION TYPE"] ||
+            ""
+          ).trim().toUpperCase();
+
+          const rawAmtStr = String(
+            row["Amount"] ||
+            row["AMOUNT"] ||
+            row["TOTAL AMOUNT"] ||
+            row["RS"] ||
+            "0"
+          ).trim();
+
+          // If amount is negative (-20.00), it's a Debit!
+          const isNegative = rawAmtStr.startsWith("-");
+          const type: "CREDIT" | "DEBIT" =
+            rawType.includes("DEBIT") || rawType === "DR" || isNegative
+              ? "DEBIT"
+              : "CREDIT";
+
+          const mode = String(
+            row["Mode"] ||
+            row["MODE"] ||
+            row["PAYMENT MODE"] ||
+            "Cash"
+          ).trim();
+
+          const date = String(
+            row["Date"] ||
+            row["DATE"] ||
+            ""
+          ).trim();
+
+          const cleanAmt = rawAmtStr.replace(/[^0-9.]/g, "");
+          const amount = parseFloat(cleanAmt);
+
+          const comment = String(
+            row["Comments"] ||
+            row["COMMENTS"] ||
+            row["Comment"] ||
+            row["COMMENT"] ||
+            row["REMARK"] ||
+            row["PARTICULAR"] ||
+            ""
+          ).trim();
+
+          if (!grNo && !uniqueNo && !studentName) {
             skippedCount++;
             return;
           }
@@ -229,9 +308,9 @@ export default function WalletPage() {
           }
 
           normalized.push({
-            unique_no: uniqueNo,
-            student_name: studentName || `Student (${grNo})`,
-            gr_no: grNo || "N/A",
+            unique_no: uniqueNo || grNo,
+            student_name: studentName || `Student (${uniqueNo || grNo})`,
+            gr_no: grNo || uniqueNo || "N/A",
             class_name: className,
             type,
             mode,

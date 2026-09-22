@@ -213,8 +213,8 @@ function Dashboard() {
             </Link>
           </div>
 
-          <div className="space-y-2.5 overflow-hidden">
-            {(data?.rows ?? []).slice(0, 8).map((r, i) => (
+          <div className="space-y-2.5 max-h-[580px] overflow-y-auto pr-1.5 scroll-smooth custom-scrollbar">
+            {(data?.rows ?? []).slice(0, 15).map((r, i) => (
               <div
                 key={i}
                 className="flex items-center justify-between p-3.5 rounded-2xl bg-[#faf6ef] hover:bg-[#f5ecdf] border border-[#e5d8c5] transition-all"

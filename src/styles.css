@@ -7,18 +7,47 @@
 }
 
 /* Custom Sleek Minimalist Scrollbar */
+html {
+  scroll-behavior: smooth;
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb {
   background: #d8c5af;
   border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  transition: background 0.2s ease;
 }
 ::-webkit-scrollbar-thumb:hover {
+  background: #8b2500;
+}
+
+/* Firefox scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d8c5af transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbb49c;
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #8b2500;
 }
 
@@ -521,5 +550,47 @@ div[role="alertdialog"],
     #4a1c14 100%
   );
   animation: shimmer-sweep 4s linear infinite;
+}
+
+/* Dark Autofill Styling for Security Portal Inputs */
+.secure-input:-webkit-autofill,
+.secure-input:-webkit-autofill:hover, 
+.secure-input:-webkit-autofill:focus, 
+.secure-input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #18110e inset !important;
+  -webkit-text-fill-color: #f5f5f5 !important;
+  caret-color: #f5f5f5 !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Unique Gurukul Logo Slow Blink & Golden Orbit Animation */
+@keyframes logo-slow-blink {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: drop-shadow(0 0 14px rgba(245, 158, 11, 0.65)) brightness(1.05);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.94);
+    filter: drop-shadow(0 0 4px rgba(139, 37, 0, 0.2)) brightness(0.92);
+  }
+}
+
+.animate-logo-blink {
+  animation: logo-slow-blink 2.2s ease-in-out infinite;
+}
+
+@keyframes spinner-golden-orbit {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-golden-orbit {
+  animation: spinner-golden-orbit 1.2s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
 }
 

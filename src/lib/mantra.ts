@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 
 /**
- * Mantra MFS110 / MFS100 fingerprint scanner hardware bridge (browser side).
+ * Mantra MFS100 fingerprint scanner hardware bridge (browser side).
  *
- * Supports:
- * 1. Mantra MFS110 L1 RD Service (UIDAI standard HTTP RD Service on ports 11100-11105)
- * 2. Mantra MFS100 / MFS110 Client Service (Local JSON API on ports 8004, 8005, 8003)
+ * Supports two distinct Mantra driver modes:
+ * 1. Mantra MFS100 RD Service (UIDAI standard HTTP RD Service on ports 11100-11105)
+ * 2. Mantra MFS100 Client Service (Local JSON API on ports 8004, 8005, 8003)
  *
  * Fully hardware-driven — simulation mode has been completely removed.
  */
@@ -94,7 +94,7 @@ async function probeRDServiceUrl(base: string, port: number, timeoutMs = 800): P
     const xml = await res.text();
     if (!xml.includes("DeviceInfo") && !xml.includes("RDService")) return null;
 
-    const mi = parseXmlAttribute(xml, "DeviceInfo", "mi") || "MFS110";
+    const mi = parseXmlAttribute(xml, "DeviceInfo", "mi") || "MFS100";
     const serial = parseParamValue(xml, "srno") || parseParamValue(xml, "SerialNo") || undefined;
 
     return {
@@ -134,7 +134,7 @@ async function probeClientServiceUrl(base: string, port: number, timeoutMs = 800
     });
     if (!res.ok) return null;
     const info = (await res.json()) as Record<string, unknown>;
-    const model = typeof info["Model"] === "string" ? info["Model"] : "MFS110";
+    const model = typeof info["Model"] === "string" ? info["Model"] : "MFS100";
     const serial = typeof info["SerialNo"] === "string" ? info["SerialNo"] : undefined;
 
     return {
@@ -199,7 +199,7 @@ export async function deviceInfo(): Promise<DeviceInfo> {
 
   return {
     connected: true,
-    model: dev.model || "MFS110",
+    model: dev.model || "MFS100",
     serial: dev.serial,
     status: "READY",
     driverType: dev.type,
@@ -207,7 +207,7 @@ export async function deviceInfo(): Promise<DeviceInfo> {
   };
 }
 
-/** React Hook for live Mantra MFS110 device status */
+/** React Hook for live Mantra MFS100 device status */
 export function useMantraDevice(pollIntervalMs = 3000) {
   const [device, setDevice] = useState<DeviceInfo | null>(null);
   const [checking, setChecking] = useState(true);
@@ -241,7 +241,7 @@ export function useMantraDevice(pollIntervalMs = 3000) {
 }
 
 /**
- * Real Fingerprint Capture on Mantra MFS110 / MFS100 hardware.
+ * Real Fingerprint Capture on Mantra MFS100 hardware.
  * Strictly communicates with the connected device — no simulation mode.
  */
 export async function captureFinger(
@@ -252,7 +252,7 @@ export async function captureFinger(
   if (!dev) {
     return {
       ok: false,
-      error: "Mantra MFS110 scanner is not connected. Please verify USB connection and RD Service.",
+      error: "Mantra MFS100 scanner is not connected. Please verify USB connection and RD Service.",
     };
   }
 
@@ -276,7 +276,7 @@ export async function captureFinger(
       });
 
       if (!res.ok) {
-        return { ok: false, error: `RD Service returned HTTP ${res.status}. Check MFS110 driver.` };
+        return { ok: false, error: `RD Service returned HTTP ${res.status}. Check MFS100 driver.` };
       }
 
       const xml = await res.text();
@@ -285,7 +285,7 @@ export async function captureFinger(
       const qScore = Number(parseXmlAttribute(xml, "Resp", "qScore") ?? 0);
 
       if (errCode !== "0") {
-        return { ok: false, error: `Mantra MFS110: ${errInfo} (Code ${errCode})` };
+        return { ok: false, error: `Mantra MFS100: ${errInfo} (Code ${errCode})` };
       }
 
       const dataTag = parseXmlTag(xml, "Data");
@@ -304,7 +304,7 @@ export async function captureFinger(
       if (err instanceof Error && err.name === "AbortError") {
         return { ok: false, error: "Scan timed out. Please place your finger firmly on the sensor." };
       }
-      return { ok: false, error: "Communication error with Mantra MFS110 scanner." };
+      return { ok: false, error: "Communication error with Mantra MFS100 scanner." };
     } finally {
       clearTimeout(timer);
     }

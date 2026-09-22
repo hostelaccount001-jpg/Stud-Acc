@@ -28,6 +28,14 @@ import {
   TrendingUp,
   TrendingDown,
   History,
+  Building2,
+  Key,
+  Bed,
+  Clock,
+  CreditCard,
+  ArrowDown,
+  ArrowUp,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   captureFinger,
@@ -242,9 +250,138 @@ function Kiosk() {
       availableBalance: Math.max(0, balance),
       totalCredit: credit,
       totalUsed: used,
-      totalTransactions: walletReportEntries.length,
+      creditCount: studentTransactions.filter((tx) => {
+        const sName = (tx.service_name || "").toLowerCase();
+        return (
+          sName.includes("credit") ||
+          sName.includes("deposit") ||
+          sName.includes("pocket") ||
+          sName.includes("sbi") ||
+          tx.amount < 0
+        );
+      }).length,
+      debitCount: studentTransactions.filter((tx) => {
+        const sName = (tx.service_name || "").toLowerCase();
+        return !(
+          sName.includes("credit") ||
+          sName.includes("deposit") ||
+          sName.includes("pocket") ||
+          sName.includes("sbi") ||
+          tx.amount < 0
+        );
+      }).length,
+      totalTransactions: studentTransactions.length,
     };
-  }, [studentTransactions, walletReportEntries]);
+  }, [studentTransactions]);
+
+  // Tab switch for student view: "services" vs "history"
+  const [studentTab, setStudentTab] = useState<"services" | "history">("services");
+  const [historySearchTerm, setHistorySearchTerm] = useState("");
+  const [historyTypeFilter, setHistoryTypeFilter] = useState<"ALL" | "CREDIT" | "DEBIT">("ALL");
+
+  // Cumulative running balance computation for passbook matching Image 3
+  const historyWithRunningBalance = useMemo(() => {
+    const sorted = [...studentTransactions].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    let running = 0;
+    const items = sorted.map((tx) => {
+      const sName = (tx.service_name || "").toLowerCase();
+      const isCredit =
+        sName.includes("credit") ||
+        sName.includes("deposit") ||
+        sName.includes("pocket") ||
+        sName.includes("sbi") ||
+        tx.amount < 0;
+
+      const amt = Math.abs(Number(tx.amount) || 0);
+      if (isCredit) {
+        running += amt;
+      } else {
+        running -= amt;
+      }
+
+      const cleanTitle = (tx.service_name || "Service")
+        .replace(/^\[Wallet\]\s*/i, "")
+        .replace(/^\[Credit\]\s*/i, "")
+        .replace(/^\[Debit\]\s*/i, "");
+
+      return {
+        ...tx,
+        isCredit,
+        amountVal: amt,
+        runningBalance: Math.max(0, running),
+        cleanTitle,
+      };
+    });
+
+    return items.reverse();
+  }, [studentTransactions]);
+
+  const filteredStudentHistory = useMemo(() => {
+    return historyWithRunningBalance.filter((tx) => {
+      const matchSearch =
+        tx.cleanTitle.toLowerCase().includes(historySearchTerm.toLowerCase()) ||
+        (tx.service_name || "").toLowerCase().includes(historySearchTerm.toLowerCase());
+
+      const matchType =
+        historyTypeFilter === "ALL"
+          ? true
+          : historyTypeFilter === "CREDIT"
+          ? tx.isCredit
+          : !tx.isCredit;
+
+      return matchSearch && matchType;
+    });
+  }, [historyWithRunningBalance, historySearchTerm, historyTypeFilter]);
+
+  const groupedStudentHistory = useMemo(() => {
+    const groups: Record<string, typeof filteredStudentHistory> = {};
+    filteredStudentHistory.forEach((tx) => {
+      const d = new Date(tx.created_at);
+      const dateKey = isNaN(d.getTime())
+        ? "Other Records"
+        : d.toLocaleDateString("en-GB", {
+            weekday: "short",
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          });
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(tx);
+    });
+
+    return Object.entries(groups).map(([dateStr, items]) => {
+      const firstDate = new Date(items[0].created_at);
+      const diffDays = Math.floor((Date.now() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+      let relBadge = "TODAY";
+      if (diffDays === 1) relBadge = "YESTERDAY";
+      else if (diffDays > 1 && diffDays < 7) relBadge = `${diffDays}D AGO`;
+      else if (diffDays >= 7 && diffDays < 30) relBadge = `${Math.floor(diffDays / 7)}W AGO`;
+      else if (diffDays >= 30) relBadge = `${Math.floor(diffDays / 30)}M AGO`;
+
+      return { dateStr, relBadge, items };
+    });
+  }, [filteredStudentHistory]);
+
+  const printSingleHistoryReceipt = (tx: (typeof historyWithRunningBalance)[0]) => {
+    if (!student) return;
+    const rData: ReceiptData = {
+      receiptNo: Number(tx.receipt_no || tx.id.replace(/\D/g, "").slice(-6) || "1001"),
+      suid: student.suid,
+      name: student.name,
+      className: student.class_name,
+      roomNo: student.room_no,
+      service: tx.cleanTitle,
+      amount: tx.amountVal,
+      at: tx.created_at,
+    };
+    setActiveReceipt(rData);
+    setTimeout(() => {
+      window.print();
+    }, 300);
+  };
 
   // Live Mantra MFS100 device status
   const { device, checking: deviceChecking, isConnected } = useMantraDevice(3000);
@@ -811,99 +948,144 @@ function Kiosk() {
           </Card>
         )}
 
-        {/* STEP 2: Student Wallet, Daily Ledger History & Cashless Services */}
+        {/* STEP 2: Student Verified Screen (Image 4 & Image 3 UI) */}
         {step === "service" && student && (
-          <div className="w-full max-w-5xl space-y-5 animate-in fade-in zoom-in-95 duration-300">
-            {/* Verified Student Header Banner */}
-            <Card className="p-4 sm:p-5 bg-white/95 backdrop-blur-md border-[#e5d8c5] shadow-sm rounded-2xl flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="size-14 rounded-2xl bg-gradient-to-br from-[#8b2500] to-amber-600 text-white flex items-center justify-center font-serif font-bold text-2xl shadow-sm border border-amber-400/40 shrink-0">
-                  {student.name[0]?.toUpperCase()}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-bold text-[#4a1c14] font-sans">{student.name}</h3>
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-600/15 text-emerald-800 border border-emerald-500/30 flex items-center gap-1">
-                      <CheckCircle2 className="size-3.5 text-emerald-600" /> Biometric Verified
+          <div className="w-full max-w-5xl space-y-4 animate-in fade-in zoom-in-95 duration-300 font-sans">
+            {/* Top Verified Student Header Banner (Exact match to Image 4) */}
+            <div className="bg-gradient-to-r from-[#4a1c14] via-[#5c2016] to-[#3a140d] text-white rounded-3xl p-5 sm:p-6 shadow-xl border border-amber-500/30 flex flex-wrap items-center justify-between gap-4 select-none">
+              <div className="space-y-1">
+                <h2 className="text-2xl sm:text-3xl font-serif font-black tracking-tight uppercase text-white">
+                  {student.name}
+                </h2>
+                <p className="text-xs sm:text-sm font-semibold tracking-wider text-amber-200/90 font-mono uppercase">
+                  UNIQUE/HR NO.: <span className="font-bold text-white">{student.suid}</span> • {student.class_name || "12 COMMERCE - B"}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {/* Available Balance Glass Pill (Image 4) */}
+                <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl px-6 py-3 shadow-lg flex flex-col items-end">
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                    <span className="relative flex size-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full size-2 bg-emerald-500" />
                     </span>
+                    <span>AVAILABLE BALANCE</span>
                   </div>
-                  <p className="text-xs text-[#7c533f] mt-0.5 font-sans">
-                    GR No / SUID: <span className="font-bold text-[#8b2500] font-mono">{student.suid}</span>
-                    {student.class_name ? ` • Class: ${student.class_name}` : ""}
-                    {student.room_no ? ` • Room: ${student.room_no}` : ""}
-                  </p>
+                  <div className="text-2xl sm:text-3xl font-black font-sans text-white tracking-tight mt-0.5">
+                    ₹ {walletMetrics.availableBalance.toFixed(2)}
+                  </div>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={reset}
+                  className="rounded-2xl border-white/20 bg-white/10 hover:bg-white/20 text-white font-bold h-12 px-4 shadow-sm cursor-pointer"
+                >
+                  <RefreshCw className="size-4 mr-1.5 text-amber-300" /> Exit
+                </Button>
+              </div>
+            </div>
+
+            {/* Student Location & Details Chips (Top of Image 3) */}
+            <div className="flex flex-wrap items-center gap-2 px-1 select-none">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e5d8c5] text-xs font-bold text-[#4a1c14] shadow-xs">
+                <Building2 className="size-3.5 text-[#8b2500]" />
+                {student.class_name || "11-12 COMMERCE"}
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e5d8c5] text-xs font-bold text-[#4a1c14] shadow-xs">
+                Floor: {student.room_no ? `${student.room_no.slice(0, 1)}ND FLOOR` : "2ND FLOOR"}
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e5d8c5] text-xs font-bold text-[#4a1c14] shadow-xs">
+                <Key className="size-3.5 text-[#8b2500]" />
+                Room {student.room_no || "206"}
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-[#e5d8c5] text-xs font-bold text-[#4a1c14] shadow-xs">
+                <Bed className="size-3.5 text-[#8b2500]" />
+                Bed {student.room_no ? student.room_no.slice(-2) : "58"}
+              </span>
+            </div>
+
+            {/* 3 Metrics Cards (Exact match to Image 3) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 select-none">
+              {/* TOTAL CREDIT */}
+              <div className="p-4 sm:p-5 bg-white border border-[#e5d8c5] rounded-2xl shadow-xs space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-600">
+                  <ArrowDown className="size-4" />
+                  <span>TOTAL CREDIT</span>
+                </div>
+                <div className="text-2xl sm:text-3xl font-black font-sans text-emerald-700">
+                  ₹ {walletMetrics.totalCredit.toFixed(2)}
+                </div>
+                <div className="text-xs text-zinc-500 font-medium">
+                  {walletMetrics.creditCount} deposits
                 </div>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={reset}
-                className="rounded-xl border-[#d8c5af] text-[#6b4a3a] hover:bg-[#f5ecdf] cursor-pointer"
-              >
-                <RefreshCw className="size-4 mr-1.5" /> Finish / Exit
-              </Button>
-            </Card>
 
-            {/* Student Wallet & Daily Report Summary (4 Key Metrics) */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              {/* Available Balance */}
-              <Card className="p-4 bg-gradient-to-br from-[#4a1c14] to-[#782414] text-white rounded-2xl border-2 border-amber-400/40 shadow-md relative overflow-hidden">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
-                    Available Balance
-                  </span>
-                  <Wallet className="size-4 text-amber-300" />
+              {/* TOTAL USED */}
+              <div className="p-4 sm:p-5 bg-white border border-[#e5d8c5] rounded-2xl shadow-xs space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-rose-600">
+                  <ArrowUp className="size-4" />
+                  <span>TOTAL USED</span>
                 </div>
-                <div className="flex items-baseline gap-1 mt-1.5">
-                  <span className="text-xl font-bold text-amber-400">₹</span>
-                  <span className="text-3xl font-black font-sans tracking-tight">
-                    {walletMetrics.availableBalance.toFixed(2)}
-                  </span>
+                <div className="text-2xl sm:text-3xl font-black font-sans text-rose-700">
+                  ₹ {walletMetrics.totalUsed.toFixed(2)}
                 </div>
-                <span className="text-[10px] text-amber-200/80 mt-0.5 block">Authorized balance</span>
-              </Card>
+                <div className="text-xs text-zinc-500 font-medium">
+                  {walletMetrics.debitCount} withdrawals
+                </div>
+              </div>
 
-              {/* Total Credit */}
-              <Card className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl shadow-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-                    Total Credit
-                  </span>
-                  <TrendingUp className="size-4 text-emerald-600" />
-                </div>
-                <p className="text-2xl font-bold font-sans text-emerald-700 mt-1.5">
-                  ₹{walletMetrics.totalCredit.toFixed(2)}
-                </p>
-                <span className="text-[10px] text-emerald-600 block">Daily deposits & vouchers</span>
-              </Card>
-
-              {/* Total Debit / Used */}
-              <Card className="p-4 bg-rose-50/80 border border-rose-200 rounded-2xl shadow-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-rose-800">
-                    Total Debit / Used
-                  </span>
-                  <TrendingDown className="size-4 text-rose-600" />
-                </div>
-                <p className="text-2xl font-bold font-sans text-rose-700 mt-1.5">
-                  ₹{walletMetrics.totalUsed.toFixed(2)}
-                </p>
-                <span className="text-[10px] text-rose-600 block">Services & deductions</span>
-              </Card>
-
-              {/* Total Transactions */}
-              <Card className="p-4 bg-white border border-[#e5d8c5] rounded-2xl shadow-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#7c533f]">
-                    Transactions
-                  </span>
+              {/* TRANSACTIONS */}
+              <div className="p-4 sm:p-5 bg-white border border-[#e5d8c5] rounded-2xl shadow-xs space-y-1">
+                <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-zinc-600">
                   <History className="size-4 text-[#8b2500]" />
+                  <span>TRANSACTIONS</span>
                 </div>
-                <p className="text-2xl font-bold font-sans text-[#4a1c14] mt-1.5">
+                <div className="text-2xl sm:text-3xl font-black font-sans text-zinc-900">
                   {walletMetrics.totalTransactions}
-                </p>
-                <span className="text-[10px] text-[#8b6553] block">Total entries on record</span>
-              </Card>
+                </div>
+                <div className="text-xs text-zinc-500 font-medium">
+                  All time
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation Tabs: Cashless Services vs History Passbook */}
+            <div className="flex items-center gap-2 border-b border-[#e5d8c5] pb-2 pt-1 select-none">
+              <button
+                type="button"
+                onClick={() => setStudentTab("services")}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold text-xs transition-all cursor-pointer ${
+                  studentTab === "services"
+                    ? "bg-[#8b2500] text-white shadow-md shadow-[#8b2500]/25"
+                    : "bg-white text-[#7c533f] hover:bg-[#faf4eb] border border-[#e5d8c5]"
+                }`}
+              >
+                <Tag className="size-4" />
+                <span>Cashless Services & Payment</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStudentTab("history")}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-bold text-xs transition-all cursor-pointer ${
+                  studentTab === "history"
+                    ? "bg-[#8b2500] text-white shadow-md shadow-[#8b2500]/25"
+                    : "bg-white text-[#7c533f] hover:bg-[#faf4eb] border border-[#e5d8c5]"
+                }`}
+              >
+                <History className="size-4" />
+                <span>Student Passbook & History</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+                    studentTab === "history" ? "bg-white/20 text-white" : "bg-amber-100 text-[#8b2500]"
+                  }`}
+                >
+                  {walletMetrics.totalTransactions}
+                </span>
+              </button>
             </div>
 
             {error && (
@@ -913,176 +1095,19 @@ function Kiosk() {
               </div>
             )}
 
-            {/* Split Layout: Recent Transactions & Daily Ledger on Left (5 Cols), Services Grid on Right (7 Cols) */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-              {/* Left Column: Recent Transactions & Daily Report History (5 Cols) */}
-              <div className="lg:col-span-5 space-y-3">
-                <Card className="p-4 bg-white border border-[#e5d8c5] rounded-3xl shadow-sm flex flex-col h-[400px]">
-                  {/* Header with Switcher Tabs */}
-                  <div className="flex items-center justify-between border-b border-[#f2e7db] pb-2.5">
-                    <div className="flex items-center gap-1 bg-[#faf5ee] p-0.5 rounded-xl border border-[#e5d8c5]">
-                      <button
-                        onClick={() => setHistoryTab("wallet")}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                          historyTab === "wallet"
-                            ? "bg-[#8b2500] text-white shadow-xs"
-                            : "text-[#7c533f] hover:text-[#2d140d]"
-                        }`}
-                      >
-                        <Wallet className="size-3" />
-                        <span>Wallet Report</span>
-                        <span
-                          className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono ${
-                            historyTab === "wallet"
-                              ? "bg-white/20 text-white"
-                              : "bg-amber-100 text-[#8b2500]"
-                          }`}
-                        >
-                          {walletReportEntries.length}
-                        </span>
-                      </button>
-
-                      <button
-                        onClick={() => setHistoryTab("kiosk")}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                          historyTab === "kiosk"
-                            ? "bg-[#8b2500] text-white shadow-xs"
-                            : "text-[#7c533f] hover:text-[#2d140d]"
-                        }`}
-                      >
-                        <Scissors className="size-3" />
-                        <span>Kiosk ERP</span>
-                        <span
-                          className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono ${
-                            historyTab === "kiosk"
-                              ? "bg-white/20 text-white"
-                              : "bg-gray-100 text-gray-700"
-                          }`}
-                        >
-                          {kioskServiceEntries.length}
-                        </span>
-                      </button>
-                    </div>
-
-                    <span className="text-[10px] font-mono text-[#7c533f] font-semibold">
-                      {historyTab === "wallet" ? "Ledger Records" : "Campus Services"}
-                    </span>
-                  </div>
-
-                  {/* Transaction Entries List */}
-                  <div className="flex-1 overflow-y-auto space-y-2 pt-2 pr-1 custom-scrollbar">
-                    {loadingLedger ? (
-                      <div className="h-full flex items-center justify-center text-xs text-[#7c533f] gap-2 py-8">
-                        <Loader2 className="size-4 animate-spin text-[#8b2500]" /> Loading transactions...
-                      </div>
-                    ) : (historyTab === "wallet" ? walletReportEntries : kioskServiceEntries).length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center text-xs text-[#7c533f] py-8 space-y-2 text-center px-4">
-                        <Wallet className="size-8 text-[#d8c5af]" />
-                        <p className="font-bold text-[#3b190f]">
-                          {historyTab === "wallet"
-                            ? "No Wallet Ledger Records Found"
-                            : "No Campus Services Recorded"}
-                        </p>
-                        <p className="text-[11px] text-[#8b6553]">
-                          {historyTab === "wallet"
-                            ? "Upload student's daily ledger from Admin Console → Wallet."
-                            : "No cashless services punched for this student yet."}
-                        </p>
-                      </div>
-                    ) : (
-                      (historyTab === "wallet" ? walletReportEntries : kioskServiceEntries).map((tx) => {
-                        const sName = (tx.service_name || "").toLowerCase();
-                        const isCredit =
-                          sName.includes("credit") ||
-                          sName.includes("deposit") ||
-                          sName.includes("pocket") ||
-                          sName.includes("sbi") ||
-                          tx.amount < 0;
-
-                        const displayTitle = (tx.service_name || "Transaction")
-                          .replace(/^\[Wallet\]\s*/i, "")
-                          .replace(/^\[Credit\]\s*/i, "")
-                          .replace(/^\[Debit\]\s*/i, "");
-
-                        return (
-                          <div
-                            key={tx.id}
-                            className="p-2.5 rounded-xl bg-[#faf5ee] hover:bg-[#f5ece0] border border-[#f0e4d4] transition-all flex items-center justify-between text-xs"
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div
-                                className={`p-1.5 rounded-lg shrink-0 ${
-                                  isCredit
-                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                                    : "bg-rose-100 text-rose-800 border border-rose-200"
-                                }`}
-                              >
-                                {isCredit ? (
-                                  <ArrowDownLeft className="size-3.5" />
-                                ) : (
-                                  <ArrowUpRight className="size-3.5" />
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <p className="font-bold text-[#2d140d] truncate" title={tx.service_name}>
-                                    {displayTitle}
-                                  </p>
-                                  {historyTab === "wallet" && (
-                                    <span
-                                      className={`text-[9px] px-1.5 py-0.2 rounded font-bold uppercase ${
-                                        isCredit
-                                          ? "bg-emerald-100 text-emerald-800"
-                                          : "bg-rose-100 text-rose-800"
-                                      }`}
-                                    >
-                                      {isCredit ? "Credit" : "Debit"}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-[10px] text-[#7c533f] font-mono mt-0.5">
-                                  {new Date(tx.created_at).toLocaleDateString("en-IN", {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                  })}{" "}
-                                  ·{" "}
-                                  {new Date(tx.created_at).toLocaleTimeString("en-IN", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </p>
-                              </div>
-                            </div>
-
-                            <span
-                              className={`font-mono font-black text-xs shrink-0 ${
-                                isCredit ? "text-emerald-700" : "text-[#8b2500]"
-                              }`}
-                            >
-                              {isCredit ? "+" : "-"}₹{Math.abs(Number(tx.amount)).toFixed(2)}
-                            </span>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </Card>
-              </div>
-
-              {/* Right Column: Campus Cashless Services (7 Cols) */}
-              <div className="lg:col-span-7 space-y-3">
+            {/* VIEW 1: CASHLESS SERVICES GRID */}
+            {studentTab === "services" && (
+              <div className="space-y-3 animate-in fade-in duration-200">
                 <div className="flex items-center justify-between px-1">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-[#8b2500] flex items-center gap-1.5">
-                    <Tag className="size-4" /> Cashless Services
+                    <Tag className="size-4" /> Available Services
                   </h4>
                   <span className="text-[11px] text-[#7c533f]">
-                    Tap service to pay & print receipt
+                    Tap service to deduct and print thermal receipt
                   </span>
                 </div>
 
-                {/* Modern Touch Services Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
                   {(config.data?.services ?? []).map((service) => {
                     const meta = getServiceMeta(service.name);
                     const IconComp = meta.icon;
@@ -1094,7 +1119,6 @@ function Kiosk() {
                         onClick={() => handleServiceClick(service)}
                         className="p-4 sm:p-5 rounded-3xl bg-white hover:bg-white/95 border-2 border-[#e6d8c6] hover:border-[#8b2500] shadow-[0_4px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_32px_rgba(139,37,0,0.12)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-300 text-left flex flex-col justify-between h-40 group relative overflow-hidden cursor-pointer"
                       >
-                        {/* Top Category & Printer Badges */}
                         <div className="space-y-2">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-1.5">
@@ -1110,7 +1134,7 @@ function Kiosk() {
 
                             {service.print_receipt && (
                               <span
-                                title="Receipt will be printed"
+                                title="Thermal receipt will be printed"
                                 className="p-1.5 rounded-lg bg-[#f7efe6] text-[#7c533f] group-hover:text-[#8b2500] transition-colors"
                               >
                                 <Printer className="size-3" />
@@ -1123,7 +1147,6 @@ function Kiosk() {
                           </h4>
                         </div>
 
-                        {/* Bottom Pricing & Action Button */}
                         <div className="flex items-center justify-between pt-2.5 border-t border-[#f2e7db] mt-1">
                           {service.price === 0 ? (
                             <span className="text-sm font-extrabold text-[#8b2500] tracking-tight font-sans">
@@ -1148,7 +1171,178 @@ function Kiosk() {
                   })}
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* VIEW 2: FULL STUDENT PASSBOOK & TRANSACTION FEED (EXACT IMAGE 3) */}
+            {studentTab === "history" && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                {/* Search & Filter Bar (Image 3) */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-[#e5d8c5] shadow-xs">
+                  <div className="relative flex-1">
+                    <Search className="size-4 absolute left-3.5 top-3 text-zinc-400 pointer-events-none" />
+                    <Input
+                      placeholder="Search by note, mode, user..."
+                      value={historySearchTerm}
+                      onChange={(e) => setHistorySearchTerm(e.target.value)}
+                      className="input-luxury pl-10 h-10 text-xs font-medium"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                    <button
+                      type="button"
+                      onClick={() => setHistoryTypeFilter("ALL")}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        historyTypeFilter === "ALL"
+                          ? "bg-[#4a1c14] text-white shadow-xs"
+                          : "bg-zinc-100 hover:bg-zinc-200 text-zinc-700"
+                      }`}
+                    >
+                      All {walletMetrics.totalTransactions}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setHistoryTypeFilter("CREDIT")}
+                      className={`flex items-center gap-1 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        historyTypeFilter === "CREDIT"
+                          ? "bg-emerald-700 text-white shadow-xs"
+                          : "bg-zinc-100 hover:bg-zinc-200 text-zinc-700"
+                      }`}
+                    >
+                      <ArrowDown className="size-3.5 text-emerald-600" />
+                      Credit {walletMetrics.creditCount}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setHistoryTypeFilter("DEBIT")}
+                      className={`flex items-center gap-1 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        historyTypeFilter === "DEBIT"
+                          ? "bg-rose-700 text-white shadow-xs"
+                          : "bg-zinc-100 hover:bg-zinc-200 text-zinc-700"
+                      }`}
+                    >
+                      <ArrowUp className="size-3.5 text-rose-600" />
+                      Debit {walletMetrics.debitCount}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Grouped Dates Transaction Feed (Exact Image 3) */}
+                <div className="space-y-4">
+                  {loadingLedger ? (
+                    <div className="py-16 text-center text-[#7c533f] flex items-center justify-center gap-2">
+                      <Loader2 className="size-5 animate-spin text-[#8b2500]" />
+                      <span>Loading complete passbook history...</span>
+                    </div>
+                  ) : groupedStudentHistory.length === 0 ? (
+                    <Card className="p-8 text-center bg-white border border-[#e5d8c5] rounded-3xl space-y-2">
+                      <Wallet className="size-10 text-[#d8c5af] mx-auto" />
+                      <p className="font-bold text-[#4a1c14] text-sm">No transaction records found</p>
+                      <p className="text-xs text-[#7c533f]">
+                        {historySearchTerm ? "No items matched your search query." : "No transactions recorded yet."}
+                      </p>
+                    </Card>
+                  ) : (
+                    groupedStudentHistory.map((group) => (
+                      <div key={group.dateStr} className="space-y-2">
+                        {/* Date Header with Relative Time Chip (Image 3) */}
+                        <div className="flex items-center justify-between px-1 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-zinc-800 text-sm font-sans">{group.dateStr}</span>
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-200/70 text-zinc-700 uppercase">
+                              {group.relBadge}
+                            </span>
+                          </div>
+                          <span className="text-zinc-500 font-medium text-xs font-mono">
+                            {group.items.length} tx
+                          </span>
+                        </div>
+
+                        {/* Transaction Cards List (Image 3) */}
+                        <div className="space-y-2">
+                          {group.items.map((tx) => (
+                            <div
+                              key={tx.id}
+                              className="p-3.5 sm:p-4 rounded-2xl bg-white border border-zinc-200/80 shadow-xs hover:shadow-md transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                            >
+                              {/* Left Info with Arrow Box */}
+                              <div className="flex items-center gap-3.5 min-w-0">
+                                <div
+                                  className={`size-11 rounded-xl flex items-center justify-center shrink-0 shadow-xs ${
+                                    tx.isCredit
+                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                      : "bg-rose-50 text-rose-700 border border-rose-200"
+                                  }`}
+                                >
+                                  {tx.isCredit ? (
+                                    <ArrowDown className="size-5" />
+                                  ) : (
+                                    <ArrowUp className="size-5" />
+                                  )}
+                                </div>
+
+                                <div className="min-w-0 space-y-1">
+                                  <h4 className="font-bold text-zinc-900 text-sm truncate font-sans">
+                                    {tx.cleanTitle}
+                                  </h4>
+
+                                  {/* Sub-chips: Time, Mode, User (Image 3) */}
+                                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-zinc-600">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 font-mono">
+                                      <Clock className="size-3 text-zinc-500" />
+                                      {new Date(tx.created_at).toLocaleTimeString("en-IN", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 font-bold uppercase">
+                                      <CreditCard className="size-3 text-zinc-500" />
+                                      CASH
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 font-semibold truncate max-w-[180px]">
+                                      <User className="size-3 text-zinc-500" />
+                                      {student.name}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right Info: Amount & Running Balance (Image 3) */}
+                              <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100">
+                                <div className="text-left sm:text-right">
+                                  <div
+                                    className={`text-lg sm:text-xl font-black font-sans tracking-tight ${
+                                      tx.isCredit ? "text-emerald-700" : "text-rose-600"
+                                    }`}
+                                  >
+                                    {tx.isCredit ? "+ " : "- "}₹ {tx.amountVal.toFixed(2)}
+                                  </div>
+                                  <div className="text-[11px] font-mono text-zinc-500 font-medium">
+                                    Bal: ₹ {tx.runningBalance.toFixed(2)}
+                                  </div>
+                                </div>
+
+                                {/* Reprint Receipt Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => printSingleHistoryReceipt(tx)}
+                                  title="Print Receipt"
+                                  className="p-2 rounded-xl border border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 hover:text-[#8b2500] transition-colors cursor-pointer shadow-xs active:scale-95"
+                                >
+                                  <Printer className="size-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>

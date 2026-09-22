@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { Button } from "@/components/ui/button";
+import { GurukulLoader } from "@/components/GurukulLoader";
 import {
   LayoutDashboard,
   Users,
@@ -38,7 +39,7 @@ const nav = [
 ] as const;
 
 function AdminLayout() {
-  const { email, roleTitle, permissions, isSuperAdmin } = useCurrentUser();
+  const { email, roleTitle, permissions, isSuperAdmin, loading } = useCurrentUser();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -50,6 +51,16 @@ function AdminLayout() {
     }, 10000);
     return () => clearInterval(timer);
   }, []);
+
+  if (loading) {
+    return (
+      <GurukulLoader
+        size="fullscreen"
+        text="Verifying Admin Security Clearance..."
+        subtext="Establishing encrypted connection with Gurukul ERP..."
+      />
+    );
+  }
 
   const visibleNav = nav.filter((item) => {
     if (item.to === "/admin") return permissions.dashboard !== false;
@@ -72,11 +83,11 @@ function AdminLayout() {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#faf6ef] text-[#2c1810] font-sans antialiased">
-      {/* DESKTOP SIDEBAR */}
-      <aside className="hidden lg:flex w-72 shrink-0 flex-col bg-gradient-to-b from-[#2c1810] via-[#3a1d14] to-[#1e100b] p-6 text-white shadow-2xl relative border-r border-white/10 select-none">
+    <div className="flex h-screen overflow-hidden bg-[#faf6ef] text-[#2c1810] font-sans antialiased">
+      {/* DESKTOP SIDEBAR - FIXED & SCROLLABLE INDEPENDENTLY */}
+      <aside className="hidden lg:flex w-72 shrink-0 flex-col bg-gradient-to-b from-[#2c1810] via-[#3a1d14] to-[#1e100b] p-6 text-white shadow-2xl relative border-r border-white/10 select-none h-full overflow-y-auto custom-scrollbar">
         {/* Brand Header */}
-        <div className="space-y-1 pb-6 border-b border-white/10">
+        <div className="space-y-1 pb-6 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-3">
             <img
               src="/logo.png"
@@ -96,7 +107,7 @@ function AdminLayout() {
         </div>
 
         {/* Navigation Items */}
-        <nav className="mt-6 flex flex-1 flex-col gap-1.5 overflow-y-auto">
+        <nav className="mt-6 flex flex-1 flex-col gap-1.5 overflow-y-auto custom-scrollbar pr-1">
           {visibleNav.map((item) => (
             <Link
               key={item.to}
@@ -118,7 +129,7 @@ function AdminLayout() {
         </nav>
 
         {/* User Info & Actions */}
-        <div className="mt-6 space-y-3 border-t border-white/10 pt-4 text-xs">
+        <div className="mt-6 space-y-3 border-t border-white/10 pt-4 text-xs shrink-0">
           <div className="p-3 rounded-2xl bg-white/5 border border-white/10 space-y-1">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-medium text-white/50">Logged in user:</span>
@@ -173,7 +184,7 @@ function AdminLayout() {
       {/* MOBILE DRAWER */}
       {mobileMenuOpen && (
         <div className="lg:hidden fixed inset-0 z-30 bg-[#2c1810]/95 backdrop-blur-xl p-6 pt-20 flex flex-col justify-between text-white animate-in fade-in duration-200">
-          <nav className="flex flex-col gap-2">
+          <nav className="flex flex-col gap-2 overflow-y-auto">
             {visibleNav.map((item) => (
               <Link
                 key={item.to}
@@ -205,10 +216,12 @@ function AdminLayout() {
         </div>
       )}
 
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 overflow-x-auto p-6 md:p-10 pt-20 lg:pt-10 max-w-7xl mx-auto w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Outlet />
-      </main>
+      {/* MAIN CONTENT AREA - INDEPENDENTLY SCROLLABLE & USER-FRIENDLY */}
+      <div className="flex-1 flex flex-col h-full overflow-y-auto overflow-x-hidden scroll-smooth custom-scrollbar">
+        <main className="flex-1 p-6 md:p-10 pt-20 lg:pt-8 max-w-7xl mx-auto w-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
