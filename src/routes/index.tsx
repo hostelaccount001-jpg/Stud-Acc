@@ -40,6 +40,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { ReceiptSlip, type ReceiptData } from "@/components/ReceiptSlip";
+import { GurukulLoader } from "@/components/GurukulLoader";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -134,6 +135,7 @@ function Kiosk() {
   const [student, setStudent] = useState<VerifiedStudent | null>(null);
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [punchingService, setPunchingService] = useState<string | null>(null);
   const [error, setError] = useState<string>("");
   const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
@@ -339,13 +341,14 @@ function Kiosk() {
       setCustomService(service);
       setCustomAmountStr("0");
     } else {
-      void executePunch(service.id, service.price);
+      void executePunch(service.id, service.price, service.name);
     }
   }
 
-  async function executePunch(serviceId: string, amount?: number) {
+  async function executePunch(serviceId: string, amount?: number, serviceName?: string) {
     if (!student) return;
     setBusy(true);
+    setPunchingService(serviceName || "Campus Service");
     setError("");
     const studentName = student.name;
 
@@ -396,6 +399,7 @@ function Kiosk() {
       setError("Transaction error. Please try again.");
     } finally {
       setBusy(false);
+      setPunchingService(null);
     }
   }
 
@@ -518,7 +522,7 @@ function Kiosk() {
         {step === "scan" && (
           <Card className="w-full max-w-xl p-8 md:p-12 text-center bg-white/95 backdrop-blur-md border-2 border-[#e5d8c5] shadow-[0_20px_60px_-15px_rgba(74,28,20,0.15)] rounded-3xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
             {/* Device Connectivity & Auto-Sense Badges */}
-            <div className="flex flex-wrap items-center justify-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 min-h-[32px]">
               <span
                 className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
                   isConnected
@@ -615,33 +619,35 @@ function Kiosk() {
                 </div>
               </div>
 
-              {/* Real-time Telemetry & Frequency Visualizer Bars */}
-              <div className="mt-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f4ebe0]/80 border border-[#b87333]/30 shadow-xs">
+              {/* Real-time Telemetry & Frequency Visualizer Bars - Stable fixed height */}
+              <div className="mt-3 h-7 flex items-center gap-1.5 px-3 rounded-full bg-[#f4ebe0]/80 border border-[#b87333]/30 shadow-xs select-none">
                 <span className="text-[10px] font-mono font-bold text-[#8b2500] uppercase tracking-wider mr-1">
                   FREQ
                 </span>
-                {[40, 70, 100, 60, 85, 30, 95, 55, 80, 45].map((val, idx) => (
-                  <span
-                    key={idx}
-                    className="w-1 rounded-full bg-gradient-to-t from-[#8b2500] to-amber-500"
-                    style={{
-                      animation: `live-eq-bar ${0.6 + (idx % 4) * 0.25}s ease-in-out infinite alternate`,
-                      animationDelay: `${idx * 0.08}s`,
-                      height: `${Math.max(4, Math.min(16, val * 0.16))}px`,
-                    }}
-                  />
-                ))}
+                <div className="flex items-center gap-1 h-3.5">
+                  {[40, 70, 100, 60, 85, 30, 95, 55, 80, 45].map((val, idx) => (
+                    <span
+                      key={idx}
+                      className="w-1 h-3.5 rounded-full bg-gradient-to-t from-[#8b2500] to-amber-500 origin-bottom"
+                      style={{
+                        animation: `live-eq-bar ${0.6 + (idx % 4) * 0.25}s ease-in-out infinite alternate`,
+                        animationDelay: `${idx * 0.08}s`,
+                      }}
+                    />
+                  ))}
+                </div>
                 <span className="text-[10px] font-mono font-bold text-emerald-700 ml-1">
                   MANTRA ACTIVE
                 </span>
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <h2 className="text-2xl md:text-3xl font-serif font-bold text-[#4a1c14]">
+            {/* Stable Non-Jittering Heading & Instruction Text Block */}
+            <div className="space-y-1.5 min-h-[76px] flex flex-col justify-center select-none">
+              <h2 className="text-2xl md:text-3xl font-serif font-bold text-[#4a1c14] leading-tight">
                 {scanning ? "Place Finger on Scanner Glass" : "Place Finger to Authenticate"}
               </h2>
-              <p className="text-sm md:text-base text-[#7c533f] font-medium">
+              <p className="text-sm md:text-base text-[#7c533f] font-medium leading-normal">
                 {scanning
                   ? "🟢 Optical sensor active. Place registered finger directly on Mantra glass."
                   : "Mantra optical biometric sensor is armed and ready."}
@@ -809,6 +815,19 @@ function Kiosk() {
         )}
       </main>
 
+      {/* Gurukul Logo Loading Circle Overlay during Service Selection & Payment */}
+      {busy && step === "service" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md animate-in fade-in duration-200 p-4">
+          <div className="bg-[#fefcf9] p-8 md:p-10 rounded-3xl border-2 border-amber-500/40 shadow-[0_25px_60px_-15px_rgba(74,28,20,0.3)] max-w-sm w-full mx-auto text-center space-y-2">
+            <GurukulLoader
+              size="md"
+              text={punchingService ? `Processing ${punchingService}...` : "Processing Service..."}
+              subtext="Generating thermal receipt & recording cashless entry..."
+            />
+          </div>
+        </div>
+      )}
+
       {/* Custom Amount Numpad Dialog */}
       <Dialog open={Boolean(customService)} onOpenChange={(open) => !open && setCustomService(null)}>
         <DialogContent className="max-w-sm p-6 bg-[#fdfbf7] border-2 border-[#e5d8c5] rounded-3xl shadow-2xl">
@@ -887,7 +906,7 @@ function Kiosk() {
             <Button
               type="button"
               disabled={busy || Number(customAmountStr) <= 0}
-              onClick={() => customService && executePunch(customService.id, Number(customAmountStr))}
+              onClick={() => customService && executePunch(customService.id, Number(customAmountStr), customService.name)}
               className="w-full sm:flex-1 h-12 text-base font-bold bg-[#4a1c14] hover:bg-[#8b2500] text-white rounded-xl shadow-lg cursor-pointer"
             >
               {busy ? (
