@@ -1,0 +1,15 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Edge]
+"SilentPrintingEnabled"=dword:00000001
+"InsecurePrivateNetworkRequestsAllowed"=dword:00000001
+
+[HKEY_CURRENT_USER\SOFTWARE\Policies\Microsoft\Edge]
+"SilentPrintingEnabled"=dword:00000001
+"InsecurePrivateNetworkRequestsAllowed"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Edge\InsecureContentAllowedForUrls]
+"1"="https://sgrsstud.vercel.app"
+
+[HKEY_CURRENT_USER\SOFTWARE\Policies\Microsoft\Edge\InsecureContentAllowedForUrls]
+"1"="https://sgrsstud.vercel.app"
