@@ -202,6 +202,15 @@ try {
                 if ($probeB64 -and $gallery) {
                     $probeBytes = [System.Convert]::FromBase64String($probeB64)
 
+                    if (-not $global:TemplateCache) {
+                        $global:TemplateCache = @{}
+                    }
+
+                    # Ensure scanner is connected/initialized for MatchISO
+                    if (-not $mfs.IsConnected()) {
+                        $null = $mfs.Init()
+                    }
+
                     foreach ($st in $gallery) {
                         $templates = $st.templates
                         if (-not $templates) { continue }
@@ -215,14 +224,21 @@ try {
                             }
 
                             try {
-                                $tmplBytes = [System.Convert]::FromBase64String($tmpl)
+                                $tmplBytes = $null
+                                if ($global:TemplateCache.ContainsKey($tmpl)) {
+                                    $tmplBytes = $global:TemplateCache[$tmpl]
+                                } else {
+                                    $tmplBytes = [System.Convert]::FromBase64String($tmpl)
+                                    $global:TemplateCache[$tmpl] = $tmplBytes
+                                }
+
                                 $score = 0
                                 $mRet = $mfs.MatchISO($probeBytes, $tmplBytes, [ref]$score)
                                 if ($score -gt $maxScore) {
                                     $maxScore = $score
                                 }
-                                # Mantra MFS100 threshold is typically >= 9600 to 14000
-                                if ($score -ge 9600) {
+                                # Mantra MFS100 standard ISO threshold is >= 1400 (FAR 0.0001%)
+                                if ($score -ge 1400) {
                                     $matchedStudent = $st
                                     break
                                 }
@@ -278,8 +294,11 @@ try {
                 $probeBytes = [System.Convert]::FromBase64String($probeB64)
                 $galleryBytes = [System.Convert]::FromBase64String($galleryB64)
                 $matchScore = 0
+                if (-not $mfs.IsConnected()) {
+                    $null = $mfs.Init()
+                }
                 $mRes = $mfs.MatchISO($probeBytes, $galleryBytes, [ref]$matchScore)
-                $isMatched = ($matchScore -ge 9600)
+                $isMatched = ($matchScore -ge 1400)
 
                 Write-Host "1:1 Match Score: $matchScore (Matched: $isMatched)"
 

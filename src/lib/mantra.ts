@@ -452,7 +452,7 @@ export async function identify<T extends { templates: string[] }>(
   for (const url of candidateIdentifyUrls) {
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 1500);
+      const timer = setTimeout(() => controller.abort(), 10000);
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -466,11 +466,12 @@ export async function identify<T extends { templates: string[] }>(
         if (data["matched"] === true && data["student"]) {
           const matchedId = (data["student"] as { id?: string })?.id;
           const match = gallery.find((g) => (g as { id?: string }).id === matchedId);
+          console.log(`[MFS100 1:N] Matched via ${url}:`, match ?? data["student"]);
           return match ?? (data["student"] as T);
         }
       }
-    } catch {
-      // Continue to next or fallback
+    } catch (err) {
+      console.warn(`[MFS100 1:N] Endpoint ${url} skipped/timeout:`, err);
     }
   }
 

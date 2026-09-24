@@ -184,7 +184,64 @@ BEGIN
     VALUES (new_user_id, lower(trim(p_email)), p_full_name, NOW())
     ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name;
 
+    -- CRITICAL: Insert into auth.identities so Supabase GoTrue signInWithPassword can authenticate the user
+    INSERT INTO auth.identities (
+        id,
+        user_id,
+        identity_data,
+        provider,
+        provider_id,
+        last_sign_in_at,
+        created_at,
+        updated_at
+    ) VALUES (
+        new_user_id,
+        new_user_id,
+        jsonb_build_object('sub', new_user_id::text, 'email', lower(trim(p_email))),
+        'email',
+        lower(trim(p_email)),
+        NOW(),
+        NOW(),
+        NOW()
+    ) ON CONFLICT (provider, provider_id) DO NOTHING;
+
     RETURN new_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 11b. RPC Function: Admin Repair Auth Identities (Fixes existing users who can't log in)
+CREATE OR REPLACE FUNCTION public.admin_repair_auth_identities()
+RETURNS INTEGER AS $$
+DECLARE
+    repaired_count INTEGER;
+BEGIN
+    WITH inserted AS (
+        INSERT INTO auth.identities (
+            id,
+            user_id,
+            identity_data,
+            provider,
+            provider_id,
+            last_sign_in_at,
+            created_at,
+            updated_at
+        )
+        SELECT
+            id,
+            id,
+            jsonb_build_object('sub', id::text, 'email', lower(email)),
+            'email',
+            lower(email),
+            NOW(),
+            NOW(),
+            NOW()
+        FROM auth.users
+        WHERE id NOT IN (SELECT user_id FROM auth.identities)
+        ON CONFLICT (provider, provider_id) DO NOTHING
+        RETURNING 1
+    )
+    SELECT COUNT(*) INTO repaired_count FROM inserted;
+    RETURN repaired_count;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -218,6 +275,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION public.admin_create_staff_user(TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.admin_reset_user_password(UUID, TEXT) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.admin_delete_staff_user(UUID) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.admin_repair_auth_identities() TO anon, authenticated, service_role;
+
+-- 15. Execute repair immediately for all existing users
+SELECT public.admin_repair_auth_identities();
 
 -- 15. Enable Row Level Security (RLS) & Full Open Access Policies
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
