@@ -2,7 +2,7 @@ import { createFileRoute, Link, Outlet, useNavigate } from "@tanstack/react-rout
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useCurrentUser } from "@/hooks/use-current-user";
+import { useCurrentUser, invalidateUserSessionCache } from "@/hooks/use-current-user";
 import { Button } from "@/components/ui/button";
 import { GurukulLoader } from "@/components/GurukulLoader";
 import {
@@ -72,6 +72,7 @@ function AdminLayout() {
   });
 
   async function signOut() {
+    invalidateUserSessionCache();
     await queryClient.cancelQueries();
     queryClient.clear();
     await supabase.auth.signOut();

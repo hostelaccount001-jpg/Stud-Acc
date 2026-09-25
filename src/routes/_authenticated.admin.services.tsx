@@ -23,8 +23,8 @@ export const Route = createFileRoute("/_authenticated/admin/services")({
 
 function ServicesPage() {
   const qc = useQueryClient();
-  const { isAdmin, isSuperAdmin, permissions } = useCurrentUser();
-  const canDeleteServices = isSuperAdmin || Boolean(permissions?.delete_services);
+  const { isAdmin, isSuperAdmin, permissions, loading } = useCurrentUser();
+  const canDeleteServices = !loading && (isSuperAdmin || Boolean(permissions?.delete_services));
   const [form, setForm] = useState({
     name: "",
     isCustomAmount: false,
@@ -40,6 +40,7 @@ function ServicesPage() {
       if (error) throw error;
       return data;
     },
+    staleTime: 1000 * 60 * 3,
   });
 
   const add = useMutation({

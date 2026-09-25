@@ -288,13 +288,12 @@ button[role="switch"][data-state="unchecked"] > span {
   outline: none;
 }
 
-/* Animated Table Row */
+/* Smooth Accelerated Table Row */
 .table-row-luxury {
-  transition: all 0.18s ease;
+  transition: background-color 0.12s ease;
 }
 .table-row-luxury:hover {
   background-color: #faf4eb;
-  transform: scale(1.002);
 }
 
 /* ========================================================================= */

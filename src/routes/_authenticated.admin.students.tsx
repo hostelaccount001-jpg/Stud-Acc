@@ -117,9 +117,9 @@ const emptyForm = { suid: "", name: "", class_name: "", room_no: "" };
 
 function StudentsPage() {
   const qc = useQueryClient();
-  const { isSuperAdmin, permissions } = useCurrentUser();
-  const canDelete = isSuperAdmin || Boolean(permissions?.delete_students);
-  const canExport = isSuperAdmin || Boolean(permissions?.export_data !== false);
+  const { isSuperAdmin, permissions, loading } = useCurrentUser();
+  const canDelete = !loading && (isSuperAdmin || Boolean(permissions?.delete_students));
+  const canExport = !loading && (isSuperAdmin || Boolean(permissions?.export_data !== false));
 
   const deleteStudentFn = useServerFn(deleteStudentServer);
   const deleteAllStudentsFn = useServerFn(deleteAllStudentsServer);
@@ -181,14 +181,13 @@ function StudentsPage() {
   }
 
   const students = useQuery({
-    queryKey: ["students", search],
+    queryKey: ["students"],
     queryFn: async () => {
-      let q = supabase.from("students").select("*").order("suid").limit(2000);
-      if (search.trim()) q = q.or(`suid.ilike.%${search.trim()}%,name.ilike.%${search.trim()}%,class_name.ilike.%${search.trim()}%,room_no.ilike.%${search.trim()}%`);
-      const { data, error } = await q;
+      const { data, error } = await supabase.from("students").select("*").order("suid").limit(2000);
       if (error) throw error;
       return data;
     },
+    staleTime: 1000 * 60 * 3,
   });
 
   const addStudent = useMutation({
@@ -674,7 +673,18 @@ function StudentsPage() {
   const blockedCount = Math.max(0, totalCount - activeCount);
 
   const filteredAndSortedStudents = useMemo(() => {
+    const q = search.trim().toLowerCase();
     const filtered = studentList.filter((s) => {
+      // Instant Client-side Search (0ms)
+      if (q) {
+        const matches =
+          (s.name || "").toLowerCase().includes(q) ||
+          (s.suid || "").toLowerCase().includes(q) ||
+          (s.class_name || "").toLowerCase().includes(q) ||
+          (s.room_no || "").toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+
       // Tab filter
       if (activeTab === "enrolled") {
         const biometrics = toBiometricRecords(s.fingerprints);
@@ -718,7 +728,7 @@ function StudentsPage() {
           return 0;
       }
     });
-  }, [studentList, activeTab, filterClass, sortKey, sortAsc]);
+  }, [studentList, search, activeTab, filterClass, sortKey, sortAsc]);
 
   function resetDirectoryFilters() {
     setSearch("");
@@ -1635,7 +1645,7 @@ function StudentsPage() {
       </Dialog>
 
       {/* SINGLE STUDENT DELETE CONFIRMATION */}
-      <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
+      <AlertDialog open={canDelete && deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent className="bg-white border border-[#e5d8c5] shadow-2xl rounded-3xl p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-serif font-bold text-rose-700 flex items-center gap-2">
@@ -1658,7 +1668,7 @@ function StudentsPage() {
       </AlertDialog>
 
       {/* DELETE ALL STUDENTS CONFIRMATION */}
-      <AlertDialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+      <AlertDialog open={canDelete && showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
         <AlertDialogContent className="modal-luxury max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="font-serif text-xl text-rose-700 flex items-center gap-2">

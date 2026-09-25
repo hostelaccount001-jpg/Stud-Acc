@@ -7,68 +7,173 @@ import {
   getCurrentUserPermissionsServer,
 } from "@/lib/staff.functions";
 
-export function useCurrentUser() {
-  const [email, setEmail] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [permissions, setPermissions] = useState<UserPermissions>(defaultSuperAdminPermissions);
-  const [loading, setLoading] = useState(true);
+export type CurrentUserState = {
+  email: string | null;
+  userId: string | null;
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
+  roleTitle: string;
+  permissions: UserPermissions;
+  loading: boolean;
+};
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!active) return;
-      const user = data.user;
-      const userEmail = user?.email ?? null;
-      setEmail(userEmail);
-      setUserId(user?.id ?? null);
+// In-memory singleton state so all components in the app share the exact same user state instantly
+let cachedState: CurrentUserState | null = null;
+const subscribers = new Set<(state: CurrentUserState) => void>();
+let fetchPromise: Promise<void> | null = null;
 
-      if (user) {
-        const isMaster = userEmail === "anshsangani2007@gmail.com";
-        if (isMaster) {
-          if (active) {
-            setIsAdmin(true);
-            setIsSuperAdmin(true);
-            setPermissions(defaultSuperAdminPermissions);
-            setLoading(false);
-          }
-          return;
-        }
-
-        try {
-          const res = await getCurrentUserPermissionsServer({
-            data: { userId: user.id, email: userEmail ?? undefined },
-          });
-          if (active) {
-            setIsAdmin(res.role === "admin" || res.role === "super_admin");
-            setIsSuperAdmin(res.isSuperAdmin);
-            setPermissions(res.permissions);
-          }
-        } catch {
-          // Fallback to direct role check
-          const { data: roles } = await supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", user.id);
-          const hasAdmin = (roles ?? []).some((r) => r.role === "admin");
-          if (active) {
-            setIsAdmin(hasAdmin);
-            setIsSuperAdmin(hasAdmin);
-            setPermissions(hasAdmin ? defaultSuperAdminPermissions : defaultStaffPermissions);
-          }
+function getStoredCache(): CurrentUserState | null {
+  if (cachedState) return cachedState;
+  if (typeof window !== "undefined") {
+    try {
+      const raw = sessionStorage.getItem("gurukul_auth_user_cache_v2");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.permissions === "object") {
+          cachedState = {
+            ...parsed,
+            loading: false,
+          };
+          return cachedState;
         }
       }
-      if (active) setLoading(false);
-    })();
+    } catch {}
+  }
+  return null;
+}
+
+function getSafeInitialState(): CurrentUserState {
+  const fromCache = getStoredCache();
+  if (fromCache) return fromCache;
+
+  return {
+    email: null,
+    userId: null,
+    isAdmin: false,
+    isSuperAdmin: false,
+    roleTitle: "Staff",
+    // CRITICAL: Safe default permissions (delete_students: false, delete_services: false, users: false)
+    permissions: { ...defaultStaffPermissions },
+    loading: true,
+  };
+}
+
+async function refreshUserPermissions(force = false) {
+  if (fetchPromise && !force) return fetchPromise;
+
+  fetchPromise = (async () => {
+    try {
+      const { data } = await supabase.auth.getUser();
+      const user = data.user;
+      const userEmail = user?.email ?? null;
+
+      if (!user) {
+        cachedState = {
+          email: null,
+          userId: null,
+          isAdmin: false,
+          isSuperAdmin: false,
+          roleTitle: "Guest",
+          permissions: { ...defaultStaffPermissions },
+          loading: false,
+        };
+        try {
+          sessionStorage.removeItem("gurukul_auth_user_cache_v2");
+        } catch {}
+        subscribers.forEach((fn) => fn(cachedState!));
+        return;
+      }
+
+      const isMaster = userEmail === "anshsangani2007@gmail.com";
+      if (isMaster) {
+        cachedState = {
+          email: userEmail,
+          userId: user.id,
+          isAdmin: true,
+          isSuperAdmin: true,
+          roleTitle: "Super Admin",
+          permissions: { ...defaultSuperAdminPermissions },
+          loading: false,
+        };
+        try {
+          sessionStorage.setItem("gurukul_auth_user_cache_v2", JSON.stringify(cachedState));
+        } catch {}
+        subscribers.forEach((fn) => fn(cachedState!));
+        return;
+      }
+
+      try {
+        const res = await getCurrentUserPermissionsServer({
+          data: { userId: user.id, email: userEmail ?? undefined },
+        });
+
+        const nextRoleTitle = res.isSuperAdmin ? "Super Admin" : res.role === "admin" ? "Administrator" : "Staff";
+        cachedState = {
+          email: userEmail,
+          userId: user.id,
+          isAdmin: res.role === "admin" || res.role === "super_admin",
+          isSuperAdmin: res.isSuperAdmin,
+          roleTitle: nextRoleTitle,
+          permissions: res.permissions,
+          loading: false,
+        };
+      } catch {
+        // Fallback to direct user_roles check
+        const { data: roles } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id);
+        const hasAdmin = (roles ?? []).some((r) => r.role === "admin");
+
+        cachedState = {
+          email: userEmail,
+          userId: user.id,
+          isAdmin: hasAdmin,
+          isSuperAdmin: hasAdmin,
+          roleTitle: hasAdmin ? "Administrator" : "Staff",
+          permissions: hasAdmin ? { ...defaultSuperAdminPermissions } : { ...defaultStaffPermissions },
+          loading: false,
+        };
+      }
+
+      try {
+        sessionStorage.setItem("gurukul_auth_user_cache_v2", JSON.stringify(cachedState));
+      } catch {}
+      subscribers.forEach((fn) => fn(cachedState!));
+    } finally {
+      fetchPromise = null;
+    }
+  })();
+
+  return fetchPromise;
+}
+
+export function useCurrentUser() {
+  const [state, setState] = useState<CurrentUserState>(getSafeInitialState);
+
+  useEffect(() => {
+    subscribers.add(setState);
+
+    // If no cache or state is still loading, fetch immediately
+    if (!cachedState || state.loading) {
+      void refreshUserPermissions();
+    }
 
     return () => {
-      active = false;
+      subscribers.delete(setState);
     };
   }, []);
 
-  const roleTitle = isSuperAdmin ? "Super Admin" : isAdmin ? "Administrator" : "Staff";
-
-  return { email, userId, isAdmin, isSuperAdmin, roleTitle, permissions, loading };
+  return state;
 }
+
+// Function to immediately invalidate auth cache when user logs in or out
+export function invalidateUserSessionCache() {
+  cachedState = null;
+  fetchPromise = null;
+  try {
+    sessionStorage.removeItem("gurukul_auth_user_cache_v2");
+  } catch {}
+  void refreshUserPermissions(true);
+}
+
