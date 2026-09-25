@@ -24,13 +24,23 @@ export function ReceiptSlip({
 }) {
   const at = new Date(receipt.at);
   const formattedNo = String(receipt.receiptNo);
-  const dateStr = `${at.getDate()}/${at.getMonth() + 1}/${at.getFullYear()}`;
+  const dateStr = at.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const timeStr = at.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
 
   return (
     <div
       id="print-receipt"
       className={cn(
-        "font-mono text-black text-xs leading-tight w-full max-w-[72mm] mx-auto p-4 bg-white",
+        "font-mono text-black text-xs leading-tight w-full max-w-[70mm] mx-auto p-3 bg-white box-border",
         preview
           ? "rounded-2xl border-2 border-dashed border-[#d8c5af] shadow-sm space-y-1"
           : "print:block"
@@ -59,6 +69,11 @@ export function ReceiptSlip({
         <div className="flex justify-between items-center text-xs">
           <span className="text-zinc-600">Date:</span>
           <span className="font-semibold text-zinc-800">{dateStr}</span>
+        </div>
+
+        <div className="flex justify-between items-center text-xs">
+          <span className="text-zinc-600">Time:</span>
+          <span className="font-semibold text-zinc-800">{timeStr}</span>
         </div>
 
         <div className="flex justify-between items-center text-xs">

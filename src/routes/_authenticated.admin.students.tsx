@@ -104,6 +104,8 @@ export const Route = createFileRoute("/_authenticated/admin/students")({
   component: StudentsPage,
 });
 
+import { useCurrentUser } from "@/hooks/use-current-user";
+
 const studentSchema = z.object({
   suid: z.string().trim().min(1).max(40),
   name: z.string().trim().min(1).max(120),
@@ -115,6 +117,10 @@ const emptyForm = { suid: "", name: "", class_name: "", room_no: "" };
 
 function StudentsPage() {
   const qc = useQueryClient();
+  const { isSuperAdmin, permissions } = useCurrentUser();
+  const canDelete = isSuperAdmin || Boolean(permissions?.delete_students);
+  const canExport = isSuperAdmin || Boolean(permissions?.export_data !== false);
+
   const deleteStudentFn = useServerFn(deleteStudentServer);
   const deleteAllStudentsFn = useServerFn(deleteAllStudentsServer);
   const addStudentFn = useServerFn(addStudentServer);
@@ -278,6 +284,9 @@ function StudentsPage() {
 
   const deleteStudent = useMutation({
     mutationFn: async (id: string) => {
+      if (!canDelete) {
+        throw new Error("You do not have permission to delete students. Please contact Super Admin.");
+      }
       try {
         await deleteStudentFn({ data: { id } });
       } catch (err) {
@@ -296,6 +305,9 @@ function StudentsPage() {
 
   const deleteAllStudents = useMutation({
     mutationFn: async () => {
+      if (!canDelete) {
+        throw new Error("You do not have permission to delete students. Please contact Super Admin.");
+      }
       try {
         const res = await deleteAllStudentsFn();
         return res;
@@ -343,6 +355,10 @@ function StudentsPage() {
   }
 
   async function exportStudents() {
+    if (!canExport) {
+      toast.error("You do not have permission to export student data.");
+      return;
+    }
     try {
       const { data, error } = await supabase
         .from("students")
@@ -780,14 +796,16 @@ function StudentsPage() {
             <Download className="size-4 text-[#8b2500]" /> Sample Excel
           </button>
 
-          <button
-            type="button"
-            onClick={exportStudents}
-            disabled={studentList.length === 0}
-            className="btn-luxury-secondary px-4 py-2.5 text-xs gap-2 text-emerald-800 border-emerald-300 hover:bg-emerald-50 shadow-xs cursor-pointer transition-transform hover:scale-102"
-          >
-            <Download className="size-4 text-emerald-600" /> Export Excel ({studentList.length})
-          </button>
+          {canExport && (
+            <button
+              type="button"
+              onClick={exportStudents}
+              disabled={studentList.length === 0}
+              className="btn-luxury-secondary px-4 py-2.5 text-xs gap-2 text-emerald-800 border-emerald-300 hover:bg-emerald-50 shadow-xs cursor-pointer transition-transform hover:scale-102"
+            >
+              <Download className="size-4 text-emerald-600" /> Export Excel ({studentList.length})
+            </button>
+          )}
 
           <button
             type="button"
@@ -808,14 +826,16 @@ function StudentsPage() {
             )}
           </button>
 
-          <button
-            type="button"
-            onClick={() => setShowDeleteAllDialog(true)}
-            disabled={deleteAllStudents.isPending || studentList.length === 0}
-            className="btn-luxury-danger px-4 py-2.5 text-xs gap-2 disabled:opacity-50 cursor-pointer transition-transform hover:scale-102"
-          >
-            <Trash2 className="size-4" /> Delete All ({studentList.length})
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => setShowDeleteAllDialog(true)}
+              disabled={deleteAllStudents.isPending || studentList.length === 0}
+              className="btn-luxury-danger px-4 py-2.5 text-xs gap-2 disabled:opacity-50 cursor-pointer transition-transform hover:scale-102"
+            >
+              <Trash2 className="size-4" /> Delete All ({studentList.length})
+            </button>
+          )}
 
           <input
             ref={fileRef}
@@ -1246,14 +1266,16 @@ function StudentsPage() {
                         >
                           <Pencil className="size-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteId(s.id)}
-                          className="p-1.5 rounded-lg text-[#7c533f] hover:text-rose-600 hover:bg-rose-50 transition-all hover:scale-110 active:scale-95 cursor-pointer"
-                          title="Delete Student"
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteId(s.id)}
+                            className="p-1.5 rounded-lg text-[#7c533f] hover:text-rose-600 hover:bg-rose-50 transition-all hover:scale-110 active:scale-95 cursor-pointer"
+                            title="Delete Student"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

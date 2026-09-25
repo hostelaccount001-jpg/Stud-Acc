@@ -358,8 +358,9 @@ div[role="alertdialog"],
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
-    max-width: 72mm !important;
-    padding: 3mm 2mm !important;
+    max-width: 70mm !important;
+    box-sizing: border-box !important;
+    padding: 2.5mm 3.5mm !important;
     margin: 0 !important;
     color: #000000 !important;
     background: #ffffff !important;

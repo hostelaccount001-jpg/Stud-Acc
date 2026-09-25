@@ -23,7 +23,8 @@ export const Route = createFileRoute("/_authenticated/admin/services")({
 
 function ServicesPage() {
   const qc = useQueryClient();
-  const { isAdmin } = useCurrentUser();
+  const { isAdmin, isSuperAdmin, permissions } = useCurrentUser();
+  const canDeleteServices = isSuperAdmin || Boolean(permissions?.delete_services);
   const [form, setForm] = useState({
     name: "",
     isCustomAmount: false,
@@ -89,6 +90,9 @@ function ServicesPage() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
+      if (!canDeleteServices) {
+        throw new Error("You do not have permission to delete services. Please contact Super Admin.");
+      }
       const { error } = await supabase.from("services").delete().eq("id", id);
       if (error) throw error;
     },
@@ -414,11 +418,12 @@ function ServicesPage() {
 
                     {/* Actions */}
                     <td className="py-4 pl-4 text-right">
-                      {isAdmin && (
+                      {canDeleteServices && (
                         <button
                           type="button"
                           onClick={() => remove.mutate(s.id)}
                           className="btn-luxury-danger px-3 py-1.5 text-xs gap-1"
+                          title="Delete Service"
                         >
                           <Trash2 className="size-3.5" />
                         </button>

@@ -8,6 +8,9 @@ export type UserPermissions = {
   settings: boolean;
   reports: boolean;
   users: boolean;
+  delete_students: boolean;
+  delete_services: boolean;
+  export_data: boolean;
 };
 
 export const defaultStaffPermissions: UserPermissions = {
@@ -17,6 +20,9 @@ export const defaultStaffPermissions: UserPermissions = {
   settings: false,
   reports: true,
   users: false,
+  delete_students: false,
+  delete_services: false,
+  export_data: false,
 };
 
 export const defaultAdminPermissions: UserPermissions = {
@@ -26,6 +32,9 @@ export const defaultAdminPermissions: UserPermissions = {
   settings: true,
   reports: true,
   users: false,
+  delete_students: false,
+  delete_services: false,
+  export_data: true,
 };
 
 export const defaultSuperAdminPermissions: UserPermissions = {
@@ -35,6 +44,9 @@ export const defaultSuperAdminPermissions: UserPermissions = {
   settings: true,
   reports: true,
   users: true,
+  delete_students: true,
+  delete_services: true,
+  export_data: true,
 };
 
 export const createStaffSchema = z.object({
@@ -50,6 +62,9 @@ export const createStaffSchema = z.object({
       settings: z.boolean().default(false),
       reports: z.boolean().default(true),
       users: z.boolean().default(false),
+      delete_students: z.boolean().default(false),
+      delete_services: z.boolean().default(false),
+      export_data: z.boolean().default(false),
     })
     .optional(),
 });
@@ -131,14 +146,17 @@ export const listStaffUsersServer = createServerFn({ method: "GET" }).handler(as
     const hasAdmin = userRoles.some((r) => r.role === "admin");
 
     const savedPerms = permMap[p.id];
-    let permissions: UserPermissions = defaultStaffPermissions;
+    let permissions: UserPermissions = { ...defaultStaffPermissions };
 
     if (isMaster) {
-      permissions = defaultSuperAdminPermissions;
+      permissions = { ...defaultSuperAdminPermissions };
     } else if (savedPerms) {
-      permissions = savedPerms;
+      permissions = {
+        ...(hasAdmin ? defaultAdminPermissions : defaultStaffPermissions),
+        ...savedPerms,
+      };
     } else if (hasAdmin) {
-      permissions = defaultAdminPermissions;
+      permissions = { ...defaultAdminPermissions };
     }
 
     const isSuper = isMaster || (permissions.users && hasAdmin);
@@ -174,7 +192,7 @@ export const getCurrentUserPermissionsServer = createServerFn({ method: "POST" }
     ]);
 
     const hasAdmin = (roles ?? []).some((r) => r.role === "admin");
-    let permissions = hasAdmin ? defaultAdminPermissions : defaultStaffPermissions;
+    let permissions = { ...(hasAdmin ? defaultAdminPermissions : defaultStaffPermissions) };
 
     if (permSetting?.value) {
       try {
@@ -324,6 +342,9 @@ export const updateStaffPermissionsServer = createServerFn({ method: "POST" })
           settings: z.boolean(),
           reports: z.boolean(),
           users: z.boolean(),
+          delete_students: z.boolean().optional().default(false),
+          delete_services: z.boolean().optional().default(false),
+          export_data: z.boolean().optional().default(true),
         }),
       })
       .parse,

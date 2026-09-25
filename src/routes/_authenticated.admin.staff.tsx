@@ -213,6 +213,34 @@ function StaffPage() {
     onError: (e: Error) => toast.error(e.message || "Failed to toggle permission"),
   });
 
+  // Toggle Delete Permission (students & services) in table directly
+  const toggleDeletePerm = useMutation({
+    mutationFn: async ({
+      user,
+      value,
+    }: {
+      user: StaffMember;
+      value: boolean;
+    }) => {
+      const nextPerms = { ...user.permissions, delete_students: value, delete_services: value };
+      const isSuper = nextPerms.users;
+      const isAdmin = isSuper || nextPerms.students || nextPerms.services || nextPerms.settings;
+
+      return await updatePermsFn({
+        data: {
+          userId: user.id,
+          role: isSuper ? "super_admin" : isAdmin ? "admin" : "staff",
+          permissions: nextPerms,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Delete rights updated");
+      qc.invalidateQueries({ queryKey: ["staff-users"] });
+    },
+    onError: (e: Error) => toast.error(e.message || "Failed to toggle delete permission"),
+  });
+
   // Reset Password Mutation
   const resetPassword = useMutation({
     mutationFn: async () => {
@@ -458,6 +486,12 @@ function StaffPage() {
                       <span className="text-[10px] font-bold">Reports</span>
                     </div>
                   </th>
+                  <th className="py-3.5 px-2 text-center" title="Can Delete Records">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <Trash2 className="size-4 text-rose-600" />
+                      <span className="text-[10px] font-bold text-rose-800">Delete</span>
+                    </div>
+                  </th>
                   <th className="py-3.5 px-2 text-center" title="Super Admin Authority">
                     <div className="flex flex-col items-center gap-0.5">
                       <Crown className="size-4 text-amber-600" />
@@ -556,6 +590,15 @@ function StaffPage() {
                         />
                       </td>
 
+                      {/* Delete Rights Toggle */}
+                      <td className="py-3.5 px-2 text-center">
+                        <Switch
+                          checked={isMaster || Boolean(u.permissions.delete_students || u.permissions.delete_services)}
+                          disabled={!isSuperAdmin || isMaster || toggleDeletePerm.isPending}
+                          onCheckedChange={(v) => toggleDeletePerm.mutate({ user: u, value: v })}
+                        />
+                      </td>
+
                       {/* Super Admin Toggle */}
                       <td className="py-3.5 px-2 text-center">
                         <Switch
@@ -613,7 +656,7 @@ function StaffPage() {
 
                 {filteredUsers.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-[#7c533f]">
+                    <td colSpan={9} className="py-12 text-center text-[#7c533f]">
                       <div className="max-w-xs mx-auto space-y-2">
                         <ShieldAlert className="size-8 text-amber-600 mx-auto opacity-70" />
                         <p className="font-bold text-[#4a1c14] text-sm">No matching user accounts</p>
@@ -797,7 +840,46 @@ function StaffPage() {
                       })
                     }
                   />
-                  <span className="font-semibold text-[#4a1c14]">Reports & Export</span>
+                  <span className="font-semibold text-[#4a1c14]">Reports & Analytics</span>
+                </label>
+
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white border border-[#e5d8c5] hover:bg-[#faf4eb] cursor-pointer shadow-xs">
+                  <Switch
+                    checked={createForm.permissions.export_data !== false}
+                    onCheckedChange={(v) =>
+                      setCreateForm({
+                        ...createForm,
+                        permissions: { ...createForm.permissions, export_data: v },
+                      })
+                    }
+                  />
+                  <span className="font-semibold text-[#4a1c14]">Export Data (Excel)</span>
+                </label>
+
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white border border-rose-200 hover:bg-rose-50 cursor-pointer shadow-xs">
+                  <Switch
+                    checked={Boolean(createForm.permissions.delete_students)}
+                    onCheckedChange={(v) =>
+                      setCreateForm({
+                        ...createForm,
+                        permissions: { ...createForm.permissions, delete_students: v },
+                      })
+                    }
+                  />
+                  <span className="font-semibold text-rose-800">Delete Students</span>
+                </label>
+
+                <label className="flex items-center gap-2 p-2 rounded-xl bg-white border border-rose-200 hover:bg-rose-50 cursor-pointer shadow-xs">
+                  <Switch
+                    checked={Boolean(createForm.permissions.delete_services)}
+                    onCheckedChange={(v) =>
+                      setCreateForm({
+                        ...createForm,
+                        permissions: { ...createForm.permissions, delete_services: v },
+                      })
+                    }
+                  />
+                  <span className="font-semibold text-rose-800">Delete Services</span>
                 </label>
 
                 <label className="flex items-center gap-2 p-2 rounded-xl bg-white border border-amber-300 hover:bg-amber-50 cursor-pointer col-span-2 shadow-xs">
@@ -888,6 +970,36 @@ function StaffPage() {
                 <Switch
                   checked={editPerms.reports}
                   onCheckedChange={(v) => setEditPerms({ ...editPerms, reports: v })}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-[#e5d8c5]">
+                <span className="font-semibold text-[#4a1c14] flex items-center gap-2">
+                  <FileSpreadsheet className="size-4 text-[#8b2500]" /> Export Data (Excel)
+                </span>
+                <Switch
+                  checked={editPerms.export_data !== false}
+                  onCheckedChange={(v) => setEditPerms({ ...editPerms, export_data: v })}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-rose-200">
+                <span className="font-semibold text-rose-800 flex items-center gap-2">
+                  <Trash2 className="size-4 text-rose-600" /> Delete Students (Single & Bulk)
+                </span>
+                <Switch
+                  checked={Boolean(editPerms.delete_students)}
+                  onCheckedChange={(v) => setEditPerms({ ...editPerms, delete_students: v })}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-rose-200">
+                <span className="font-semibold text-rose-800 flex items-center gap-2">
+                  <Trash2 className="size-4 text-rose-600" /> Delete Services
+                </span>
+                <Switch
+                  checked={Boolean(editPerms.delete_services)}
+                  onCheckedChange={(v) => setEditPerms({ ...editPerms, delete_services: v })}
                 />
               </div>
 
