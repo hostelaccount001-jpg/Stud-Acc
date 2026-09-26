@@ -12,21 +12,35 @@ async def list_students(
     search: Optional[str] = Query(None, description="Search by name, SUID, or NFC"),
     class_name: Optional[str] = Query(None),
     blocked: Optional[bool] = Query(None),
-    limit: int = Query(100, le=1000),
+    limit: int = Query(1000, le=50000),
     user: dict = Depends(get_current_user)
 ):
     client = get_supabase_client()
     if not client:
         return []
 
-    query = client.table("students").select("*")
-    if class_name:
-        query = query.eq("class_name", class_name)
-    if blocked is not None:
-        query = query.eq("blocked", blocked)
-    
-    res = query.order("created_at", desc=True).limit(limit).execute()
-    data = res.data or []
+    PAGE_SIZE = 1000
+    all_rows = []
+    current_from = 0
+
+    while len(all_rows) < limit:
+        batch_limit = min(PAGE_SIZE, limit - len(all_rows))
+        query = client.table("students").select("*")
+        if class_name:
+            query = query.eq("class_name", class_name)
+        if blocked is not None:
+            query = query.eq("blocked", blocked)
+
+        res = query.order("suid").range(current_from, current_from + batch_limit - 1).execute()
+        batch = res.data or []
+        if not batch:
+            break
+        all_rows.extend(batch)
+        if len(batch) < batch_limit:
+            break
+        current_from += len(batch)
+
+    data = all_rows
 
     if search:
         s = search.lower().strip()

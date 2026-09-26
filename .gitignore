@@ -37,6 +37,7 @@ __pycache__/
 
 # Local standalone folders & build artifacts
 server.js
+webrtc_server.cjs
 netlify.toml
 scratch/
 react-kiosk/

@@ -93,13 +93,17 @@ import {
   updateStudentServer,
   toggleBlockServer,
   bulkUploadStudentsServer,
+  getAllStudentsServer,
 } from "@/lib/students.functions";
 
 export const Route = createFileRoute("/_authenticated/admin/students")({
   head: () => ({
     meta: [
       { title: "Students & Biometrics — Gurukul Kiosk ERP" },
-      { name: "description", content: "Add, edit, or delete students, and enrol fingerprints on Mantra MFS100." },
+      {
+        name: "description",
+        content: "Add, edit, or delete students, and enrol fingerprints on Mantra MFS100.",
+      },
     ],
   }),
   component: StudentsPage,
@@ -128,6 +132,7 @@ function StudentsPage() {
   const updateStudentFn = useServerFn(updateStudentServer);
   const toggleBlockFn = useServerFn(toggleBlockServer);
   const bulkUploadFn = useServerFn(bulkUploadStudentsServer);
+  const getAllStudentsFn = useServerFn(getAllStudentsServer);
 
   type StudentSortKey = "name" | "suid" | "class" | "room" | "fingers" | "status";
 
@@ -135,7 +140,9 @@ function StudentsPage() {
   const [sortKey, setSortKey] = useState<StudentSortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
   const [filterClass, setFilterClass] = useState("all");
-  const [activeTab, setActiveTab] = useState<"all" | "enrolled" | "missing" | "active" | "blocked">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "enrolled" | "missing" | "active" | "blocked">(
+    "all",
+  );
   const [copiedSuid, setCopiedSuid] = useState<string | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -166,7 +173,10 @@ function StudentsPage() {
   async function saveInlineRoom(id: string, room: string) {
     try {
       const clean = room.trim();
-      const { error } = await supabase.from("students").update({ room_no: clean || null }).eq("id", id);
+      const { error } = await supabase
+        .from("students")
+        .update({ room_no: clean || null })
+        .eq("id", id);
       if (error) throw error;
       setEditingRoomId(null);
       qc.invalidateQueries({ queryKey: ["students"] });
@@ -183,12 +193,44 @@ function StudentsPage() {
     setTimeout(() => setCopiedSuid(null), 2000);
   }
 
+  async function fetchAllStudentsClient() {
+    const PAGE_SIZE = 1000;
+    const all: any[] = [];
+    let from = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from("students")
+        .select("*")
+        .order("suid")
+        .range(from, from + PAGE_SIZE - 1);
+
+      if (error) throw error;
+      if (data && data.length > 0) {
+        all.push(...data);
+        if (data.length < PAGE_SIZE) {
+          hasMore = false;
+        } else {
+          from += PAGE_SIZE;
+        }
+      } else {
+        hasMore = false;
+      }
+    }
+    return all;
+  }
+
   const students = useQuery({
     queryKey: ["students"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("students").select("*").order("suid").limit(2000);
-      if (error) throw error;
-      return data;
+      try {
+        const serverData = await getAllStudentsFn();
+        if (serverData && Array.isArray(serverData)) return serverData;
+      } catch (err) {
+        console.warn("Server students fetch fallback to client pagination:", err);
+      }
+      return await fetchAllStudentsClient();
     },
     staleTime: 1000 * 60 * 3,
   });
@@ -239,8 +281,13 @@ function StudentsPage() {
 
       // Check if any finger was captured via RDSERVICE instead of CLIENT
       for (const f of editFingers) {
-        if (typeof f?.template === "string" && (f.template.includes("<?xml") || f.template.includes("PidData"))) {
-          toast.error("❌ Mantra Client Service missing! Please install/run MFS100 Client Service to register fingerprints. RD Service is not allowed here.");
+        if (
+          typeof f?.template === "string" &&
+          (f.template.includes("<?xml") || f.template.includes("PidData"))
+        ) {
+          toast.error(
+            "❌ Mantra Client Service missing! Please install/run MFS100 Client Service to register fingerprints. RD Service is not allowed here.",
+          );
           return;
         }
       }
@@ -287,7 +334,9 @@ function StudentsPage() {
   const deleteSelectedStudents = useMutation({
     mutationFn: async (ids: string[]) => {
       if (!canDelete) {
-        throw new Error("You do not have permission to delete students. Please contact Super Admin.");
+        throw new Error(
+          "You do not have permission to delete students. Please contact Super Admin.",
+        );
       }
       if (ids.length === 0) return { count: 0 };
       try {
@@ -314,14 +363,19 @@ function StudentsPage() {
   const deleteAllStudents = useMutation({
     mutationFn: async () => {
       if (!canDelete) {
-        throw new Error("You do not have permission to delete students. Please contact Super Admin.");
+        throw new Error(
+          "You do not have permission to delete students. Please contact Super Admin.",
+        );
       }
       try {
         const res = await deleteAllStudentsFn();
         return res;
       } catch (err) {
         console.warn("Server delete-all failed, fallback client:", err);
-        const { error } = await supabase.from("students").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        const { error } = await supabase
+          .from("students")
+          .delete()
+          .neq("id", "00000000-0000-0000-0000-000000000000");
         if (error) throw error;
         return { count: studentList.length };
       }
@@ -368,12 +422,14 @@ function StudentsPage() {
       return;
     }
     try {
-      const { data, error } = await supabase
-        .from("students")
-        .select("*")
-        .order("suid");
+      let data: any[] = [];
+      try {
+        const serverData = await getAllStudentsFn();
+        if (serverData && Array.isArray(serverData)) data = serverData;
+      } catch {
+        data = await fetchAllStudentsClient();
+      }
 
-      if (error) throw error;
       if (!data || data.length === 0) {
         toast.error("No students found to export");
         return;
@@ -429,7 +485,9 @@ function StudentsPage() {
       const wb = XLSX.read(buf, { type: "array" });
       const sheetName = wb.SheetNames[0];
       if (!sheetName) throw new Error("Excel file has no sheets");
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName]!, { defval: "" });
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName]!, {
+        defval: "",
+      });
       if (rows.length === 0) throw new Error("Excel file is empty");
 
       setUploadState((prev) =>
@@ -491,37 +549,123 @@ function StudentsPage() {
       }
 
       const roomAliases = [
-        "room", "roomno", "roomnumber", "roomnum", "room#",
-        "rno", "r_no", "r.no", "r.no.", "r no", "rm", "rmno", "rm_no", "rm.no", "rm no",
-        "bed", "bedno", "bed_no", "bednumber", "bed#", "bno", "b_no", "b.no", "b no",
-        "roombed", "roomandbed", "bedroom", "room/bed", "room-bed", "room_bed",
-        "hostelroom", "hostelroomno", "hostel_room",
-        "bhavan", "bhavanno", "building", "buildingno",
-        "block", "blockno", "wing", "wingno",
-        "floor", "floorno", "floorroom",
-        "dorm", "dormitory", "dormno",
-        "allotment", "roomallotment", "allottedroom", "allocatedroom",
-        "accommodation", "lodging", "residence",
-        "રૂમ", "રૂમનંબર", "રૂમનં", "રૂમનં.",
-        "બેડ", "બેડનંબર", "બેડનં", "બેડનં.",
-        "ઓરડો", "ઓરડાનંબર", "હોસ્ટેલરૂમ", "હોસ્ટેલ", "બ્લોક", "ભવન",
+        "room",
+        "roomno",
+        "roomnumber",
+        "roomnum",
+        "room#",
+        "rno",
+        "r_no",
+        "r.no",
+        "r.no.",
+        "r no",
+        "rm",
+        "rmno",
+        "rm_no",
+        "rm.no",
+        "rm no",
+        "bed",
+        "bedno",
+        "bed_no",
+        "bednumber",
+        "bed#",
+        "bno",
+        "b_no",
+        "b.no",
+        "b no",
+        "roombed",
+        "roomandbed",
+        "bedroom",
+        "room/bed",
+        "room-bed",
+        "room_bed",
+        "hostelroom",
+        "hostelroomno",
+        "hostel_room",
+        "bhavan",
+        "bhavanno",
+        "building",
+        "buildingno",
+        "block",
+        "blockno",
+        "wing",
+        "wingno",
+        "floor",
+        "floorno",
+        "floorroom",
+        "dorm",
+        "dormitory",
+        "dormno",
+        "allotment",
+        "roomallotment",
+        "allottedroom",
+        "allocatedroom",
+        "accommodation",
+        "lodging",
+        "residence",
+        "રૂમ",
+        "રૂમનંબર",
+        "રૂમનં",
+        "રૂમનં.",
+        "બેડ",
+        "બેડનંબર",
+        "બેડનં",
+        "બેડનં.",
+        "ઓરડો",
+        "ઓરડાનંબર",
+        "હોસ્ટેલરૂમ",
+        "હોસ્ટેલ",
+        "બ્લોક",
+        "ભવન",
       ];
 
       const payload = rows
         .map((r, index) => {
           const suidObj = getValWithKey(r, [
-            "suid", "grno", "gr_no", "gr", "rollno", "roll_no", "id", "enrollment", "student_id", "suidgrno", "admissionno", "જીઆર", "જીઆરનંબર"
+            "suid",
+            "grno",
+            "gr_no",
+            "gr",
+            "rollno",
+            "roll_no",
+            "id",
+            "enrollment",
+            "student_id",
+            "suidgrno",
+            "admissionno",
+            "જીઆર",
+            "જીઆરનંબર",
           ]);
           const suid = suidObj.val || `SUID${String(index + 1).padStart(3, "0")}`;
 
           const nameObj = getValWithKey(r, [
-            "name", "student_name", "fullname", "student", "studentname", "full_name", "નામ", "વિદ્યાર્થી"
+            "name",
+            "student_name",
+            "fullname",
+            "student",
+            "studentname",
+            "full_name",
+            "નામ",
+            "વિદ્યાર્થી",
           ]);
           const name = nameObj.val || `Student ${suid}`;
           const nfc_no = suid;
 
           const classObj = getValWithKey(r, [
-            "class", "class_name", "classname", "std", "standard", "grade", "classstd", "stdclass", "dhoran", "section", "division", "stddiv", "ધોરણ", "વર્ગ"
+            "class",
+            "class_name",
+            "classname",
+            "std",
+            "standard",
+            "grade",
+            "classstd",
+            "stdclass",
+            "dhoran",
+            "section",
+            "division",
+            "stddiv",
+            "ધોરણ",
+            "વર્ગ",
           ]);
           const class_name = classObj.val || null;
 
@@ -533,7 +677,19 @@ function StudentsPage() {
           if (!room_no) {
             const usedKeys = new Set([suidObj.key, nameObj.key, classObj.key].filter(Boolean));
             const ignoreKeys = new Set([
-              "srno", "slno", "serial", "no", "date", "amount", "comments", "remarks", "status", "type", "mode", "fee", "paid"
+              "srno",
+              "slno",
+              "serial",
+              "no",
+              "date",
+              "amount",
+              "comments",
+              "remarks",
+              "status",
+              "type",
+              "mode",
+              "fee",
+              "paid",
             ]);
             for (const k of Object.keys(r)) {
               const cleanK = normalizeKey(k);
@@ -567,8 +723,8 @@ function StudentsPage() {
           : null,
       );
 
-      // Upload in chunks of 25 with real-time animated upload line progress
-      const chunkSize = 25;
+      // Upload in chunks of 100 with real-time animated upload line progress
+      const chunkSize = 100;
       let totalImported = 0;
       for (let i = 0; i < payload.length; i += chunkSize) {
         const chunk = payload.slice(i, i + chunkSize);
@@ -577,19 +733,21 @@ function StudentsPage() {
           totalImported += res.count;
         } catch (err) {
           console.warn("Server bulk upload failed for chunk, fallback client:", err);
-          for (const p of chunk) {
-            const { error } = await supabase.from("students").upsert(
-              {
-                suid: p.suid,
-                name: p.name,
-                nfc_no: p.nfc_no,
-                class_name: p.class_name,
-                room_no: p.room_no,
-                updated_at: new Date().toISOString(),
-              },
-              { onConflict: "suid" },
-            );
-            if (!error) totalImported++;
+          const { error } = await supabase.from("students").upsert(
+            chunk.map((p) => ({
+              suid: p.suid,
+              name: p.name,
+              nfc_no: p.nfc_no,
+              class_name: p.class_name,
+              room_no: p.room_no,
+              updated_at: new Date().toISOString(),
+            })),
+            { onConflict: "suid" },
+          );
+          if (!error) {
+            totalImported += chunk.length;
+          } else {
+            console.error("Client fallback upsert error:", error);
           }
         }
         const currentProcessed = Math.min(i + chunkSize, payload.length);
@@ -660,7 +818,7 @@ function StudentsPage() {
     setEditFingers(toBiometricRecords(s.fingerprints));
   }
 
-  const studentList = students.data ?? [];
+  const studentList = useMemo(() => students.data ?? [], [students.data]);
 
   const uniqueClasses = useMemo(() => {
     const set = new Set<string>();
@@ -716,13 +874,20 @@ function StudentsPage() {
     return [...filtered].sort((a, b) => {
       switch (sortKey) {
         case "name":
-          return (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }) * dir;
+          return (
+            (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }) * dir
+          );
         case "suid":
           return (a.suid || "").localeCompare(b.suid || "", undefined, { numeric: true }) * dir;
         case "class":
-          return (a.class_name || "").localeCompare(b.class_name || "", undefined, { numeric: true }) * dir;
+          return (
+            (a.class_name || "").localeCompare(b.class_name || "", undefined, { numeric: true }) *
+            dir
+          );
         case "room":
-          return (a.room_no || "").localeCompare(b.room_no || "", undefined, { numeric: true }) * dir;
+          return (
+            (a.room_no || "").localeCompare(b.room_no || "", undefined, { numeric: true }) * dir
+          );
         case "fingers": {
           const countA = Array.isArray(a.fingerprints) ? a.fingerprints.length : 0;
           const countB = Array.isArray(b.fingerprints) ? b.fingerprints.length : 0;
@@ -741,7 +906,7 @@ function StudentsPage() {
 
   function toggleSelectStudent(id: string) {
     setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
   }
 
@@ -757,13 +922,12 @@ function StudentsPage() {
     filteredAndSortedStudents.length > 0 &&
     filteredAndSortedStudents.every((s) => selectedIds.includes(s.id));
 
-  const isSomeSelected =
-    selectedIds.length > 0 && !allFilteredSelected;
+  const isSomeSelected = selectedIds.length > 0 && !allFilteredSelected;
 
   function toggleSelectAll() {
     if (allFilteredSelected) {
       setSelectedIds((prev) =>
-        prev.filter((id) => !filteredAndSortedStudents.some((s) => s.id === id))
+        prev.filter((id) => !filteredAndSortedStudents.some((s) => s.id === id)),
       );
     } else {
       const newIds = new Set([...selectedIds, ...filteredAndSortedStudents.map((s) => s.id)]);
@@ -820,14 +984,18 @@ function StudentsPage() {
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e5d8c5] pb-5">
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100/80 text-[#8b2500] text-xs font-bold tracking-wider uppercase mb-1.5 border border-amber-200">
-            <Sparkles className="size-3 text-amber-700 animate-spin" style={{ animationDuration: "6s" }} />
+            <Sparkles
+              className="size-3 text-amber-700 animate-spin"
+              style={{ animationDuration: "6s" }}
+            />
             <span>Biometric Master Register</span>
           </div>
           <h1 className="text-3xl md:text-4xl font-serif font-black text-[#4a1c14] tracking-tight flex items-center gap-3">
             <Users className="size-9 text-[#8b2500]" /> Students & Biometrics
           </h1>
           <p className="mt-1 text-sm text-[#7c533f] font-medium">
-            Manage student records, live Mantra MFS100 optical fingerprint enrolment, and kiosk access permissions.
+            Manage student records, live Mantra MFS100 optical fingerprint enrolment, and kiosk
+            access permissions.
           </p>
         </div>
 
@@ -949,7 +1117,10 @@ function StudentsPage() {
                   )}
                 </p>
                 <p className="text-[11px] font-mono text-[#7c533f]">
-                  File: {uploadState.fileName} {uploadState.totalRows ? `• ${uploadState.processedRows} of ${uploadState.totalRows} students` : ""}
+                  File: {uploadState.fileName}{" "}
+                  {uploadState.totalRows
+                    ? `• ${uploadState.processedRows} of ${uploadState.totalRows} students`
+                    : ""}
                 </p>
               </div>
             </div>
@@ -996,7 +1167,9 @@ function StudentsPage() {
         {/* Total Students */}
         <div className="card-luxury p-5 flex items-center justify-between group hover:-translate-y-0.5 transition-all duration-300">
           <div className="space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#7c533f]">Total Students</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#7c533f]">
+              Total Students
+            </span>
             <div className="text-3xl font-black font-sans text-[#4a1c14]">{totalCount}</div>
             <p className="text-[11px] text-[#7c533f]">Registered in Gurukul ERP</p>
           </div>
@@ -1008,7 +1181,9 @@ function StudentsPage() {
         {/* Biometrics Complete */}
         <div className="card-luxury p-5 flex items-center justify-between group hover:-translate-y-0.5 transition-all duration-300">
           <div className="space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Biometrics Complete</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+              Biometrics Complete
+            </span>
             <div className="text-3xl font-black font-sans text-emerald-800">{enrolledCount}</div>
             <p className="text-[11px] text-emerald-700 font-semibold">
               {totalCount > 0 ? Math.round((enrolledCount / totalCount) * 100) : 0}% MFS100 enrolled
@@ -1045,7 +1220,9 @@ function StudentsPage() {
         {/* Account Status */}
         <div className="card-luxury p-5 flex items-center justify-between group hover:-translate-y-0.5 transition-all duration-300">
           <div className="space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#7c533f]">Active Accounts</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-[#7c533f]">
+              Active Accounts
+            </span>
             <div className="text-3xl font-black font-sans text-teal-900">{activeCount}</div>
             <p className="text-[11px] text-[#7c533f]">
               {blockedCount > 0 ? (
@@ -1097,7 +1274,11 @@ function StudentsPage() {
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-[#7c533f]">
-              Showing <strong className="text-[#8b2500] font-mono">{filteredAndSortedStudents.length}</strong> of {totalCount}
+              Showing{" "}
+              <strong className="text-[#8b2500] font-mono">
+                {filteredAndSortedStudents.length}
+              </strong>{" "}
+              of {totalCount}
             </span>
           </div>
         </div>
@@ -1106,7 +1287,9 @@ function StudentsPage() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 items-end bg-[#faf6ef]/70 p-3.5 rounded-2xl border border-[#e5d8c5]">
           {/* Search Box */}
           <div className="space-y-1 sm:col-span-2 lg:col-span-2">
-            <Label htmlFor="search-students" className="text-[11px] font-bold text-[#7c533f]">Search Student</Label>
+            <Label htmlFor="search-students" className="text-[11px] font-bold text-[#7c533f]">
+              Search Student
+            </Label>
             <div className="relative">
               <Search className="size-4 absolute left-3 top-3 text-[#7c533f]/50" />
               <Input
@@ -1194,7 +1377,8 @@ function StudentsPage() {
               </div>
               <div>
                 <span className="font-bold text-xs sm:text-sm text-rose-950 font-sans">
-                  {selectedIds.length} {selectedIds.length === 1 ? "student selected" : "students selected"}
+                  {selectedIds.length}{" "}
+                  {selectedIds.length === 1 ? "student selected" : "students selected"}
                 </span>
                 <span className="text-[11px] text-rose-700 ml-2 font-medium hidden sm:inline">
                   (Checkboxes selected in table below)
@@ -1240,11 +1424,7 @@ function StudentsPage() {
                     <div className="flex items-center justify-center">
                       <Checkbox
                         checked={
-                          allFilteredSelected
-                            ? true
-                            : isSomeSelected
-                              ? "indeterminate"
-                              : false
+                          allFilteredSelected ? true : isSomeSelected ? "indeterminate" : false
                         }
                         onCheckedChange={toggleSelectAll}
                         aria-label="Select all students"
@@ -1259,7 +1439,9 @@ function StudentsPage() {
                 {renderHeader("Room", "room")}
                 {renderHeader("Biometrics (MFS100)", "fingers")}
                 {renderHeader("Kiosk Access", "status")}
-                <th className="py-3.5 pr-4 text-right text-xs uppercase tracking-wider text-[#7c533f] font-bold">Actions</th>
+                <th className="py-3.5 pr-4 text-right text-xs uppercase tracking-wider text-[#7c533f] font-bold">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e5d8c5]/60 text-xs font-mono">
@@ -1278,7 +1460,10 @@ function StudentsPage() {
                     }`}
                   >
                     {canDelete && (
-                      <td className="py-3.5 pl-4 pr-2 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td
+                        className="py-3.5 pl-4 pr-2 text-center"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="flex items-center justify-center">
                           <Checkbox
                             checked={selectedIds.includes(s.id)}
@@ -1384,7 +1569,9 @@ function StudentsPage() {
                       {fingerCount > 0 ? (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-xs">
                           <Fingerprint className="size-3.5 text-emerald-600" />
-                          <span>{fingerCount} {fingerCount === 1 ? "Finger" : "Fingers"}</span>
+                          <span>
+                            {fingerCount} {fingerCount === 1 ? "Finger" : "Fingers"}
+                          </span>
                         </span>
                       ) : (
                         <button
@@ -1402,13 +1589,17 @@ function StudentsPage() {
                       <div className="flex items-center gap-2">
                         <Switch
                           checked={!s.blocked}
-                          onCheckedChange={(active) => toggleBlock.mutate({ id: s.id, blocked: !active })}
+                          onCheckedChange={(active) =>
+                            toggleBlock.mutate({ id: s.id, blocked: !active })
+                          }
                         />
-                        <span className={`text-[10px] font-sans font-extrabold px-2.5 py-0.5 rounded-full border shadow-xs ${
-                          !s.blocked
-                            ? "bg-emerald-500/20 text-emerald-900 border-emerald-500/40"
-                            : "bg-rose-500/20 text-rose-900 border-rose-500/40"
-                        }`}>
+                        <span
+                          className={`text-[10px] font-sans font-extrabold px-2.5 py-0.5 rounded-full border shadow-xs ${
+                            !s.blocked
+                              ? "bg-emerald-500/20 text-emerald-900 border-emerald-500/40"
+                              : "bg-rose-500/20 text-rose-900 border-rose-500/40"
+                          }`}
+                        >
                           {!s.blocked ? "ACTIVE" : "BLOCKED"}
                         </span>
                       </div>
@@ -1431,10 +1622,15 @@ function StudentsPage() {
 
               {filteredAndSortedStudents.length === 0 && (
                 <tr>
-                  <td colSpan={canDelete ? 8 : 7} className="py-12 text-center text-sm font-sans text-[#7c533f]">
+                  <td
+                    colSpan={canDelete ? 8 : 7}
+                    className="py-12 text-center text-sm font-sans text-[#7c533f]"
+                  >
                     {studentList.length === 0 ? (
                       <div className="space-y-3">
-                        <p className="font-semibold text-base text-[#4a1c14]">No student records in database yet</p>
+                        <p className="font-semibold text-base text-[#4a1c14]">
+                          No student records in database yet
+                        </p>
                         <button
                           type="button"
                           onClick={() => setShowAddModal(true)}
@@ -1527,7 +1723,9 @@ function StudentsPage() {
 
               <div className="flex items-center justify-between text-xs font-sans">
                 <span className="font-bold text-[#4a1c14] flex items-center gap-1.5">
-                  {uploadState?.stage === "saving" && <Loader2 className="size-3.5 animate-spin text-[#8b2500]" />}
+                  {uploadState?.stage === "saving" && (
+                    <Loader2 className="size-3.5 animate-spin text-[#8b2500]" />
+                  )}
                   {uploadState?.statusText}
                 </span>
                 {uploadState?.totalRows ? (
@@ -1615,7 +1813,9 @@ function StudentsPage() {
           >
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="modal-suid" className="text-xs font-bold text-[#7c533f]">SUID / GR No *</Label>
+                <Label htmlFor="modal-suid" className="text-xs font-bold text-[#7c533f]">
+                  SUID / GR No *
+                </Label>
                 <Input
                   id="modal-suid"
                   required
@@ -1627,7 +1827,9 @@ function StudentsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="modal-name" className="text-xs font-bold text-[#7c533f]">Student Full Name *</Label>
+                <Label htmlFor="modal-name" className="text-xs font-bold text-[#7c533f]">
+                  Student Full Name *
+                </Label>
                 <Input
                   id="modal-name"
                   required
@@ -1639,7 +1841,9 @@ function StudentsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="modal-class" className="text-xs font-bold text-[#7c533f]">Class / Standard</Label>
+                <Label htmlFor="modal-class" className="text-xs font-bold text-[#7c533f]">
+                  Class / Standard
+                </Label>
                 <Input
                   id="modal-class"
                   placeholder="e.g. 10th A, 12th Commerce"
@@ -1650,7 +1854,9 @@ function StudentsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="modal-room" className="text-xs font-bold text-[#7c533f]">Room No / Hostel</Label>
+                <Label htmlFor="modal-room" className="text-xs font-bold text-[#7c533f]">
+                  Room No / Hostel
+                </Label>
                 <Input
                   id="modal-room"
                   placeholder="e.g. 101, B-205"
@@ -1662,11 +1868,7 @@ function StudentsPage() {
             </div>
 
             {/* Unified Mantra Fingerprint Enroller */}
-            <BiometricEnroller
-              records={newFingers}
-              onChange={setNewFingers}
-              suid={form.suid}
-            />
+            <BiometricEnroller records={newFingers} onChange={setNewFingers} suid={form.suid} />
 
             <DialogFooter className="gap-2.5 pt-4 border-t border-[#e5d8c5]">
               <button
@@ -1681,7 +1883,11 @@ function StudentsPage() {
                 disabled={addStudent.isPending}
                 className="btn-luxury-primary px-7 py-2.5 text-xs font-bold gap-2 shadow-md cursor-pointer"
               >
-                {addStudent.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                {addStudent.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Plus className="size-4" />
+                )}
                 Save & Enrol Student
               </button>
             </DialogFooter>
@@ -1710,7 +1916,9 @@ function StudentsPage() {
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="edit-suid" className="text-xs font-bold text-[#7c533f]">SUID *</Label>
+                <Label htmlFor="edit-suid" className="text-xs font-bold text-[#7c533f]">
+                  SUID *
+                </Label>
                 <Input
                   id="edit-suid"
                   required
@@ -1721,7 +1929,9 @@ function StudentsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="edit-name" className="text-xs font-bold text-[#7c533f]">Student Name *</Label>
+                <Label htmlFor="edit-name" className="text-xs font-bold text-[#7c533f]">
+                  Student Name *
+                </Label>
                 <Input
                   id="edit-name"
                   required
@@ -1732,7 +1942,9 @@ function StudentsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="edit-class" className="text-xs font-bold text-[#7c533f]">Class / Std</Label>
+                <Label htmlFor="edit-class" className="text-xs font-bold text-[#7c533f]">
+                  Class / Std
+                </Label>
                 <Input
                   id="edit-class"
                   placeholder="Enter Class / Standard"
@@ -1743,7 +1955,9 @@ function StudentsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="edit-room" className="text-xs font-bold text-[#7c533f]">Room No / Hostel</Label>
+                <Label htmlFor="edit-room" className="text-xs font-bold text-[#7c533f]">
+                  Room No / Hostel
+                </Label>
                 <Input
                   id="edit-room"
                   placeholder="Enter Room No (e.g. 101, B-12)"
@@ -1794,19 +2008,22 @@ function StudentsPage() {
               </div>
               <div>
                 <AlertDialogTitle className="font-serif text-xl font-bold text-rose-800">
-                  Delete {selectedIds.length} Selected {selectedIds.length === 1 ? "Student" : "Students"}?
+                  Delete {selectedIds.length} Selected{" "}
+                  {selectedIds.length === 1 ? "Student" : "Students"}?
                 </AlertDialogTitle>
-                <p className="text-xs text-[#7c533f] mt-0.5">
-                  Permanent removal from database
-                </p>
+                <p className="text-xs text-[#7c533f] mt-0.5">Permanent removal from database</p>
               </div>
             </div>
 
             <AlertDialogDescription asChild>
               <div className="text-xs text-[#7c533f] pt-2 space-y-3">
                 <p>
-                  Are you sure you want to delete the <strong className="text-rose-900 font-bold">{selectedIds.length}</strong> selected student record{selectedIds.length === 1 ? "" : "s"}?
-                  This action is <strong className="text-rose-700">irreversible</strong> and will permanently remove student profiles, biometrics (fingerprints), and associated kiosk credentials.
+                  Are you sure you want to delete the{" "}
+                  <strong className="text-rose-900 font-bold">{selectedIds.length}</strong> selected
+                  student record{selectedIds.length === 1 ? "" : "s"}? This action is{" "}
+                  <strong className="text-rose-700">irreversible</strong> and will permanently
+                  remove student profiles, biometrics (fingerprints), and associated kiosk
+                  credentials.
                 </p>
 
                 {/* Preview list of selected students */}
@@ -1872,11 +2089,14 @@ function StudentsPage() {
               <AlertTriangle className="size-6 text-rose-600" /> DANGER: Delete ALL Students?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-[#7c533f]">
-              This will permanently delete all {studentList.length} student profiles and all enrolled biometrics from the system.
+              This will permanently delete all {studentList.length} student profiles and all
+              enrolled biometrics from the system.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 pt-4 border-t border-[#e5d8c5]">
-            <AlertDialogCancel className="btn-luxury-secondary px-4 py-2 text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="btn-luxury-secondary px-4 py-2 text-xs">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               className="btn-luxury-danger px-4 py-2 text-xs"
               onClick={() => deleteAllStudents.mutate()}
@@ -1949,7 +2169,9 @@ function BiometricEnroller({
       <div className="flex items-center justify-between border-b border-[#e5d8c5] pb-2.5">
         <div className="flex items-center gap-2 font-bold text-xs text-[#4a1c14]">
           <Fingerprint className="size-4 text-[#8b2500]" />
-          <span>Mantra Fingerprints ({fingers.length}/{MAX_FINGERS})</span>
+          <span>
+            Mantra Fingerprints ({fingers.length}/{MAX_FINGERS})
+          </span>
         </div>
 
         <div className="flex items-center gap-2 text-xs">
@@ -1975,7 +2197,9 @@ function BiometricEnroller({
             >
               <Fingerprint className="size-4 text-[#8b2500] shrink-0" />
               <span>{f.finger || `Finger ${idx + 1}`}</span>
-              {f.quality > 0 && <span className="text-[10px] opacity-75 font-mono">Q:{f.quality}%</span>}
+              {f.quality > 0 && (
+                <span className="text-[10px] opacity-75 font-mono">Q:{f.quality}%</span>
+              )}
               <button
                 type="button"
                 aria-label={`Remove ${f.finger}`}
@@ -2003,7 +2227,9 @@ function BiometricEnroller({
                 <>
                   <Plus className="size-4" />
                   <Fingerprint className="size-4" />
-                  <span>Add Finger ({fingers.length}/{MAX_FINGERS})</span>
+                  <span>
+                    Add Finger ({fingers.length}/{MAX_FINGERS})
+                  </span>
                 </>
               )}
             </button>

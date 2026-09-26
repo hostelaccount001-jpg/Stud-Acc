@@ -19,16 +19,8 @@ import {
   ChevronRight,
   Tag,
 } from "lucide-react";
-import {
-  captureFinger,
-  identify,
-  useMantraDevice,
-} from "@/lib/mantra";
-import {
-  getKioskConfig,
-  punchService,
-  getStudentGallery,
-} from "@/lib/kiosk.functions";
+import { captureFinger, identify, useMantraDevice } from "@/lib/mantra";
+import { getKioskConfig, punchService, getStudentGallery } from "@/lib/kiosk.functions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -50,7 +42,8 @@ export const Route = createFileRoute("/")({
       },
       {
         name: "description",
-        content: "Self-service cashless payment terminal with direct Mantra MFS100 fingerprint biometric authentication.",
+        content:
+          "Self-service cashless payment terminal with direct Mantra MFS100 fingerprint biometric authentication.",
       },
     ],
   }),
@@ -244,7 +237,9 @@ function Kiosk() {
               setBusy(false);
               break; // exit loop as student is now verified
             } else {
-              setError("❌ Fingerprint not recognized. Please place your registered finger firmly on the sensor.");
+              setError(
+                "❌ Fingerprint not recognized. Please place your registered finger firmly on the sensor.",
+              );
               setBusy(false);
               await new Promise((resolve) => setTimeout(resolve, 2500));
               if (!cancelled) setError("");
@@ -283,7 +278,10 @@ function Kiosk() {
     try {
       const capture = await captureFinger(50, 10);
       if (!capture.ok) {
-        setError(capture.error || "Failed to capture fingerprint. Please place finger firmly on sensor glass.");
+        setError(
+          capture.error ||
+            "Failed to capture fingerprint. Please place finger firmly on sensor glass.",
+        );
         setScanning(false);
         return;
       }
@@ -299,7 +297,9 @@ function Kiosk() {
 
       const gallery = galleryQuery.data || [];
       if (gallery.length === 0) {
-        setError("Student database is loading or no biometric records enrolled. Please contact admin.");
+        setError(
+          "Student database is loading or no biometric records enrolled. Please contact admin.",
+        );
         setScanning(false);
         setBusy(false);
         return;
@@ -309,7 +309,9 @@ function Kiosk() {
       const matched = await identify(capture.template, gallery);
 
       if (!matched) {
-        setError("❌ Fingerprint not recognized. Please place your registered finger firmly on the Mantra sensor.");
+        setError(
+          "❌ Fingerprint not recognized. Please place your registered finger firmly on the Mantra sensor.",
+        );
         setScanning(false);
         setBusy(false);
         return;
@@ -442,11 +444,7 @@ function Kiosk() {
       {/* Background Thermal Slip for Instant Window Print */}
       {activeReceipt && (
         <div id="receipt-print-area" className="hidden print:block">
-          <ReceiptSlip
-            title={title}
-            receipt={activeReceipt}
-            footerText={footerText}
-          />
+          <ReceiptSlip title={title} receipt={activeReceipt} footerText={footerText} />
         </div>
       )}
 
@@ -471,7 +469,10 @@ function Kiosk() {
         {/* Center Title & Subtitle */}
         <div className="max-w-4xl mx-auto px-16 sm:px-24">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#ebdcc8]/90 backdrop-blur-xs text-[#8b2500] text-xs font-bold tracking-wider uppercase shadow-inner border border-[#d8c5af]/80 mb-1.5 animate-in fade-in slide-in-from-top-2 duration-500">
-            <Sparkles className="size-3.5 text-amber-600 animate-spin" style={{ animationDuration: "6s" }} />
+            <Sparkles
+              className="size-3.5 text-amber-600 animate-spin"
+              style={{ animationDuration: "6s" }}
+            />
             <span>Shree Swaminarayan Gurukul • Biometric Kiosk</span>
           </div>
           <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-[44px] font-serif font-black tracking-tight text-[#4a1c14] drop-shadow-sm whitespace-nowrap">
@@ -491,7 +492,11 @@ function Kiosk() {
                 : "bg-emerald-600/20 text-emerald-900 border border-emerald-500/40"
             }`}
           >
-            {student ? <CheckCircle2 className="size-3.5 text-emerald-600" /> : <Fingerprint className="size-3.5" />}
+            {student ? (
+              <CheckCircle2 className="size-3.5 text-emerald-600" />
+            ) : (
+              <Fingerprint className="size-3.5" />
+            )}
             1. Scan Fingerprint (MFS100)
           </span>
           <span className="text-[#c5a880] font-bold">———</span>
@@ -528,20 +533,24 @@ function Kiosk() {
                   isConnected
                     ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                     : deviceChecking
-                    ? "bg-amber-50 text-amber-700 border border-amber-200"
-                    : "bg-rose-50 text-rose-700 border border-rose-200"
+                      ? "bg-amber-50 text-amber-700 border border-amber-200"
+                      : "bg-rose-50 text-rose-700 border border-rose-200"
                 }`}
               >
                 <span
                   className={`size-2 rounded-full ${
-                    isConnected ? "bg-emerald-500 animate-pulse" : deviceChecking ? "bg-amber-500" : "bg-rose-500"
+                    isConnected
+                      ? "bg-emerald-500 animate-pulse"
+                      : deviceChecking
+                        ? "bg-amber-500"
+                        : "bg-rose-500"
                   }`}
                 />
                 {isConnected
                   ? `Mantra ${device?.model || "MFS100"} Ready`
                   : deviceChecking
-                  ? "Checking Mantra Device..."
-                  : "Mantra Scanner Not Connected"}
+                    ? "Checking Mantra Device..."
+                    : "Mantra Scanner Not Connected"}
               </span>
 
               {isConnected && autoDetect && (
@@ -829,7 +838,10 @@ function Kiosk() {
       )}
 
       {/* Custom Amount Numpad Dialog */}
-      <Dialog open={Boolean(customService)} onOpenChange={(open) => !open && setCustomService(null)}>
+      <Dialog
+        open={Boolean(customService)}
+        onOpenChange={(open) => !open && setCustomService(null)}
+      >
         <DialogContent className="max-w-sm p-6 bg-[#fdfbf7] border-2 border-[#e5d8c5] rounded-3xl shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-center font-sans text-xl font-extrabold text-[#2d140d] tracking-tight">
@@ -839,7 +851,9 @@ function Kiosk() {
 
           {/* Amount Display */}
           <div className="my-3 rounded-2xl bg-white border-2 border-[#d8c5af] p-4 text-center shadow-xs">
-            <span className="text-xs font-bold text-[#7c533f] uppercase tracking-wider block">Total Amount</span>
+            <span className="text-xs font-bold text-[#7c533f] uppercase tracking-wider block">
+              Total Amount
+            </span>
             <div className="text-4xl sm:text-5xl font-sans font-black text-[#2d140d] mt-1 tracking-tight">
               ₹ {customAmountStr}
             </div>
@@ -906,7 +920,10 @@ function Kiosk() {
             <Button
               type="button"
               disabled={busy || Number(customAmountStr) <= 0}
-              onClick={() => customService && executePunch(customService.id, Number(customAmountStr), customService.name)}
+              onClick={() =>
+                customService &&
+                executePunch(customService.id, Number(customAmountStr), customService.name)
+              }
               className="w-full sm:flex-1 h-12 text-base font-bold bg-[#4a1c14] hover:bg-[#8b2500] text-white rounded-xl shadow-lg cursor-pointer"
             >
               {busy ? (
@@ -929,11 +946,7 @@ function Kiosk() {
       {/* Hidden Thermal Slip - Active During window.print() */}
       {activeReceipt && (
         <div className="hidden print:block">
-          <ReceiptSlip
-            title={title}
-            receipt={activeReceipt}
-            footerText={footerText}
-          />
+          <ReceiptSlip title={title} receipt={activeReceipt} footerText={footerText} />
         </div>
       )}
     </div>

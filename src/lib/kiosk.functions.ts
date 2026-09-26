@@ -22,7 +22,13 @@ const punchSchema = z.object({
 export type KioskConfig = {
   services: { id: string; name: string; price: number; print_receipt: boolean }[];
   settings: Record<string, string>;
-  enrolledStudents: { id: string; suid: string; name: string; class_name?: string | null; nfc_no: string }[];
+  enrolledStudents: {
+    id: string;
+    suid: string;
+    name: string;
+    class_name?: string | null;
+    nfc_no: string;
+  }[];
 };
 
 export type IdentifyResult =
@@ -140,7 +146,13 @@ export const lookupStudentBySuid = createServerFn({ method: "POST" })
     let faceDescriptor: number[] | null = null;
     let faceDescriptor512: number[] | null = null;
 
-    for (const f of fingerRecords as { type?: string; photo?: string; descriptor?: number[]; descriptor512?: number[]; template?: string }[]) {
+    for (const f of fingerRecords as {
+      type?: string;
+      photo?: string;
+      descriptor?: number[];
+      descriptor512?: number[];
+      template?: string;
+    }[]) {
       if (f && f.type === "face" && typeof f.photo === "string") {
         facePhoto = f.photo;
         if (Array.isArray(f.descriptor)) faceDescriptor = f.descriptor;
@@ -156,7 +168,8 @@ export const lookupStudentBySuid = createServerFn({ method: "POST" })
     if (!hasFace && !hasFingerprint) {
       return {
         status: "no_fingerprint",
-        message: "No Face or Fingerprint enrolled for this student. Please add biometrics in Admin Portal first.",
+        message:
+          "No Face or Fingerprint enrolled for this student. Please add biometrics in Admin Portal first.",
       };
     }
 
@@ -178,34 +191,54 @@ export const lookupStudentBySuid = createServerFn({ method: "POST" })
     };
   });
 
-export const getStudentGallery = createServerFn({ method: "GET" })
-  .handler(async () => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: students } = await supabaseAdmin
+export const getStudentGallery = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const PAGE_SIZE = 1000;
+  const allStudents: any[] = [];
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data: students, error } = await supabaseAdmin
       .from("students")
       .select("id, suid, name, class_name, room_no, nfc_no, fingerprints")
-      .eq("blocked", false);
+      .eq("blocked", false)
+      .order("id")
+      .range(from, from + PAGE_SIZE - 1);
 
-    const enrolled = (students ?? []).filter(
-      (s) => Array.isArray(s.fingerprints) && s.fingerprints.length > 0,
-    );
-
-    return enrolled.map(s => {
-      const templates: string[] = [];
-      for (const f of s.fingerprints as { template?: string }[]) {
-        if (f.template) templates.push(f.template);
+    if (error) throw new Error(error.message);
+    if (students && students.length > 0) {
+      allStudents.push(...students);
+      if (students.length < PAGE_SIZE) {
+        hasMore = false;
+      } else {
+        from += PAGE_SIZE;
       }
-      return {
-        id: s.id,
-        suid: s.suid,
-        name: s.name,
-        nfc_no: s.nfc_no,
-        class_name: s.class_name,
-        room_no: s.room_no,
-        templates
-      };
-    });
+    } else {
+      hasMore = false;
+    }
+  }
+
+  const enrolled = allStudents.filter(
+    (s) => Array.isArray(s.fingerprints) && s.fingerprints.length > 0,
+  );
+
+  return enrolled.map((s) => {
+    const templates: string[] = [];
+    for (const f of s.fingerprints as { template?: string }[]) {
+      if (f.template) templates.push(f.template);
+    }
+    return {
+      id: s.id,
+      suid: s.suid,
+      name: s.name,
+      nfc_no: s.nfc_no,
+      class_name: s.class_name,
+      room_no: s.room_no,
+      templates,
+    };
   });
+});
 
 export const lookupStudent = createServerFn({ method: "POST" })
   .validator((input: unknown) => nfcSchema.parse(input))
@@ -244,7 +277,13 @@ export const lookupStudent = createServerFn({ method: "POST" })
     let faceDescriptor: number[] | null = null;
     let faceDescriptor512: number[] | null = null;
 
-    for (const f of fingerRecords as { type?: string; photo?: string; descriptor?: number[]; descriptor512?: number[]; template?: string }[]) {
+    for (const f of fingerRecords as {
+      type?: string;
+      photo?: string;
+      descriptor?: number[];
+      descriptor512?: number[];
+      template?: string;
+    }[]) {
       if (f && f.type === "face" && typeof f.photo === "string") {
         facePhoto = f.photo;
         if (Array.isArray(f.descriptor)) faceDescriptor = f.descriptor;
@@ -315,7 +354,8 @@ export const punchService = createServerFn({ method: "POST" })
       return { status: "blocked", message: settings["msg_blocked"] ?? "Card is blocked." };
 
     const basePrice = Number(service.price);
-    const price = data.customAmount && data.customAmount > 0 ? Number(data.customAmount) : basePrice;
+    const price =
+      data.customAmount && data.customAmount > 0 ? Number(data.customAmount) : basePrice;
 
     if (price <= 0) {
       throw new Error("Please enter a valid amount greater than 0.");
@@ -382,6 +422,3 @@ export const punchService = createServerFn({ method: "POST" })
       },
     };
   });
-
-
-

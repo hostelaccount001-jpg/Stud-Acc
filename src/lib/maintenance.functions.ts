@@ -39,11 +39,31 @@ export const executeErpFormatServer = createServerFn({ method: "POST" })
     if (data.formatSettings) {
       const defaultSettings = [
         { key: "daily_limit", value: "500", updated_at: new Date().toISOString() },
-        { key: "msg_success", value: "Thank you! Your receipt has been generated.", updated_at: new Date().toISOString() },
-        { key: "msg_limit", value: "Today's limit is over. Please come tomorrow.", updated_at: new Date().toISOString() },
-        { key: "msg_blocked", value: "Your card is temporarily blocked. Please contact the office.", updated_at: new Date().toISOString() },
-        { key: "kiosk_title", value: "Shree Swaminarayan Gurukul, Rajkot", updated_at: new Date().toISOString() },
-        { key: "kiosk_subtitle", value: "Cashless Service Kiosk", updated_at: new Date().toISOString() },
+        {
+          key: "msg_success",
+          value: "Thank you! Your receipt has been generated.",
+          updated_at: new Date().toISOString(),
+        },
+        {
+          key: "msg_limit",
+          value: "Today's limit is over. Please come tomorrow.",
+          updated_at: new Date().toISOString(),
+        },
+        {
+          key: "msg_blocked",
+          value: "Your card is temporarily blocked. Please contact the office.",
+          updated_at: new Date().toISOString(),
+        },
+        {
+          key: "kiosk_title",
+          value: "Shree Swaminarayan Gurukul, Rajkot",
+          updated_at: new Date().toISOString(),
+        },
+        {
+          key: "kiosk_subtitle",
+          value: "Cashless Service Kiosk",
+          updated_at: new Date().toISOString(),
+        },
         { key: "receipt_footer", value: "Jay Swaminarayan", updated_at: new Date().toISOString() },
       ];
       const { error: setErr } = await supabaseAdmin
@@ -68,7 +88,7 @@ export const executeErpFormatServer = createServerFn({ method: "POST" })
       // Get all staff users except the primary super admin
       const { data: usersData } = await supabaseAdmin.auth.admin.listUsers();
       const usersToDelete = (usersData?.users ?? []).filter(
-        (u) => u.email !== "anshsangani2007@gmail.com"
+        (u) => u.email !== "anshsangani2007@gmail.com",
       );
       for (const u of usersToDelete) {
         await supabaseAdmin.auth.admin.deleteUser(u.id);

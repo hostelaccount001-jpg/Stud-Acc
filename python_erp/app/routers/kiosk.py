@@ -29,11 +29,20 @@ async def get_kiosk_configuration():
     try:
         services_res = client.table("services").select("id, name, price, print_receipt, active, daily_limit").eq("active", True).order("sort_order").execute()
         settings_res = client.table("settings").select("key, value").execute()
-        students_res = client.table("students").select("id, suid, name, class_name, room_no, nfc_no").eq("blocked", False).execute()
-
         services = services_res.data or []
         settings_dict = {item["key"]: item["value"] for item in (settings_res.data or [])}
-        students = students_res.data or []
+
+        students = []
+        cur_from = 0
+        while True:
+            batch_res = client.table("students").select("id, suid, name, class_name, room_no, nfc_no").eq("blocked", False).order("id").range(cur_from, cur_from + 999).execute()
+            b = batch_res.data or []
+            if not b:
+                break
+            students.extend(b)
+            if len(b) < 1000:
+                break
+            cur_from += len(b)
 
         return {
             "services": services,

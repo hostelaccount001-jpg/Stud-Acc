@@ -49,6 +49,9 @@ import {
   Trash2,
   Loader2,
   CheckCircle2,
+  Lock,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ReceiptSlip, type ReceiptData } from "@/components/ReceiptSlip";
@@ -59,7 +62,11 @@ export const Route = createFileRoute("/_authenticated/admin/reports")({
   head: () => ({
     meta: [
       { title: "Reports & Transactions Ledger — Gurukul Kiosk ERP" },
-      { name: "description", content: "Filter kiosk transactions, print full reports, reprint thermal receipts, edit or delete entries, and export to Excel." },
+      {
+        name: "description",
+        content:
+          "Filter kiosk transactions, print full reports, reprint thermal receipts, edit or delete entries, and export to Excel.",
+      },
     ],
   }),
   component: ReportsPage,
@@ -91,7 +98,15 @@ type TransactionRow = {
 
 function ReportsPage() {
   const qc = useQueryClient();
-  const { isSuperAdmin } = useCurrentUser();
+  const { isSuperAdmin, permissions, userId, roleTitle, loading: userLoading } = useCurrentUser();
+  const canViewReports = !userLoading && (isSuperAdmin || permissions.reports !== false);
+  const canExportReports =
+    !userLoading &&
+    (isSuperAdmin || permissions.reports_export !== false || permissions.export_data !== false);
+  const canEditReports = !userLoading && (isSuperAdmin || Boolean(permissions.reports_edit));
+  const canDeleteReports = !userLoading && (isSuperAdmin || Boolean(permissions.reports_delete));
+  const canPrintSlip = !userLoading && (isSuperAdmin || permissions.reports_print_slip !== false);
+
   const updateTxFn = useServerFn(updateTransactionServer);
   const deleteTxFn = useServerFn(deleteTransactionServer);
 
@@ -133,7 +148,10 @@ function ReportsPage() {
   const services = useQuery({
     queryKey: ["services-list"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("services").select("id, name").order("sort_order");
+      const { data, error } = await supabase
+        .from("services")
+        .select("id, name")
+        .order("sort_order");
       if (error) throw error;
       return data;
     },
@@ -144,18 +162,40 @@ function ReportsPage() {
     queryFn: async () => {
       const start = new Date(`${from}T00:00:00`);
       const end = new Date(`${to}T23:59:59.999`);
-      const { data, error } = await supabase
-        .from("transactions")
-        .select("id, receipt_no, nfc_no, suid, student_name, service_name, amount, created_at, service_id")
-        .not("service_id", "is", null)
-        .not("service_name", "ilike", "[Wallet]%")
-        .gte("created_at", start.toISOString())
-        .lte("created_at", end.toISOString())
-        .order("created_at", { ascending: false })
-        .limit(5000);
-      if (error) throw error;
-      const cleanRows = (data ?? []).filter(
-        (r: any) => r.service_id !== null && !r.service_name?.startsWith("[Wallet]")
+      const PAGE_SIZE = 1000;
+      const MAX_TOTAL = 10000;
+      const allTx: any[] = [];
+      let curFrom = 0;
+      let hasMore = true;
+
+      while (hasMore && allTx.length < MAX_TOTAL) {
+        const { data, error } = await supabase
+          .from("transactions")
+          .select(
+            "id, receipt_no, nfc_no, suid, student_name, service_name, amount, created_at, service_id",
+          )
+          .not("service_id", "is", null)
+          .not("service_name", "ilike", "[Wallet]%")
+          .gte("created_at", start.toISOString())
+          .lte("created_at", end.toISOString())
+          .order("created_at", { ascending: false })
+          .range(curFrom, curFrom + PAGE_SIZE - 1);
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+          allTx.push(...data);
+          if (data.length < PAGE_SIZE) {
+            hasMore = false;
+          } else {
+            curFrom += PAGE_SIZE;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const cleanRows = allTx.filter(
+        (r: any) => r.service_id !== null && !r.service_name?.startsWith("[Wallet]"),
       );
       return cleanRows as TransactionRow[];
     },
@@ -165,6 +205,9 @@ function ReportsPage() {
   const editMutation = useMutation({
     mutationFn: async () => {
       if (!editingRow) return;
+      if (!canEditReports) {
+        throw new Error("Access Denied: You do not have permission to edit transactions.");
+      }
       const numAmount = Number(editAmount);
       if (isNaN(numAmount) || numAmount < 0) {
         throw new Error("Please enter a valid amount");
@@ -178,6 +221,7 @@ function ReportsPage() {
           id: editingRow.id,
           amount: numAmount,
           service_name: editService.trim(),
+          operatorUserId: userId ?? undefined,
         },
       });
     },
@@ -196,9 +240,13 @@ function ReportsPage() {
   const deleteMutation = useMutation({
     mutationFn: async () => {
       if (!deletingRow) return;
+      if (!canDeleteReports) {
+        throw new Error("Access Denied: You do not have permission to delete transactions.");
+      }
       await deleteTxFn({
         data: {
           id: deletingRow.id,
+          operatorUserId: userId ?? undefined,
         },
       });
     },
@@ -224,7 +272,9 @@ function ReportsPage() {
       at: row.created_at,
     };
     setActiveReceipt(rData);
-    toast.success(`Printing Receipt #${String(row.receipt_no).padStart(4, "0")} for ${row.student_name}`);
+    toast.success(
+      `Printing Receipt #${String(row.receipt_no).padStart(4, "0")} for ${row.student_name}`,
+    );
     setTimeout(() => {
       try {
         window.print();
@@ -235,6 +285,10 @@ function ReportsPage() {
   }
 
   function handlePrintFullReport() {
+    if (!canExportReports) {
+      toast.error("Access Denied: You do not have permission to print full reports.");
+      return;
+    }
     if (rows.length === 0) {
       toast.error("No transactions to print for these filters");
       return;
@@ -251,6 +305,10 @@ function ReportsPage() {
   }
 
   function openEdit(row: TransactionRow) {
+    if (!canEditReports) {
+      toast.error("Access Denied: You do not have permission to edit transactions.");
+      return;
+    }
     setEditingRow(row);
     setEditAmount(String(row.amount));
     setEditService(row.service_name);
@@ -319,6 +377,10 @@ function ReportsPage() {
   const avgAmount = rows.length > 0 ? (totalAmount / rows.length).toFixed(1) : "0";
 
   function exportExcel() {
+    if (!canExportReports) {
+      toast.error("Access Denied: You do not have permission to export reports.");
+      return;
+    }
     if (rows.length === 0) {
       toast.error("Nothing to export for these filters");
       return;
@@ -326,11 +388,11 @@ function ReportsPage() {
     const ws = XLSX.utils.json_to_sheet(
       rows.map((r) => ({
         "Receipt No": r.receipt_no,
-        "Date": new Date(r.created_at).toLocaleDateString("en-IN"),
-        "Time": new Date(r.created_at).toLocaleTimeString("en-IN"),
-        "SUID": r.suid,
+        Date: new Date(r.created_at).toLocaleDateString("en-IN"),
+        Time: new Date(r.created_at).toLocaleTimeString("en-IN"),
+        SUID: r.suid,
         "Student Name": r.student_name,
-        "Service": r.service_name,
+        Service: r.service_name,
         "Amount (Rs)": Number(r.amount),
       })),
     );
@@ -355,7 +417,9 @@ function ReportsPage() {
           }}
         >
           {label}
-          <ArrowUpDown className={`size-3.5 ${sortKey === key ? "text-[#8b2500]" : "opacity-30"}`} />
+          <ArrowUpDown
+            className={`size-3.5 ${sortKey === key ? "text-[#8b2500]" : "opacity-30"}`}
+          />
         </button>
       </th>
     );
@@ -373,8 +437,12 @@ function ReportsPage() {
         <div id="print-report" className="hidden print:block text-black p-6 font-sans">
           <div className="text-center border-b-2 border-black pb-4 mb-4">
             <h1 className="text-xl font-bold uppercase tracking-wider">{kioskTitle}</h1>
-            <p className="text-xs font-semibold text-gray-700 uppercase">Cashless Service Transactions Ledger Report</p>
-            <p className="text-xs text-gray-600 mt-1">Period: {from} to {to} | Total Entries: {rows.length}</p>
+            <p className="text-xs font-semibold text-gray-700 uppercase">
+              Cashless Service Transactions Ledger Report
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              Period: {from} to {to} | Total Entries: {rows.length}
+            </p>
           </div>
 
           {/* Summary KPIs in Print */}
@@ -414,19 +482,28 @@ function ReportsPage() {
                 const at = new Date(r.created_at);
                 return (
                   <tr key={r.id}>
-                    <td className="py-2 px-2 font-mono font-bold">#{String(r.receipt_no).padStart(5, "0")}</td>
-                    <td className="py-2 px-2">{at.toLocaleDateString("en-IN")} {at.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</td>
+                    <td className="py-2 px-2 font-mono font-bold">
+                      #{String(r.receipt_no).padStart(5, "0")}
+                    </td>
+                    <td className="py-2 px-2">
+                      {at.toLocaleDateString("en-IN")}{" "}
+                      {at.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                    </td>
                     <td className="py-2 px-2 font-mono">{r.suid}</td>
                     <td className="py-2 px-2 font-semibold">{r.student_name}</td>
                     <td className="py-2 px-2">{r.service_name}</td>
-                    <td className="py-2 px-2 text-right font-bold">₹{Number(r.amount).toFixed(2)}</td>
+                    <td className="py-2 px-2 text-right font-bold">
+                      ₹{Number(r.amount).toFixed(2)}
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-black font-bold bg-gray-50">
-                <td colSpan={5} className="py-2 px-2 text-right uppercase">Total Filtered Amount:</td>
+                <td colSpan={5} className="py-2 px-2 text-right uppercase">
+                  Total Filtered Amount:
+                </td>
                 <td className="py-2 px-2 text-right text-sm">₹{totalAmount.toFixed(2)}</td>
               </tr>
             </tfoot>
@@ -434,7 +511,9 @@ function ReportsPage() {
 
           <div className="mt-8 text-center text-xs border-t border-gray-400 pt-3">
             <p className="font-bold">{receiptFooter}</p>
-            <p className="text-gray-500 text-[10px] mt-0.5">Generated on {new Date().toLocaleString("en-IN")}</p>
+            <p className="text-gray-500 text-[10px] mt-0.5">
+              Generated on {new Date().toLocaleString("en-IN")}
+            </p>
           </div>
         </div>
       )}
@@ -445,30 +524,47 @@ function ReportsPage() {
           <h1 className="text-3xl md:text-4xl font-serif font-bold text-[#4a1c14] tracking-tight flex items-center gap-2.5">
             <FileSpreadsheet className="size-8 text-[#8b2500]" /> Reports & Transactions Ledger
           </h1>
-          <p className="mt-1 text-sm text-[#7c533f] font-medium">
-            Print full report summaries, reprint thermal receipts, edit or delete entries, and export to Excel.
-          </p>
+          <div className="flex flex-wrap items-center gap-2 mt-1.5">
+            <p className="text-sm text-[#7c533f] font-medium">
+              Print full report summaries, reprint thermal receipts, edit or delete entries, and
+              export to Excel.
+            </p>
+            {!isSuperAdmin && !canEditReports && !canDeleteReports && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-800 border border-emerald-500/30 shadow-xs">
+                <ShieldCheck className="size-3.5 text-emerald-600" />
+                <span>{roleTitle || "Report Viewer"}: View & Export Only</span>
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Header Action Buttons: Print Report + Export Excel */}
         <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={handlePrintFullReport}
-            disabled={rows.length === 0}
-            className="btn-luxury-secondary px-5 py-2.5 text-xs gap-2 shadow-md disabled:opacity-50"
-          >
-            <Printer className="size-4 text-[#8b2500]" /> Print Report ({rows.length})
-          </button>
+          {canExportReports ? (
+            <>
+              <button
+                type="button"
+                onClick={handlePrintFullReport}
+                disabled={rows.length === 0}
+                className="btn-luxury-secondary px-5 py-2.5 text-xs gap-2 shadow-md disabled:opacity-50"
+              >
+                <Printer className="size-4 text-[#8b2500]" /> Print Report ({rows.length})
+              </button>
 
-          <button
-            type="button"
-            onClick={exportExcel}
-            disabled={rows.length === 0}
-            className="btn-luxury-primary px-6 py-2.5 text-xs gap-2 shadow-lg disabled:opacity-50"
-          >
-            <Download className="size-4" /> Export Excel ({rows.length})
-          </button>
+              <button
+                type="button"
+                onClick={exportExcel}
+                disabled={rows.length === 0}
+                className="btn-luxury-primary px-6 py-2.5 text-xs gap-2 shadow-lg disabled:opacity-50"
+              >
+                <Download className="size-4" /> Export Excel ({rows.length})
+              </button>
+            </>
+          ) : (
+            <div className="px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[#8b2500] text-xs font-bold flex items-center gap-2 shadow-sm">
+              <Lock className="size-4 text-[#8b2500]" /> View-Only Access (Export Disabled)
+            </div>
+          )}
         </div>
       </header>
 
@@ -476,7 +572,9 @@ function ReportsPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="card-luxury p-5 space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-[#7c533f] uppercase">Total Filtered Revenue</span>
+            <span className="text-xs font-bold text-[#7c533f] uppercase">
+              Total Filtered Revenue
+            </span>
             <div className="size-9 rounded-2xl bg-amber-500/15 text-amber-700 border border-amber-500/30 flex items-center justify-center">
               <IndianRupee className="size-4.5" />
             </div>
@@ -484,7 +582,9 @@ function ReportsPage() {
           <div className="text-3xl font-serif font-extrabold text-[#8b2500]">
             ₹{totalAmount.toLocaleString("en-IN")}
           </div>
-          <p className="text-[11px] text-[#7c533f]">{from} to {to}</p>
+          <p className="text-[11px] text-[#7c533f]">
+            {from} to {to}
+          </p>
         </Card>
 
         <Card className="card-luxury p-5 space-y-1.5">
@@ -494,9 +594,7 @@ function ReportsPage() {
               <Receipt className="size-4.5" />
             </div>
           </div>
-          <div className="text-3xl font-serif font-extrabold text-blue-800">
-            {rows.length}
-          </div>
+          <div className="text-3xl font-serif font-extrabold text-blue-800">{rows.length}</div>
           <p className="text-[11px] text-[#7c533f]">Total transactions</p>
         </Card>
 
@@ -520,9 +618,7 @@ function ReportsPage() {
               <IndianRupee className="size-4.5" />
             </div>
           </div>
-          <div className="text-3xl font-serif font-extrabold text-purple-800">
-            ₹{avgAmount}
-          </div>
+          <div className="text-3xl font-serif font-extrabold text-purple-800">₹{avgAmount}</div>
           <p className="text-[11px] text-[#7c533f]">Avg spend per slip</p>
         </Card>
       </div>
@@ -549,7 +645,9 @@ function ReportsPage() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 items-end">
           <div className="space-y-1.5">
-            <Label htmlFor="from" className="text-xs font-bold text-[#7c533f]">From Date</Label>
+            <Label htmlFor="from" className="text-xs font-bold text-[#7c533f]">
+              From Date
+            </Label>
             <Input
               id="from"
               type="date"
@@ -560,7 +658,9 @@ function ReportsPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="to" className="text-xs font-bold text-[#7c533f]">To Date</Label>
+            <Label htmlFor="to" className="text-xs font-bold text-[#7c533f]">
+              To Date
+            </Label>
             <Input
               id="to"
               type="date"
@@ -588,7 +688,9 @@ function ReportsPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="q" className="text-xs font-bold text-[#7c533f]">Search Student / SUID</Label>
+            <Label htmlFor="q" className="text-xs font-bold text-[#7c533f]">
+              Search Student / SUID
+            </Label>
             <div className="relative">
               <Search className="size-4 absolute left-3 top-3 text-[#7c533f]/50" />
               <Input
@@ -637,11 +739,14 @@ function ReportsPage() {
                       </span>
                     </td>
                     <td className="py-3.5 pr-4 text-[#7c533f]">
-                      {at.toLocaleDateString("en-IN")}, {at.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
+                      {at.toLocaleDateString("en-IN")},{" "}
+                      {at.toLocaleTimeString("en-IN", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                      })}
                     </td>
-                    <td className="py-3.5 pr-4 font-bold text-[#8b2500]">
-                      {r.suid}
-                    </td>
+                    <td className="py-3.5 pr-4 font-bold text-[#8b2500]">{r.suid}</td>
                     <td className="py-3.5 pr-4 font-sans font-bold text-sm text-[#2c1810]">
                       {r.student_name}
                     </td>
@@ -657,32 +762,44 @@ function ReportsPage() {
                     {/* Per-Entry Actions: Print Receipt, Edit, Delete */}
                     <td className="py-3.5 pl-4 text-right font-sans">
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          title="Reprint Thermal Receipt Slip"
-                          onClick={() => handlePrintReceipt(r)}
-                          className="btn-luxury-secondary px-3 py-1.5 text-xs gap-1.5 shadow-sm text-[#4a1c14] hover:text-[#8b2500]"
-                        >
-                          <Printer className="size-3.5 text-[#8b2500]" /> Print
-                        </button>
+                        {canPrintSlip && (
+                          <button
+                            type="button"
+                            title="Reprint Thermal Receipt Slip"
+                            onClick={() => handlePrintReceipt(r)}
+                            className="btn-luxury-secondary px-3 py-1.5 text-xs gap-1.5 shadow-sm text-[#4a1c14] hover:text-[#8b2500]"
+                          >
+                            <Printer className="size-3.5 text-[#8b2500]" /> Print
+                          </button>
+                        )}
 
-                        <button
-                          type="button"
-                          title="Edit Entry Amount/Service"
-                          onClick={() => openEdit(r)}
-                          className="btn-luxury-secondary px-3 py-1.5 text-xs gap-1.5 shadow-sm text-[#4a1c14]"
-                        >
-                          <Pencil className="size-3.5 text-amber-700" /> Edit
-                        </button>
+                        {canEditReports && (
+                          <button
+                            type="button"
+                            title="Edit Entry Amount/Service"
+                            onClick={() => openEdit(r)}
+                            className="btn-luxury-secondary px-3 py-1.5 text-xs gap-1.5 shadow-sm text-[#4a1c14]"
+                          >
+                            <Pencil className="size-3.5 text-amber-700" /> Edit
+                          </button>
+                        )}
 
-                        <button
-                          type="button"
-                          title="Delete Transaction"
-                          onClick={() => setDeletingRow(r)}
-                          className="btn-luxury-danger px-2.5 py-1.5 text-xs shadow-sm"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
+                        {canDeleteReports && (
+                          <button
+                            type="button"
+                            title="Delete Transaction"
+                            onClick={() => setDeletingRow(r)}
+                            className="btn-luxury-danger px-2.5 py-1.5 text-xs shadow-sm"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        )}
+
+                        {!canPrintSlip && !canEditReports && !canDeleteReports && (
+                          <span className="text-[11px] text-[#7c533f]/60 italic font-mono px-2 py-0.5 rounded bg-amber-50 border border-amber-200/40">
+                            View Only
+                          </span>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -709,7 +826,8 @@ function ReportsPage() {
               <Pencil className="size-6 text-[#8b2500]" /> Edit Transaction Entry
             </DialogTitle>
             <DialogDescription className="text-xs text-[#7c533f]">
-              Modify charged amount or service type for Receipt #{editingRow?.receipt_no} ({editingRow?.student_name}).
+              Modify charged amount or service type for Receipt #{editingRow?.receipt_no} (
+              {editingRow?.student_name}).
             </DialogDescription>
           </DialogHeader>
 
@@ -729,7 +847,9 @@ function ReportsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="edit-svc" className="text-xs font-bold text-[#7c533f]">Service Name *</Label>
+              <Label htmlFor="edit-svc" className="text-xs font-bold text-[#7c533f]">
+                Service Name *
+              </Label>
               <Select value={editService} onValueChange={setEditService}>
                 <SelectTrigger className="input-luxury h-10 text-sm font-semibold">
                   <SelectValue placeholder="Select Service" />
@@ -741,17 +861,20 @@ function ReportsPage() {
                     </SelectItem>
                   ))}
                   {/* Keep original service name if deleted */}
-                  {editingRow && !(services.data ?? []).some((s) => s.name === editingRow.service_name) && (
-                    <SelectItem value={editingRow.service_name}>
-                      {editingRow.service_name}
-                    </SelectItem>
-                  )}
+                  {editingRow &&
+                    !(services.data ?? []).some((s) => s.name === editingRow.service_name) && (
+                      <SelectItem value={editingRow.service_name}>
+                        {editingRow.service_name}
+                      </SelectItem>
+                    )}
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="edit-amt" className="text-xs font-bold text-[#7c533f]">Amount Charged (₹) *</Label>
+              <Label htmlFor="edit-amt" className="text-xs font-bold text-[#7c533f]">
+                Amount Charged (₹) *
+              </Label>
               <div className="relative">
                 <span className="absolute left-3 top-2.5 text-xs font-bold text-[#7c533f]">₹</span>
                 <Input
@@ -789,7 +912,10 @@ function ReportsPage() {
       </Dialog>
 
       {/* DELETE TRANSACTION CONFIRMATION DIALOG */}
-      <AlertDialog open={deletingRow !== null} onOpenChange={(open) => !open && setDeletingRow(null)}>
+      <AlertDialog
+        open={deletingRow !== null}
+        onOpenChange={(open) => !open && setDeletingRow(null)}
+      >
         <AlertDialogContent className="bg-white border border-[#e5d8c5] shadow-2xl rounded-3xl p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl font-serif font-bold text-rose-700 flex items-center gap-2">
@@ -797,7 +923,9 @@ function ReportsPage() {
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-[#7c533f] space-y-2 pt-2">
               <p>
-                Are you sure you want to permanently delete <strong>Receipt #{deletingRow?.receipt_no}</strong> (₹{deletingRow?.amount} - {deletingRow?.service_name}) for <strong>{deletingRow?.student_name}</strong>?
+                Are you sure you want to permanently delete{" "}
+                <strong>Receipt #{deletingRow?.receipt_no}</strong> (₹{deletingRow?.amount} -{" "}
+                {deletingRow?.service_name}) for <strong>{deletingRow?.student_name}</strong>?
               </p>
               <p className="text-rose-700 font-bold text-xs">
                 This transaction will be completely removed from the ledger and daily totals.

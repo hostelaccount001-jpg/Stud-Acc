@@ -12,6 +12,7 @@ export type CurrentUserState = {
   userId: string | null;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  roleId?: string | undefined;
   roleTitle: string;
   permissions: UserPermissions;
   loading: boolean;
@@ -107,12 +108,19 @@ async function refreshUserPermissions(force = false) {
           data: { userId: user.id, email: userEmail ?? undefined },
         });
 
-        const nextRoleTitle = res.isSuperAdmin ? "Super Admin" : res.role === "admin" ? "Administrator" : "Staff";
+        const nextRoleTitle =
+          res.roleTitle ||
+          (res.isSuperAdmin
+            ? "Super Admin"
+            : res.role === "admin"
+              ? "Administrator"
+              : "Staff");
         cachedState = {
           email: userEmail,
           userId: user.id,
           isAdmin: res.role === "admin" || res.role === "super_admin",
           isSuperAdmin: res.isSuperAdmin,
+          roleId: res.roleId,
           roleTitle: nextRoleTitle,
           permissions: res.permissions,
           loading: false,
@@ -131,7 +139,9 @@ async function refreshUserPermissions(force = false) {
           isAdmin: hasAdmin,
           isSuperAdmin: hasAdmin,
           roleTitle: hasAdmin ? "Administrator" : "Staff",
-          permissions: hasAdmin ? { ...defaultSuperAdminPermissions } : { ...defaultStaffPermissions },
+          permissions: hasAdmin
+            ? { ...defaultSuperAdminPermissions }
+            : { ...defaultStaffPermissions },
           loading: false,
         };
       }
@@ -154,8 +164,8 @@ export function useCurrentUser() {
   useEffect(() => {
     subscribers.add(setState);
 
-    // If no cache or state is still loading, fetch immediately
-    if (!cachedState || state.loading) {
+    // If no cache, fetch immediately
+    if (!cachedState) {
       void refreshUserPermissions();
     }
 
@@ -176,4 +186,3 @@ export function invalidateUserSessionCache() {
   } catch {}
   void refreshUserPermissions(true);
 }
-

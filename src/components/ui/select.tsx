@@ -80,8 +80,7 @@ const SelectContent = React.forwardRef<
       <SelectPrimitive.Viewport
         className={cn(
           "p-1.5",
-          position === "popper" &&
-            "w-full min-w-[var(--radix-select-trigger-width)]",
+          position === "popper" && "w-full min-w-[var(--radix-select-trigger-width)]",
         )}
       >
         {children}
@@ -98,7 +97,10 @@ const SelectLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Label
     ref={ref}
-    className={cn("px-2.5 py-1.5 text-xs font-bold text-[#7c533f] uppercase tracking-wider", className)}
+    className={cn(
+      "px-2.5 py-1.5 text-xs font-bold text-[#7c533f] uppercase tracking-wider",
+      className,
+    )}
     {...props}
   />
 ));

@@ -8,14 +8,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Trash2, Wrench, Plus, Calculator, Coins, Printer, CheckCircle2, ShoppingBag, ShieldCheck } from "lucide-react";
+import {
+  Trash2,
+  Wrench,
+  Plus,
+  Calculator,
+  Coins,
+  Printer,
+  CheckCircle2,
+  ShoppingBag,
+  ShieldCheck,
+} from "lucide-react";
 import { useCurrentUser } from "@/hooks/use-current-user";
 
 export const Route = createFileRoute("/_authenticated/admin/services")({
   head: () => ({
     meta: [
       { title: "Services & Pricing — Gurukul Kiosk ERP" },
-      { name: "description", content: "Configure kiosk services with fixed prices, custom amount touchscreen keypads, receipt printing and daily caps." },
+      {
+        name: "description",
+        content:
+          "Configure kiosk services with fixed prices, custom amount touchscreen keypads, receipt printing and daily caps.",
+      },
     ],
   }),
   component: ServicesPage,
@@ -49,7 +63,9 @@ function ServicesPage() {
       const price = form.isCustomAmount ? 0 : Number(form.price);
       if (!name) throw new Error("Please enter service name");
       if (!form.isCustomAmount && (!Number.isFinite(price) || price <= 0)) {
-        throw new Error("Enter a valid fixed price greater than 0, or turn ON Custom Amount switch");
+        throw new Error(
+          "Enter a valid fixed price greater than 0, or turn ON Custom Amount switch",
+        );
       }
 
       const { error } = await supabase.from("services").insert({
@@ -64,7 +80,13 @@ function ServicesPage() {
     },
     onSuccess: () => {
       toast.success("Service created successfully!");
-      setForm({ name: "", isCustomAmount: false, price: "50", print_receipt: true, daily_limit: "" });
+      setForm({
+        name: "",
+        isCustomAmount: false,
+        price: "50",
+        print_receipt: true,
+        daily_limit: "",
+      });
       qc.invalidateQueries({ queryKey: ["services"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -76,7 +98,12 @@ function ServicesPage() {
       patch,
     }: {
       id: string;
-      patch: { price?: number; daily_limit?: number | null; print_receipt?: boolean; active?: boolean };
+      patch: {
+        price?: number;
+        daily_limit?: number | null;
+        print_receipt?: boolean;
+        active?: boolean;
+      };
     }) => {
       const { error } = await supabase.from("services").update(patch).eq("id", id);
       if (error) throw error;
@@ -92,7 +119,9 @@ function ServicesPage() {
   const remove = useMutation({
     mutationFn: async (id: string) => {
       if (!canDeleteServices) {
-        throw new Error("You do not have permission to delete services. Please contact Super Admin.");
+        throw new Error(
+          "You do not have permission to delete services. Please contact Super Admin.",
+        );
       }
       const { error } = await supabase.from("services").delete().eq("id", id);
       if (error) throw error;
@@ -107,7 +136,10 @@ function ServicesPage() {
 
   const removeAll = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("services").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      const { error } = await supabase
+        .from("services")
+        .delete()
+        .neq("id", "00000000-0000-0000-0000-000000000000");
       if (error) throw error;
     },
     onSuccess: () => {
@@ -146,7 +178,8 @@ function ServicesPage() {
             <ShoppingBag className="size-8 text-[#8b2500]" /> Services & Pricing Controls
           </h1>
           <p className="mt-1 text-sm text-[#7c533f] font-medium">
-            Manage Gurukul store, haircut, laundry and other services. Toggle custom keypad entry or fixed price boxes.
+            Manage Gurukul store, haircut, laundry and other services. Toggle custom keypad entry or
+            fixed price boxes.
           </p>
         </div>
 
@@ -163,7 +196,9 @@ function ServicesPage() {
             <button
               type="button"
               onClick={() => {
-                if (window.confirm("Are you sure you want to delete ALL services from the database?")) {
+                if (
+                  window.confirm("Are you sure you want to delete ALL services from the database?")
+                ) {
                   removeAll.mutate();
                 }
               }}
@@ -196,7 +231,9 @@ function ServicesPage() {
             }}
           >
             <div className="space-y-1.5">
-              <Label htmlFor="sname" className="text-xs font-bold text-[#7c533f]">Service Name *</Label>
+              <Label htmlFor="sname" className="text-xs font-bold text-[#7c533f]">
+                Service Name *
+              </Label>
               <Input
                 id="sname"
                 placeholder="e.g. Store, Haircut"
@@ -210,7 +247,10 @@ function ServicesPage() {
             {/* Custom Amount Switch & Price Box */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="scustom-toggle" className="text-xs font-bold text-[#7c533f] flex items-center gap-1">
+                <Label
+                  htmlFor="scustom-toggle"
+                  className="text-xs font-bold text-[#7c533f] flex items-center gap-1"
+                >
                   <Calculator className="size-3.5 text-amber-700" /> Custom Keypad
                 </Label>
                 <div className="flex items-center gap-1.5">
@@ -228,7 +268,9 @@ function ServicesPage() {
                 </div>
               ) : (
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-xs font-bold text-[#7c533f]">₹</span>
+                  <span className="absolute left-3 top-2.5 text-xs font-bold text-[#7c533f]">
+                    ₹
+                  </span>
                   <Input
                     id="sprice"
                     type="number"
@@ -245,7 +287,9 @@ function ServicesPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="slimit" className="text-xs font-bold text-[#7c533f]">Daily Cap (₹ optional)</Label>
+              <Label htmlFor="slimit" className="text-xs font-bold text-[#7c533f]">
+                Daily Cap (₹ optional)
+              </Label>
               <Input
                 id="slimit"
                 type="number"
@@ -324,11 +368,13 @@ function ServicesPage() {
                             }
                           }}
                         />
-                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                          isCustom
-                            ? "bg-amber-500/15 text-amber-900 border border-amber-500/30"
-                            : "bg-[#faf6ef] text-[#7c533f] border border-[#d8c5af]"
-                        }`}>
+                        <span
+                          className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                            isCustom
+                              ? "bg-amber-500/15 text-amber-900 border border-amber-500/30"
+                              : "bg-[#faf6ef] text-[#7c533f] border border-[#d8c5af]"
+                          }`}
+                        >
                           {isCustom ? "KEYPAD ON" : "FIXED PRICE"}
                         </span>
                       </div>
@@ -387,13 +433,17 @@ function ServicesPage() {
                         <Switch
                           checked={s.print_receipt ?? true}
                           disabled={!isAdmin}
-                          onCheckedChange={(print_receipt) => update.mutate({ id: s.id, patch: { print_receipt } })}
+                          onCheckedChange={(print_receipt) =>
+                            update.mutate({ id: s.id, patch: { print_receipt } })
+                          }
                         />
-                        <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border shadow-sm ${
-                          s.print_receipt !== false
-                            ? "bg-emerald-500/20 text-emerald-900 border-emerald-500/40"
-                            : "bg-zinc-200 text-zinc-700 border-zinc-300"
-                        }`}>
+                        <span
+                          className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border shadow-sm ${
+                            s.print_receipt !== false
+                              ? "bg-emerald-500/20 text-emerald-900 border-emerald-500/40"
+                              : "bg-zinc-200 text-zinc-700 border-zinc-300"
+                          }`}
+                        >
                           {s.print_receipt !== false ? "PRINT ON" : "NO PRINT"}
                         </span>
                       </div>
@@ -405,13 +455,17 @@ function ServicesPage() {
                         <Switch
                           checked={s.active}
                           disabled={!isAdmin}
-                          onCheckedChange={(active) => update.mutate({ id: s.id, patch: { active } })}
+                          onCheckedChange={(active) =>
+                            update.mutate({ id: s.id, patch: { active } })
+                          }
                         />
-                        <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border shadow-sm ${
-                          s.active
-                            ? "bg-emerald-500/20 text-emerald-900 border-emerald-500/40"
-                            : "bg-rose-500/20 text-rose-900 border-rose-500/40"
-                        }`}>
+                        <span
+                          className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border shadow-sm ${
+                            s.active
+                              ? "bg-emerald-500/20 text-emerald-900 border-emerald-500/40"
+                              : "bg-rose-500/20 text-rose-900 border-rose-500/40"
+                          }`}
+                        >
                           {s.active ? "ACTIVE" : "HIDDEN"}
                         </span>
                       </div>

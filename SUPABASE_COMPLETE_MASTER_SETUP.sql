@@ -245,17 +245,33 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 12. RPC Function: Admin Reset Password
+-- 12. RPC Function: Admin Reset Password (Supports both UUID and Email)
+DROP FUNCTION IF EXISTS public.admin_reset_user_password(UUID, TEXT);
 CREATE OR REPLACE FUNCTION public.admin_reset_user_password(
-    p_user_id UUID,
+    p_user_id TEXT,
     p_new_password TEXT
 )
 RETURNS VOID AS $$
+DECLARE
+    v_target_id UUID := NULL;
 BEGIN
-    UPDATE auth.users
-    SET encrypted_password = crypt(p_new_password, gen_salt('bf')),
-        updated_at = NOW()
-    WHERE id = p_user_id;
+    IF p_user_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+        v_target_id := p_user_id::UUID;
+    ELSE
+        SELECT id INTO v_target_id FROM auth.users WHERE email = lower(trim(p_user_id)) LIMIT 1;
+        IF v_target_id IS NULL AND p_user_id = 'master-admin-anshsangani' THEN
+            SELECT id INTO v_target_id FROM auth.users WHERE email = 'anshsangani2007@gmail.com' LIMIT 1;
+        END IF;
+    END IF;
+
+    IF v_target_id IS NOT NULL THEN
+        UPDATE auth.users
+        SET encrypted_password = crypt(p_new_password, gen_salt('bf')),
+            updated_at = NOW()
+        WHERE id = v_target_id;
+    ELSE
+        RAISE EXCEPTION 'User not found in auth.users: %', p_user_id;
+    END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -273,7 +289,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 14. Grant Execute Permissions to all roles
 GRANT EXECUTE ON FUNCTION public.admin_create_staff_user(TEXT, TEXT, TEXT) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.admin_reset_user_password(UUID, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.admin_reset_user_password(TEXT, TEXT) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.admin_delete_staff_user(UUID) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.admin_repair_auth_identities() TO anon, authenticated, service_role;
 

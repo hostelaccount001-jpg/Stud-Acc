@@ -32,7 +32,14 @@ export type FingerRecord = {
 };
 
 export type CaptureOutcome =
-  | { ok: true; template: string; quality: number; serial?: string | undefined; model?: string | undefined; driverType?: string | undefined }
+  | {
+      ok: true;
+      template: string;
+      quality: number;
+      serial?: string | undefined;
+      model?: string | undefined;
+      driverType?: string | undefined;
+    }
   | { ok: false; error: string };
 
 export type DeviceInfo = {
@@ -82,7 +89,11 @@ function parseXmlTag(xml: string, tag: string): string | null {
   return match && match[1] ? match[1].trim() : null;
 }
 
-async function probeRDServiceUrl(base: string, port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
+async function probeRDServiceUrl(
+  base: string,
+  port: number,
+  timeoutMs = 800,
+): Promise<DiscoveredDevice | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -122,7 +133,11 @@ async function probeRDService(port: number, timeoutMs = 800): Promise<Discovered
   return await probeRDServiceUrl(`http://127.0.0.1:${port}`, port, timeoutMs);
 }
 
-async function probeClientServiceUrl(base: string, port: number, timeoutMs = 800): Promise<DiscoveredDevice | null> {
+async function probeClientServiceUrl(
+  base: string,
+  port: number,
+  timeoutMs = 800,
+): Promise<DiscoveredDevice | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -244,10 +259,7 @@ export function useMantraDevice(pollIntervalMs = 3000) {
  * Real Fingerprint Capture on Mantra MFS100 hardware.
  * Strictly communicates with the connected device — no simulation mode.
  */
-export async function captureFinger(
-  quality = 60,
-  timeoutSeconds = 10,
-): Promise<CaptureOutcome> {
+export async function captureFinger(quality = 60, timeoutSeconds = 10): Promise<CaptureOutcome> {
   const dev = await findDevice();
   if (!dev) {
     return {
@@ -302,7 +314,10 @@ export async function captureFinger(
       };
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") {
-        return { ok: false, error: "Scan timed out. Please place your finger firmly on the sensor." };
+        return {
+          ok: false,
+          error: "Scan timed out. Please place your finger firmly on the sensor.",
+        };
       }
       return { ok: false, error: "Communication error with Mantra MFS100 scanner." };
     } finally {
@@ -324,7 +339,10 @@ export async function captureFinger(
       const data = (await res.json()) as Record<string, unknown>;
       const code = Number(data["ErrorCode"] ?? -1);
       if (code !== 0) {
-        return { ok: false, error: String(data["ErrorDescription"] ?? "Fingerprint capture failed.") };
+        return {
+          ok: false,
+          error: String(data["ErrorDescription"] ?? "Fingerprint capture failed."),
+        };
       }
       const template = String(data["IsoTemplate"] ?? data["AnsiTemplate"] ?? "");
       if (!template) return { ok: false, error: "Scanner returned empty template." };
@@ -378,7 +396,11 @@ export async function matchTemplate(probe: string, gallery: string): Promise<boo
 
       if (res.ok) {
         const data = (await res.json()) as Record<string, unknown>;
-        const verified = data["verified"] === true || data["Status"] === true || data["status"] === true || data["Status"] === "true";
+        const verified =
+          data["verified"] === true ||
+          data["Status"] === true ||
+          data["status"] === true ||
+          data["Status"] === "true";
         const score = Number(data["Score"] ?? data["score"] ?? data["MatchingScore"] ?? 0);
         if (verified || score >= 100) return true;
         return false;
@@ -413,7 +435,11 @@ export async function matchTemplate(probe: string, gallery: string): Promise<boo
       if (res.ok) {
         const data = (await res.json()) as Record<string, unknown>;
         cachedMatcherEndpoint = url;
-        const verified = data["verified"] === true || data["Status"] === true || data["status"] === true || data["Status"] === "true";
+        const verified =
+          data["verified"] === true ||
+          data["Status"] === true ||
+          data["status"] === true ||
+          data["Status"] === "true";
         const score = Number(data["Score"] ?? data["score"] ?? data["MatchingScore"] ?? 0);
         return verified || score >= 100;
       }

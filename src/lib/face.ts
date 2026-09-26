@@ -1,6 +1,6 @@
 /**
  * Shree Swaminarayan Gurukul - Ultra-Accurate AI Face Biometrics Engine
- * 
+ *
  * Features:
  * 1. True Human Face Detection: Checks ocular symmetry, nasal ridge prominence,
  *    and mouth boundary to reject blank walls, hands, paper, objects, and dummy surfaces.
@@ -14,18 +14,19 @@ export type FaceRecord = {
   type: "face";
   photo: string; // base64 JPEG data URL
   descriptor: number[]; // 128-dimensional biometric feature vector (legacy)
-  descriptor512?: number[]; // 512-dimensional InsightFace ArcFace embedding (production)
+  descriptor512?: number[] | undefined; // 512-dimensional InsightFace ArcFace embedding (production)
   enrolled_at: string;
-  suid?: string;
-  nfc_no?: string;
+  suid?: string | undefined;
+  nfc_no?: string | undefined;
 };
 
 export type FingerRecord = {
+  type?: "finger" | undefined;
   finger: string;
   template: string;
   quality: number;
   enrolled_at: string;
-  serial?: string;
+  serial?: string | undefined;
 };
 
 export type BiometricItem = FaceRecord | FingerRecord;
@@ -34,8 +35,8 @@ export type FaceDetectionResult = {
   isHumanFace: boolean;
   confidence: number; // 0 to 100
   quality: number; // 0 to 100
-  reason?: string;
-  descriptor?: number[];
+  reason?: string | undefined;
+  descriptor?: number[] | undefined;
 };
 
 /**
@@ -88,7 +89,8 @@ export function detectHumanFace(canvas: HTMLCanvasElement): FaceDetectionResult 
     }
   }
 
-  if (faceCount === 0) return { isHumanFace: false, confidence: 0, quality: 0, reason: "No face area" };
+  if (faceCount === 0)
+    return { isHumanFace: false, confidence: 0, quality: 0, reason: "No face area" };
   const meanFaceLuma = faceLumaSum / faceCount;
 
   // 1. Overall Contrast across Face Oval
@@ -111,7 +113,7 @@ export function detectHumanFace(canvas: HTMLCanvasElement): FaceDetectionResult 
       isHumanFace: false,
       confidence: 0,
       quality: Math.round(stdFaceLuma),
-      reason: "No human face in camera view"
+      reason: "No human face in camera view",
     };
   }
 
@@ -170,30 +172,32 @@ export function detectHumanFace(canvas: HTMLCanvasElement): FaceDetectionResult 
   // - Bilateral Symmetry: 25 pts
   // - 128D Feature Energy: 20 pts
   const contrastPts = Math.min(25, (stdFaceLuma / 14.0) * 25);
-  const edgePts = singleDirectionDominance > 0.90 || activeAngleBins < 2 
-    ? Math.max(0, 30 - 25) // penalty for single lines on ceiling
-    : Math.min(30, (totalEdges / 25.0) * 20 + activeAngleBins * 2.5);
+  const edgePts =
+    singleDirectionDominance > 0.9 || activeAngleBins < 2
+      ? Math.max(0, 30 - 25) // penalty for single lines on ceiling
+      : Math.min(30, (totalEdges / 25.0) * 20 + activeAngleBins * 2.5);
   const symPts = symmetryScore * 25;
   const vectorPts = Math.min(20, vectorRichness * 35);
 
-  const confidenceScore = Math.round(Math.min(100, Math.max(0, contrastPts + edgePts + symPts + vectorPts)));
+  const confidenceScore = Math.round(
+    Math.min(100, Math.max(0, contrastPts + edgePts + symPts + vectorPts)),
+  );
 
   // Strict anti-ceiling/dummy check:
   // Ceilings with a wire or blank walls get < 40 confidence.
   // Genuine human faces score 50 to 95.
-  const isHuman = (
+  const isHuman =
     confidenceScore >= 45 &&
     stdFaceLuma >= 5.0 &&
     totalEdges >= 10 &&
-    singleDirectionDominance < 0.92
-  );
+    singleDirectionDominance < 0.92;
 
   return {
     isHumanFace: isHuman,
     confidence: confidenceScore,
     quality: Math.min(100, Math.round(stdFaceLuma * 3.5)),
     reason: isHuman ? "Human face verified" : "Looking for human face...",
-    descriptor: isHuman ? vector : undefined
+    descriptor: isHuman ? vector : undefined,
   };
 }
 
@@ -411,11 +415,15 @@ let faceServerOfflineUntil = 0;
  * Extract a 512D ArcFace embedding from an image via the Python InsightFace server.
  * Returns the embedding, detection confidence, and cropped face.
  */
-export async function extractFace512D(
-  imageDataUrl: string
-): Promise<Face512DExtractResult> {
+export async function extractFace512D(imageDataUrl: string): Promise<Face512DExtractResult> {
   if (Date.now() < faceServerOfflineUntil) {
-    return { success: false, embedding: [], det_score: 0, face_crop_b64: "", error: "Server offline" };
+    return {
+      success: false,
+      embedding: [],
+      det_score: 0,
+      face_crop_b64: "",
+      error: "Server offline",
+    };
   }
   try {
     const controller = new AbortController();
@@ -430,14 +438,26 @@ export async function extractFace512D(
     clearTimeout(timer);
 
     if (!res.ok) {
-      return { success: false, embedding: [], det_score: 0, face_crop_b64: "", error: `Server error ${res.status}` };
+      return {
+        success: false,
+        embedding: [],
+        det_score: 0,
+        face_crop_b64: "",
+        error: `Server error ${res.status}`,
+      };
     }
 
-    const data = await res.json() as Face512DExtractResult;
+    const data = (await res.json()) as Face512DExtractResult;
     return data;
   } catch {
     faceServerOfflineUntil = Date.now() + 5000; // back off for 5s
-    return { success: false, embedding: [], det_score: 0, face_crop_b64: "", error: "InsightFace server unreachable" };
+    return {
+      success: false,
+      embedding: [],
+      det_score: 0,
+      face_crop_b64: "",
+      error: "InsightFace server unreachable",
+    };
   }
 }
 
@@ -447,7 +467,7 @@ export async function extractFace512D(
 export async function verifyFace512D(
   probeEmbedding: number[],
   galleryEmbedding: number[],
-  threshold: number = 0.45
+  threshold: number = 0.45,
 ): Promise<Face512DVerifyResult> {
   if (Date.now() < faceServerOfflineUntil) {
     return { verified: false, score: 0, should_update: false, message: "Server offline" };
@@ -469,14 +489,24 @@ export async function verifyFace512D(
     clearTimeout(timer);
 
     if (!res.ok) {
-      return { verified: false, score: 0, should_update: false, message: `Server error ${res.status}` };
+      return {
+        verified: false,
+        score: 0,
+        should_update: false,
+        message: `Server error ${res.status}`,
+      };
     }
 
-    const data = await res.json() as Face512DVerifyResult;
+    const data = (await res.json()) as Face512DVerifyResult;
     return data;
   } catch {
     faceServerOfflineUntil = Date.now() + 5000;
-    return { verified: false, score: 0, should_update: false, message: "InsightFace server unreachable" };
+    return {
+      verified: false,
+      score: 0,
+      should_update: false,
+      message: "InsightFace server unreachable",
+    };
   }
 }
 
@@ -490,17 +520,34 @@ export async function matchFace(
   probeVector?: number[],
   galleryVector?: number[],
   probeVector512?: number[],
-  galleryVector512?: number[]
+  galleryVector512?: number[],
 ): Promise<{ verified: boolean; score: number; should_update?: boolean; reason?: string }> {
   if (!probeVector || probeVector.length === 0) {
-    return { verified: false, score: 0, reason: "No face detected in camera view. Please look directly at the lens." };
+    return {
+      verified: false,
+      score: 0,
+      reason: "No face detected in camera view. Please look directly at the lens.",
+    };
   }
-  if (!galleryPhoto && (!galleryVector || galleryVector.length === 0) && (!galleryVector512 || galleryVector512.length === 0)) {
-    return { verified: false, score: 0, reason: "Student does not have enrolled facial biometric data." };
+  if (
+    !galleryPhoto &&
+    (!galleryVector || galleryVector.length === 0) &&
+    (!galleryVector512 || galleryVector512.length === 0)
+  ) {
+    return {
+      verified: false,
+      score: 0,
+      reason: "Student does not have enrolled facial biometric data.",
+    };
   }
 
   // 1. Try InsightFace 512D server verification (highest accuracy)
-  if (probeVector512 && galleryVector512 && probeVector512.length === 512 && galleryVector512.length === 512) {
+  if (
+    probeVector512 &&
+    galleryVector512 &&
+    probeVector512.length === 512 &&
+    galleryVector512.length === 512
+  ) {
     try {
       const result = await verifyFace512D(probeVector512, galleryVector512);
       if (result.score > 0) {
@@ -555,7 +602,8 @@ export async function matchFace(
           verified,
           score,
           should_update: Boolean(data.should_update),
-          reason: data.message ?? (verified ? "Face verified" : "Face does not match scanned NFC card"),
+          reason:
+            data.message ?? (verified ? "Face verified" : "Face does not match scanned NFC card"),
         };
       }
     } catch {
@@ -570,7 +618,9 @@ export async function matchFace(
     return {
       verified,
       score,
-      reason: verified ? "Face verified successfully" : "Face does not match the scanned NFC student record",
+      reason: verified
+        ? "Face verified successfully"
+        : "Face does not match the scanned NFC student record",
     };
   }
 
@@ -596,6 +646,7 @@ export function toBiometricRecords(value: unknown): BiometricItem[] {
       });
     } else if (typeof (f as any).finger === "string") {
       records.push({
+        type: "finger",
         finger: String((f as any).finger),
         template: typeof (f as any).template === "string" ? (f as any).template : "",
         quality: Number((f as any).quality ?? 0),
@@ -606,4 +657,3 @@ export function toBiometricRecords(value: unknown): BiometricItem[] {
   }
   return records;
 }
-

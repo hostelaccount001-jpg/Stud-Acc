@@ -38,19 +38,20 @@ export const deleteSelectedStudentsServer = createServerFn({ method: "POST" })
     return { success: true, count: del?.length ?? 0 };
   });
 
-export const deleteAllStudentsServer = createServerFn({ method: "POST" }).handler(
-  async () => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    await supabaseAdmin.from("transactions").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    const { data: del, error } = await supabaseAdmin
-      .from("students")
-      .delete()
-      .neq("id", "00000000-0000-0000-0000-000000000000")
-      .select("id");
-    if (error) throw new Error(error.message);
-    return { success: true, count: del?.length ?? 0 };
-  },
-);
+export const deleteAllStudentsServer = createServerFn({ method: "POST" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  await supabaseAdmin
+    .from("transactions")
+    .delete()
+    .neq("id", "00000000-0000-0000-0000-000000000000");
+  const { data: del, error } = await supabaseAdmin
+    .from("students")
+    .delete()
+    .neq("id", "00000000-0000-0000-0000-000000000000")
+    .select("id");
+  if (error) throw new Error(error.message);
+  return { success: true, count: del?.length ?? 0 };
+});
 
 export const addStudentServer = createServerFn({ method: "POST" })
   .validator((input: unknown) => studentInputSchema.parse(input))
@@ -99,46 +100,96 @@ export const toggleBlockServer = createServerFn({ method: "POST" })
   .validator((input: unknown) => z.object({ id: z.string(), blocked: z.boolean() }).parse(input))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.from("students").update({ blocked: data.blocked }).eq("id", data.id);
+    const { error } = await supabaseAdmin
+      .from("students")
+      .update({ blocked: data.blocked })
+      .eq("id", data.id);
     if (error) throw new Error(error.message);
     return { success: true };
   });
 
+export const getAllStudentsServer = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const PAGE_SIZE = 1000;
+  const allStudents: any[] = [];
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await supabaseAdmin
+      .from("students")
+      .select("*")
+      .order("suid")
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) throw new Error(error.message);
+    if (data && data.length > 0) {
+      allStudents.push(...data);
+      if (data.length < PAGE_SIZE) {
+        hasMore = false;
+      } else {
+        from += PAGE_SIZE;
+      }
+    } else {
+      hasMore = false;
+    }
+  }
+  return allStudents;
+});
+
 export const bulkUploadStudentsServer = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
-    if (input && typeof input === "object" && "data" in input && Array.isArray((input as any).data)) {
+    if (
+      input &&
+      typeof input === "object" &&
+      "data" in input &&
+      Array.isArray((input as any).data)
+    ) {
       return z.array(studentInputSchema).parse((input as any).data);
     }
     return z.array(studentInputSchema).parse(input);
   })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    let count = 0;
-    for (const d of data) {
-      // Check for existing student to preserve existing biometrics and NFC credentials
-      const { data: existing } = await supabaseAdmin
-        .from("students")
-        .select("id, fingerprints, nfc_no")
-        .eq("suid", d.suid)
-        .maybeSingle();
+    if (!data || data.length === 0) return { count: 0 };
 
-      const { error } = await supabaseAdmin.from("students").upsert(
-        {
-          suid: d.suid,
-          name: d.name,
-          nfc_no: d.nfc_no || existing?.nfc_no || d.suid,
-          class_name: d.class_name ? String(d.class_name).trim() : null,
-          room_no: d.room_no ? String(d.room_no).trim() : null,
-          fingerprints: (d.fingerprints && d.fingerprints.length > 0) ? d.fingerprints : (existing?.fingerprints || []),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "suid" },
-      );
-      if (!error) {
-        count++;
-      } else {
-        console.error("Bulk upload error for suid", d.suid, error);
+    const suids = data.map((d) => d.suid);
+    const { data: existingList } = await supabaseAdmin
+      .from("students")
+      .select("id, suid, fingerprints, nfc_no")
+      .in("suid", suids);
+
+    const existingMap = new Map((existingList || []).map((e) => [e.suid, e]));
+
+    const upsertRows = data.map((d) => {
+      const existing = existingMap.get(d.suid);
+      return {
+        suid: d.suid,
+        name: d.name,
+        nfc_no: d.nfc_no || existing?.nfc_no || d.suid,
+        class_name: d.class_name ? String(d.class_name).trim() : null,
+        room_no: d.room_no ? String(d.room_no).trim() : null,
+        fingerprints:
+          d.fingerprints && d.fingerprints.length > 0
+            ? d.fingerprints
+            : existing?.fingerprints || [],
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+    const { error: upsertErr } = await supabaseAdmin
+      .from("students")
+      .upsert(upsertRows, { onConflict: "suid" });
+
+    if (upsertErr) {
+      console.warn("Batch upsert encountered error, retrying individual items:", upsertErr);
+      let count = 0;
+      for (const row of upsertRows) {
+        const { error } = await supabaseAdmin.from("students").upsert(row, { onConflict: "suid" });
+        if (!error) count++;
       }
+      return { count };
     }
-    return { count };
+
+    return { count: upsertRows.length };
   });

@@ -26,13 +26,44 @@ export const Route = createFileRoute("/_authenticated/admin")({
 });
 
 const nav = [
-  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true, desc: "Live overview & transactions" },
-  { to: "/admin/students", label: "Students", icon: Users, desc: "Biometric enrollment & profiles" },
+  {
+    to: "/admin",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    exact: true,
+    desc: "Live overview & transactions",
+  },
+  {
+    to: "/admin/students",
+    label: "Students",
+    icon: Users,
+    desc: "Biometric enrollment & profiles",
+  },
   { to: "/admin/services", label: "Services", icon: Wrench, desc: "Pricing & receipt controls" },
-  { to: "/admin/settings", label: "Limits & Messages", icon: SlidersHorizontal, desc: "Daily cap & kiosk headers" },
-  { to: "/admin/reports", label: "Reports", icon: FileSpreadsheet, desc: "Excel exports & analytics" },
-  { to: "/admin/staff", label: "Users & Roles", icon: ShieldCheck, desc: "Super Admin user manager" },
-  { to: "/admin/maintenance", label: "System Maintenance", icon: Database, desc: "Database reset & audit tools" },
+  {
+    to: "/admin/settings",
+    label: "Limits & Messages",
+    icon: SlidersHorizontal,
+    desc: "Daily cap & kiosk headers",
+  },
+  {
+    to: "/admin/reports",
+    label: "Reports",
+    icon: FileSpreadsheet,
+    desc: "Excel exports & analytics",
+  },
+  {
+    to: "/admin/staff",
+    label: "Users & Roles",
+    icon: ShieldCheck,
+    desc: "Super Admin user manager",
+  },
+  {
+    to: "/admin/maintenance",
+    label: "System Maintenance",
+    icon: Database,
+    desc: "Database reset & audit tools",
+  },
 ] as const;
 
 function AdminLayout() {
@@ -40,7 +71,9 @@ function AdminLayout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [time, setTime] = useState(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
+  const [time, setTime] = useState(
+    new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+  );
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -189,7 +222,8 @@ function AdminLayout() {
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center gap-3 p-3.5 rounded-2xl text-base font-semibold text-white/80 hover:bg-white/10"
                 activeProps={{
-                  className: "flex items-center gap-3 p-3.5 rounded-2xl text-base font-bold bg-[#8b2500] text-white",
+                  className:
+                    "flex items-center gap-3 p-3.5 rounded-2xl text-base font-bold bg-[#8b2500] text-white",
                 }}
               >
                 <item.icon className="size-5" />

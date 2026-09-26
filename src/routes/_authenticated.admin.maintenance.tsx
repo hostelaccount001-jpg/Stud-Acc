@@ -42,7 +42,10 @@ export const Route = createFileRoute("/_authenticated/admin/maintenance")({
   head: () => ({
     meta: [
       { title: "System Maintenance & Database Console — Gurukul Kiosk ERP" },
-      { name: "description", content: "Selectively manage, maintain, or reset specific ERP modules." },
+      {
+        name: "description",
+        content: "Selectively manage, maintain, or reset specific ERP modules.",
+      },
     ],
   }),
   component: MaintenancePage,
@@ -126,7 +129,13 @@ function MaintenancePage() {
   }
 
   function triggerSelectedFormat() {
-    if (!formatStudents && !formatServices && !formatSettings && !formatReports && !formatStaffUsers) {
+    if (
+      !formatStudents &&
+      !formatServices &&
+      !formatSettings &&
+      !formatReports &&
+      !formatStaffUsers
+    ) {
       toast.error("Please select at least one module to format");
       return;
     }
@@ -163,7 +172,8 @@ function MaintenancePage() {
             <Database className="size-8 text-[#8b2500]" /> System Maintenance & Database Console
           </h1>
           <p className="mt-1 text-sm text-[#7c533f] font-medium">
-            Selectively reset or purge test data from individual ERP modules, or execute a comprehensive system maintenance wipe.
+            Selectively reset or purge test data from individual ERP modules, or execute a
+            comprehensive system maintenance wipe.
           </p>
         </div>
 
@@ -242,7 +252,8 @@ function MaintenancePage() {
               <Trash2 className="size-5 text-[#8b2500]" /> Select ERP Modules to Format
             </h2>
             <p className="text-xs text-[#7c533f]">
-              Choose which module you want to wipe or reset. Only the checked modules will be formatted.
+              Choose which module you want to wipe or reset. Only the checked modules will be
+              formatted.
             </p>
           </div>
 
@@ -318,7 +329,8 @@ function MaintenancePage() {
                 </span>
               </div>
               <p className="text-xs text-[#7c533f]">
-                Wipes and deletes all services completely from database so you can add new custom services.
+                Wipes and deletes all services completely from database so you can add new custom
+                services.
               </p>
             </div>
           </div>
@@ -340,14 +352,16 @@ function MaintenancePage() {
             <div className="space-y-1 flex-1">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-sm text-[#4a1c14] flex items-center gap-1.5">
-                  <SlidersHorizontal className="size-4 text-purple-700" /> 3. Limits & Messages Module
+                  <SlidersHorizontal className="size-4 text-purple-700" /> 3. Limits & Messages
+                  Module
                 </span>
                 <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-white border border-[#d8c5af]">
                   Defaults
                 </span>
               </div>
               <p className="text-xs text-[#7c533f]">
-                Resets student daily spending limit (₹500), kiosk headers, and thermal receipt footer message to default.
+                Resets student daily spending limit (₹500), kiosk headers, and thermal receipt
+                footer message to default.
               </p>
             </div>
           </div>
@@ -376,7 +390,8 @@ function MaintenancePage() {
                 </span>
               </div>
               <p className="text-xs text-[#7c533f]">
-                Wipes all historical transaction slips and purchases. Resets daily and monthly revenue charts to ₹0.
+                Wipes all historical transaction slips and purchases. Resets daily and monthly
+                revenue charts to ₹0.
               </p>
             </div>
           </div>
@@ -405,7 +420,8 @@ function MaintenancePage() {
                 </span>
               </div>
               <p className="text-xs text-[#7c533f]">
-                Deletes all additional staff and admin accounts. (Primary Super Admin account remains safely preserved).
+                Deletes all additional staff and admin accounts. (Primary Super Admin account
+                remains safely preserved).
               </p>
             </div>
           </div>
@@ -433,7 +449,11 @@ function MaintenancePage() {
             onClick={triggerSelectedFormat}
             disabled={
               formatMutation.isPending ||
-              (!formatStudents && !formatServices && !formatSettings && !formatReports && !formatStaffUsers)
+              (!formatStudents &&
+                !formatServices &&
+                !formatSettings &&
+                !formatReports &&
+                !formatStaffUsers)
             }
             className="btn-luxury-primary px-8 py-3 text-sm gap-2 disabled:opacity-50"
           >
@@ -448,7 +468,9 @@ function MaintenancePage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="text-2xl font-serif font-bold text-rose-700 flex items-center gap-2">
               <AlertTriangle className="size-7 text-rose-600" />
-              {isFullReset ? "Confirm Complete 5-Module ERP Format?" : "Confirm Selected ERP Modules Format?"}
+              {isFullReset
+                ? "Confirm Complete 5-Module ERP Format?"
+                : "Confirm Selected ERP Modules Format?"}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm text-[#7c533f] space-y-3 pt-2">
               <p>You are about to format the following modules:</p>
@@ -456,7 +478,9 @@ function MaintenancePage() {
                 {formatStudents && <li>👥 Students Module (All students, cards & fingerprints)</li>}
                 {formatServices && <li>🛠️ Services Module (All services & price lists)</li>}
                 {formatSettings && <li>⚙️ Limits & Messages Module (Reset to factory defaults)</li>}
-                {formatReports && <li>📄 Reports Module (All transaction slips & revenue ledger)</li>}
+                {formatReports && (
+                  <li>📄 Reports Module (All transaction slips & revenue ledger)</li>
+                )}
                 {formatStaffUsers && <li>🛡️ Users & Roles Module (All staff accounts)</li>}
               </ul>
               <p className="text-rose-700 font-bold">

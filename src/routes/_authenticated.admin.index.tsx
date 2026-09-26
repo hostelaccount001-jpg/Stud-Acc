@@ -22,7 +22,10 @@ export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
     meta: [
       { title: "Dashboard & Analytics — Gurukul Kiosk ERP" },
-      { name: "description", content: "Real-time analytics, transactions, revenue and student metrics at a glance." },
+      {
+        name: "description",
+        content: "Real-time analytics, transactions, revenue and student metrics at a glance.",
+      },
     ],
   }),
   component: Dashboard,
@@ -51,12 +54,15 @@ function Dashboard() {
       ]);
       const rawRows = tx.data ?? [];
       const rows = rawRows.filter(
-        (r: any) => r.service_id !== null && !r.service_name?.startsWith("[Wallet]")
+        (r: any) => r.service_id !== null && !r.service_name?.startsWith("[Wallet]"),
       );
       const byService = new Map<string, { count: number; total: number }>();
       for (const r of rows) {
         const cur = byService.get(r.service_name) ?? { count: 0, total: 0 };
-        byService.set(r.service_name, { count: cur.count + 1, total: cur.total + Number(r.amount) });
+        byService.set(r.service_name, {
+          count: cur.count + 1,
+          total: cur.total + Number(r.amount),
+        });
       }
       return {
         rows,
@@ -119,18 +125,31 @@ function Dashboard() {
             </span>
           </div>
           <p className="mt-1 text-sm font-medium text-[#7c533f]">
-            Real-time analytics and cashless operations for {new Date().toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+            Real-time analytics and cashless operations for{" "}
+            {new Date().toLocaleDateString("en-IN", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <Link to="/admin/students">
-            <Button size="sm" variant="outline" className="rounded-xl border-[#d8c5af] text-[#6b4a3a]">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl border-[#d8c5af] text-[#6b4a3a]"
+            >
               <UserCheck className="size-4 mr-1.5" /> Enrol Student
             </Button>
           </Link>
           <Link to="/admin/reports">
-            <Button size="sm" className="rounded-xl bg-[#4a1c14] hover:bg-[#6b2c1a] text-white shadow-md">
+            <Button
+              size="sm"
+              className="rounded-xl bg-[#4a1c14] hover:bg-[#6b2c1a] text-white shadow-md"
+            >
               <TrendingUp className="size-4 mr-1.5" /> Full Reports
             </Button>
           </Link>
@@ -146,7 +165,9 @@ function Dashboard() {
           >
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold text-[#7c533f] uppercase tracking-wider">{s.label}</p>
-              <div className={`size-10 rounded-2xl bg-gradient-to-tr ${s.gradient} flex items-center justify-center text-white shadow-md`}>
+              <div
+                className={`size-10 rounded-2xl bg-gradient-to-tr ${s.gradient} flex items-center justify-center text-white shadow-md`}
+              >
                 <s.icon className="size-5" />
               </div>
             </div>
@@ -173,12 +194,18 @@ function Dashboard() {
 
           <div className="space-y-4">
             {(data?.byService ?? []).map(([name, v]) => {
-              const pct = (data?.total ?? 0) > 0 ? Math.round((v.total / (data?.total ?? 1)) * 100) : 0;
+              const pct =
+                (data?.total ?? 0) > 0 ? Math.round((v.total / (data?.total ?? 1)) * 100) : 0;
               return (
-                <div key={name} className="p-4 rounded-2xl bg-[#faf6ef] border border-[#e5d8c5] space-y-2">
+                <div
+                  key={name}
+                  className="p-4 rounded-2xl bg-[#faf6ef] border border-[#e5d8c5] space-y-2"
+                >
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-bold text-[#4a1c14]">{name}</span>
-                    <span className="font-mono font-extrabold text-[#8b2500]">₹{v.total.toLocaleString("en-IN")}</span>
+                    <span className="font-mono font-extrabold text-[#8b2500]">
+                      ₹{v.total.toLocaleString("en-IN")}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between text-xs text-[#7c533f]">
                     <span>{v.count} slips issued</span>
@@ -211,9 +238,14 @@ function Dashboard() {
               <h2 className="text-lg font-serif font-bold text-[#4a1c14] flex items-center gap-2">
                 <Activity className="size-5 text-emerald-600" /> Recent Live Transactions
               </h2>
-              <p className="text-xs text-[#7c533f]">Latest cashless entries processed at terminal</p>
+              <p className="text-xs text-[#7c533f]">
+                Latest cashless entries processed at terminal
+              </p>
             </div>
-            <Link to="/admin/reports" className="text-xs font-bold text-[#8b2500] hover:underline flex items-center gap-1">
+            <Link
+              to="/admin/reports"
+              className="text-xs font-bold text-[#8b2500] hover:underline flex items-center gap-1"
+            >
               View All <ArrowUpRight className="size-3" />
             </Link>
           </div>
@@ -236,7 +268,8 @@ function Dashboard() {
                       </span>
                     </div>
                     <p className="text-xs text-[#7c533f] font-mono mt-0.5">
-                      SUID: <span className="font-semibold text-[#4a1c14]">{r.suid}</span> • {r.service_name}
+                      SUID: <span className="font-semibold text-[#4a1c14]">{r.suid}</span> •{" "}
+                      {r.service_name}
                     </p>
                   </div>
                 </div>
@@ -246,7 +279,11 @@ function Dashboard() {
                     ₹{Number(r.amount).toFixed(2)}
                   </p>
                   <p className="text-[10px] text-[#7c533f] font-mono">
-                    {new Date(r.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
+                    {new Date(r.created_at).toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      hour12: true,
+                    })}
                   </p>
                 </div>
               </div>

@@ -2,39 +2,116 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 export type UserPermissions = {
+  // Modules
   dashboard: boolean;
   students: boolean;
   services: boolean;
   settings: boolean;
   reports: boolean;
   users: boolean;
-  delete_students: boolean;
-  delete_services: boolean;
-  export_data: boolean;
+
+  // Reports Micro-Rights (Requested by User)
+  reports_view?: boolean | undefined;
+  reports_export?: boolean | undefined;
+  reports_edit?: boolean | undefined;
+  reports_delete?: boolean | undefined;
+  reports_print_slip?: boolean | undefined;
+
+  // Students Micro-Rights
+  students_view?: boolean | undefined;
+  students_create?: boolean | undefined;
+  students_edit?: boolean | undefined;
+  students_delete?: boolean | undefined;
+  students_export?: boolean | undefined;
+
+  // Services Micro-Rights
+  services_view?: boolean | undefined;
+  services_create?: boolean | undefined;
+  services_edit?: boolean | undefined;
+  services_delete?: boolean | undefined;
+
+  // Staff & Roles Micro-Rights
+  users_view?: boolean | undefined;
+  users_create?: boolean | undefined;
+  users_edit?: boolean | undefined;
+  users_delete?: boolean | undefined;
+  roles_manage?: boolean | undefined;
+
+  // System & Maintenance
+  maintenance?: boolean | undefined;
+
+  // Compatibility fields
+  delete_students?: boolean | undefined;
+  delete_services?: boolean | undefined;
+  export_data?: boolean | undefined;
+
+  // Role Metadata
+  _roleId?: string | undefined;
+  _roleTitle?: string | undefined;
 };
 
-export const defaultStaffPermissions: UserPermissions = {
-  dashboard: true,
-  students: false,
-  services: false,
-  settings: false,
-  reports: true,
-  users: false,
-  delete_students: false,
-  delete_services: false,
-  export_data: false,
-};
+export function normalizePermissions(raw?: Partial<UserPermissions>): UserPermissions {
+  const p = raw || {};
+  const hasReports = p.reports ?? p.reports_view ?? true;
+  const hasStudents = p.students ?? p.students_view ?? false;
+  const hasServices = p.services ?? p.services_view ?? false;
+  const hasUsers = p.users ?? p.users_view ?? false;
+  const hasSettings = p.settings ?? false;
 
-export const defaultAdminPermissions: UserPermissions = {
-  dashboard: true,
-  students: true,
-  services: true,
-  settings: true,
-  reports: true,
-  users: false,
-  delete_students: false,
-  delete_services: false,
-  export_data: true,
+  const exportData = p.export_data ?? p.reports_export ?? p.students_export ?? false;
+  const deleteStudents = p.delete_students ?? p.students_delete ?? false;
+  const deleteServices = p.delete_services ?? p.services_delete ?? false;
+
+  return {
+    dashboard: p.dashboard ?? true,
+    students: hasStudents,
+    services: hasServices,
+    settings: hasSettings,
+    reports: hasReports,
+    users: hasUsers,
+
+    reports_view: p.reports_view ?? hasReports,
+    reports_export: p.reports_export ?? exportData,
+    reports_edit: p.reports_edit ?? false,
+    reports_delete: p.reports_delete ?? false,
+    reports_print_slip: p.reports_print_slip ?? true,
+
+    students_view: p.students_view ?? hasStudents,
+    students_create: p.students_create ?? (hasStudents && (p.students_create ?? false)),
+    students_edit: p.students_edit ?? (hasStudents && (p.students_edit ?? false)),
+    students_delete: deleteStudents,
+    students_export: p.students_export ?? exportData,
+
+    services_view: p.services_view ?? hasServices,
+    services_create: p.services_create ?? (hasServices && (p.services_create ?? false)),
+    services_edit: p.services_edit ?? (hasServices && (p.services_edit ?? false)),
+    services_delete: deleteServices,
+
+    users_view: p.users_view ?? hasUsers,
+    users_create: p.users_create ?? (hasUsers && (p.users_create ?? false)),
+    users_edit: p.users_edit ?? (hasUsers && (p.users_edit ?? false)),
+    users_delete: p.users_delete ?? (hasUsers && (p.users_delete ?? false)),
+    roles_manage: p.roles_manage ?? (hasUsers && (p.roles_manage ?? false)),
+
+    maintenance: p.maintenance ?? hasSettings,
+
+    delete_students: deleteStudents,
+    delete_services: deleteServices,
+    export_data: exportData,
+
+    _roleId: p._roleId,
+    _roleTitle: p._roleTitle,
+  };
+}
+
+export type CustomRole = {
+  id: string;
+  name: string;
+  description: string;
+  color: string; // e.g. "emerald", "amber", "blue", "purple", "rose", "cyan", "indigo"
+  isSystem?: boolean | undefined;
+  permissions: UserPermissions;
+  created_at?: string | undefined;
 };
 
 export const defaultSuperAdminPermissions: UserPermissions = {
@@ -44,64 +121,373 @@ export const defaultSuperAdminPermissions: UserPermissions = {
   settings: true,
   reports: true,
   users: true,
+
+  reports_view: true,
+  reports_export: true,
+  reports_edit: true,
+  reports_delete: true,
+  reports_print_slip: true,
+
+  students_view: true,
+  students_create: true,
+  students_edit: true,
+  students_delete: true,
+  students_export: true,
+
+  services_view: true,
+  services_create: true,
+  services_edit: true,
+  services_delete: true,
+
+  users_view: true,
+  users_create: true,
+  users_edit: true,
+  users_delete: true,
+  roles_manage: true,
+
+  maintenance: true,
+
   delete_students: true,
   delete_services: true,
   export_data: true,
 };
 
+export const defaultAdminPermissions: UserPermissions = {
+  dashboard: true,
+  students: true,
+  services: true,
+  settings: true,
+  reports: true,
+  users: false,
+
+  reports_view: true,
+  reports_export: true,
+  reports_edit: true,
+  reports_delete: false,
+  reports_print_slip: true,
+
+  students_view: true,
+  students_create: true,
+  students_edit: true,
+  students_delete: false,
+  students_export: true,
+
+  services_view: true,
+  services_create: true,
+  services_edit: true,
+  services_delete: false,
+
+  users_view: false,
+  users_create: false,
+  users_edit: false,
+  users_delete: false,
+  roles_manage: false,
+
+  maintenance: false,
+
+  delete_students: false,
+  delete_services: false,
+  export_data: true,
+};
+
+export const defaultReportViewerPermissions: UserPermissions = {
+  dashboard: true,
+  students: false,
+  services: false,
+  settings: false,
+  reports: true,
+  users: false,
+
+  reports_view: true,
+  reports_export: true,
+  reports_edit: false,
+  reports_delete: false,
+  reports_print_slip: true,
+
+  students_view: false,
+  students_create: false,
+  students_edit: false,
+  students_delete: false,
+  students_export: false,
+
+  services_view: false,
+  services_create: false,
+  services_edit: false,
+  services_delete: false,
+
+  users_view: false,
+  users_create: false,
+  users_edit: false,
+  users_delete: false,
+  roles_manage: false,
+
+  maintenance: false,
+
+  delete_students: false,
+  delete_services: false,
+  export_data: true,
+};
+
+export const defaultStaffPermissions: UserPermissions = {
+  dashboard: true,
+  students: false,
+  services: false,
+  settings: false,
+  reports: true,
+  users: false,
+
+  reports_view: true,
+  reports_export: false,
+  reports_edit: false,
+  reports_delete: false,
+  reports_print_slip: true,
+
+  students_view: false,
+  students_create: false,
+  students_edit: false,
+  students_delete: false,
+  students_export: false,
+
+  services_view: false,
+  services_create: false,
+  services_edit: false,
+  services_delete: false,
+
+  users_view: false,
+  users_create: false,
+  users_edit: false,
+  users_delete: false,
+  roles_manage: false,
+
+  maintenance: false,
+
+  delete_students: false,
+  delete_services: false,
+  export_data: false,
+};
+
+export const BUILTIN_ROLES: CustomRole[] = [
+  {
+    id: "super_admin",
+    name: "Super Administrator",
+    description: "Complete unrestricted access to all modules, transactions, and security rights.",
+    color: "amber",
+    isSystem: true,
+    permissions: defaultSuperAdminPermissions,
+  },
+  {
+    id: "admin",
+    name: "Administrator",
+    description: "Full management of students, services, and reports with export rights.",
+    color: "blue",
+    isSystem: true,
+    permissions: defaultAdminPermissions,
+  },
+  {
+    id: "report_viewer",
+    name: "Report Viewer (Strict View & Export Only)",
+    description:
+      "Can view and export reports to Excel/Print only. Strictly blocked from editing or deleting transactions.",
+    color: "emerald",
+    isSystem: true,
+    permissions: defaultReportViewerPermissions,
+  },
+  {
+    id: "staff",
+    name: "General Staff",
+    description: "Standard staff member with read-only dashboard overview and transaction lookups.",
+    color: "purple",
+    isSystem: true,
+    permissions: defaultStaffPermissions,
+  },
+];
+
+export const listCustomRolesServer = createServerFn({ method: "GET" }).handler(async () => {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+  const { data: setting } = await supabaseAdmin
+    .from("settings")
+    .select("value")
+    .eq("key", "custom_roles")
+    .maybeSingle();
+
+  let storedRoles: CustomRole[] = [];
+  if (setting?.value) {
+    try {
+      const parsed = JSON.parse(setting.value);
+      if (Array.isArray(parsed)) {
+        storedRoles = parsed.map((r) => ({
+          ...r,
+          permissions: normalizePermissions(r.permissions),
+        }));
+      }
+    } catch {}
+  }
+
+  const roleMap = new Map<string, CustomRole>();
+  BUILTIN_ROLES.forEach((b) => roleMap.set(b.id, { ...b }));
+  storedRoles.forEach((r) => {
+    if (roleMap.has(r.id)) {
+      roleMap.set(r.id, { ...roleMap.get(r.id)!, ...r, isSystem: true });
+    } else {
+      roleMap.set(r.id, r);
+    }
+  });
+
+  return Array.from(roleMap.values());
+});
+
+export const saveCustomRoleServer = createServerFn({ method: "POST" })
+  .validator((input: unknown) =>
+    z
+      .object({
+        role: z.object({
+          id: z.string().optional(),
+          name: z.string().min(1, "Role name is required"),
+          description: z.string().default(""),
+          color: z.string().default("emerald"),
+          permissions: z.record(z.any()),
+        }),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: setting } = await supabaseAdmin
+      .from("settings")
+      .select("value")
+      .eq("key", "custom_roles")
+      .maybeSingle();
+
+    let customRoles: CustomRole[] = [];
+    if (setting?.value) {
+      try {
+        const parsed = JSON.parse(setting.value);
+        if (Array.isArray(parsed)) customRoles = parsed;
+      } catch {}
+    }
+
+    const roleId =
+      data.role.id || `custom_role_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const normalizedPerms = normalizePermissions(data.role.permissions);
+    const isSystemRole = BUILTIN_ROLES.some((b) => b.id === roleId);
+
+    const newRole: CustomRole = {
+      id: roleId,
+      name: data.role.name.trim(),
+      description: data.role.description.trim(),
+      color: data.role.color || "emerald",
+      isSystem: isSystemRole,
+      permissions: normalizedPerms,
+      created_at: new Date().toISOString(),
+    };
+
+    const existingIdx = customRoles.findIndex((r) => r.id === roleId);
+    if (existingIdx >= 0) {
+      customRoles[existingIdx] = newRole;
+    } else {
+      customRoles.push(newRole);
+    }
+
+    await supabaseAdmin.from("settings").upsert({
+      key: "custom_roles",
+      value: JSON.stringify(customRoles),
+    });
+
+    return { success: true, role: newRole };
+  });
+
+export const deleteCustomRoleServer = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({ roleId: z.string() }).parse(input))
+  .handler(async ({ data }) => {
+    if (BUILTIN_ROLES.some((b) => b.id === data.roleId)) {
+      throw new Error("System default roles cannot be deleted.");
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: setting } = await supabaseAdmin
+      .from("settings")
+      .select("value")
+      .eq("key", "custom_roles")
+      .maybeSingle();
+
+    if (setting?.value) {
+      try {
+        const parsed = JSON.parse(setting.value);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((r: CustomRole) => r.id !== data.roleId);
+          await supabaseAdmin.from("settings").upsert({
+            key: "custom_roles",
+            value: JSON.stringify(filtered),
+          });
+        }
+      } catch {}
+    }
+
+    return { success: true };
+  });
+
 export const createStaffSchema = z.object({
   email: z.string().trim().email(),
   password: z.string().min(6, "Password must be at least 6 characters"),
   fullName: z.string().trim().min(1, "Full name is required"),
-  role: z.enum(["super_admin", "admin", "staff"]).default("staff"),
-  permissions: z
-    .object({
-      dashboard: z.boolean().default(true),
-      students: z.boolean().default(false),
-      services: z.boolean().default(false),
-      settings: z.boolean().default(false),
-      reports: z.boolean().default(true),
-      users: z.boolean().default(false),
-      delete_students: z.boolean().default(false),
-      delete_services: z.boolean().default(false),
-      export_data: z.boolean().default(false),
-    })
-    .optional(),
+  role: z.string().default("staff"),
+  roleId: z.string().optional(),
+  roleTitle: z.string().optional(),
+  permissions: z.record(z.any()).optional(),
 });
 
 export const listStaffUsersServer = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  
+
   // 1. Fetch profiles, roles, and perms
-  const [{ data: profiles }, { data: roles }, { data: permSettings }] = await Promise.all([
-    supabaseAdmin.from("profiles").select("id, email, full_name, created_at").order("created_at"),
-    supabaseAdmin.from("user_roles").select("user_id, role"),
-    supabaseAdmin.from("settings").select("key, value").like("key", "perms_%"),
-  ]);
+  const [{ data: profiles }, { data: roles }, { data: permSettings }, { data: roleSetting }] =
+    await Promise.all([
+      supabaseAdmin.from("profiles").select("id, email, full_name, created_at").order("created_at"),
+      supabaseAdmin.from("user_roles").select("user_id, role"),
+      supabaseAdmin.from("settings").select("key, value").like("key", "perms_%"),
+      supabaseAdmin.from("settings").select("value").eq("key", "custom_roles").maybeSingle(),
+    ]);
+
+  let allRoles: CustomRole[] = [...BUILTIN_ROLES];
+  if (roleSetting?.value) {
+    try {
+      const parsed = JSON.parse(roleSetting.value);
+      if (Array.isArray(parsed)) {
+        allRoles = [...BUILTIN_ROLES, ...parsed];
+      }
+    } catch {}
+  }
 
   // 2. Fetch auth users (admin API)
-  let authUsersList: Array<{ id: string; email?: string; user_metadata?: { full_name?: string }; created_at: string }> = [];
+  let authUsersList: Array<{
+    id: string;
+    email?: string;
+    user_metadata?: { full_name?: string };
+    created_at: string;
+  }> = [];
   try {
     const { data: authData } = await supabaseAdmin.auth.admin.listUsers();
     if (authData?.users) {
       authUsersList = authData.users;
     }
-  } catch {
-    // ignore if admin API is not permitted
-  }
+  } catch {}
 
-  const permMap: Record<string, UserPermissions> = {};
+  const permMap: Record<string, any> = {};
   (permSettings ?? []).forEach((row) => {
     try {
       const userId = row.key.replace("perms_", "");
-      permMap[userId] = JSON.parse(row.value) as UserPermissions;
-    } catch {
-      // ignore
-    }
+      permMap[userId] = JSON.parse(row.value);
+    } catch {}
   });
 
   // Map to hold consolidated users keyed by lowercase email
-  const userMap = new Map<string, { id: string; email: string; full_name: string; created_at: string }>();
+  const userMap = new Map<
+    string,
+    { id: string; email: string; full_name: string; created_at: string }
+  >();
 
   // Insert from auth list first
   authUsersList.forEach((au) => {
@@ -109,7 +495,8 @@ export const listStaffUsersServer = createServerFn({ method: "GET" }).handler(as
       userMap.set(au.email.toLowerCase(), {
         id: au.id,
         email: au.email,
-        full_name: au.user_metadata?.full_name || au.email.split("@")[0],
+        full_name:
+          (au.user_metadata?.full_name as string | undefined) || au.email.split("@")[0] || au.email,
         created_at: au.created_at,
       });
     }
@@ -123,7 +510,7 @@ export const listStaffUsersServer = createServerFn({ method: "GET" }).handler(as
       userMap.set(key, {
         id: p.id,
         email: p.email,
-        full_name: p.full_name || existing?.full_name || p.email.split("@")[0],
+        full_name: p.full_name || existing?.full_name || p.email.split("@")[0] || p.email,
         created_at: p.created_at || existing?.created_at || new Date().toISOString(),
       });
     }
@@ -146,18 +533,28 @@ export const listStaffUsersServer = createServerFn({ method: "GET" }).handler(as
     const hasAdmin = userRoles.some((r) => r.role === "admin");
 
     const savedPerms = permMap[p.id];
-    let permissions: UserPermissions = { ...defaultStaffPermissions };
+    let permissions: UserPermissions;
+    let assignedRoleId = savedPerms?._roleId;
 
     if (isMaster) {
       permissions = { ...defaultSuperAdminPermissions };
+      assignedRoleId = "super_admin";
     } else if (savedPerms) {
-      permissions = {
-        ...(hasAdmin ? defaultAdminPermissions : defaultStaffPermissions),
-        ...savedPerms,
-      };
+      permissions = normalizePermissions(savedPerms);
     } else if (hasAdmin) {
       permissions = { ...defaultAdminPermissions };
+      assignedRoleId = "admin";
+    } else {
+      permissions = { ...defaultStaffPermissions };
+      assignedRoleId = "staff";
     }
+
+    const matchedRole = allRoles.find((r) => r.id === assignedRoleId);
+    const roleTitle =
+      savedPerms?._roleTitle ||
+      matchedRole?.name ||
+      (isMaster ? "Super Administrator" : hasAdmin ? "Administrator" : "General Staff");
+    const roleColor = matchedRole?.color || (isMaster ? "amber" : hasAdmin ? "blue" : "purple");
 
     const isSuper = isMaster || (permissions.users && hasAdmin);
 
@@ -167,6 +564,9 @@ export const listStaffUsersServer = createServerFn({ method: "GET" }).handler(as
       full_name: p.full_name,
       created_at: p.created_at,
       role: isSuper ? ("super_admin" as const) : hasAdmin ? ("admin" as const) : ("staff" as const),
+      roleId: assignedRoleId || "staff",
+      roleTitle,
+      roleColor,
       isSuperAdmin: isMaster,
       permissions,
     };
@@ -174,38 +574,65 @@ export const listStaffUsersServer = createServerFn({ method: "GET" }).handler(as
 });
 
 export const getCurrentUserPermissionsServer = createServerFn({ method: "POST" })
-  .validator((input: unknown) => z.object({ userId: z.string(), email: z.string().optional() }).parse(input))
+  .validator((input: unknown) =>
+    z.object({ userId: z.string(), email: z.string().optional() }).parse(input),
+  )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     if (data.email === "anshsangani2007@gmail.com") {
       return {
         role: "super_admin" as const,
+        roleId: "super_admin",
+        roleTitle: "Super Administrator",
         isSuperAdmin: true,
         permissions: defaultSuperAdminPermissions,
       };
     }
 
-    const [{ data: roles }, { data: permSetting }] = await Promise.all([
+    const [{ data: roles }, { data: permSetting }, { data: roleSetting }] = await Promise.all([
       supabaseAdmin.from("user_roles").select("role").eq("user_id", data.userId),
-      supabaseAdmin.from("settings").select("value").eq("key", `perms_${data.userId}`).maybeSingle(),
+      supabaseAdmin
+        .from("settings")
+        .select("value")
+        .eq("key", `perms_${data.userId}`)
+        .maybeSingle(),
+      supabaseAdmin.from("settings").select("value").eq("key", "custom_roles").maybeSingle(),
     ]);
+
+    let allRoles: CustomRole[] = [...BUILTIN_ROLES];
+    if (roleSetting?.value) {
+      try {
+        const parsed = JSON.parse(roleSetting.value);
+        if (Array.isArray(parsed)) allRoles = [...BUILTIN_ROLES, ...parsed];
+      } catch {}
+    }
 
     const hasAdmin = (roles ?? []).some((r) => r.role === "admin");
     let permissions = { ...(hasAdmin ? defaultAdminPermissions : defaultStaffPermissions) };
+    let assignedRoleId = hasAdmin ? "admin" : "staff";
+    let customTitle = "";
 
     if (permSetting?.value) {
       try {
-        permissions = { ...permissions, ...JSON.parse(permSetting.value) };
-      } catch {
-        // ignore
-      }
+        const parsed = JSON.parse(permSetting.value);
+        permissions = normalizePermissions(parsed);
+        if (parsed._roleId) assignedRoleId = parsed._roleId;
+        if (parsed._roleTitle) customTitle = parsed._roleTitle;
+      } catch {}
     }
 
     const isSuper = permissions.users && hasAdmin;
+    const matchedRole = allRoles.find((r) => r.id === assignedRoleId);
+    const roleTitle =
+      customTitle ||
+      matchedRole?.name ||
+      (isSuper ? "Super Administrator" : hasAdmin ? "Administrator" : "General Staff");
 
     return {
       role: isSuper ? ("super_admin" as const) : hasAdmin ? ("admin" as const) : ("staff" as const),
+      roleId: assignedRoleId,
+      roleTitle,
       isSuperAdmin: isSuper,
       permissions,
     };
@@ -219,7 +646,7 @@ export const createStaffUserServer = createServerFn({ method: "POST" })
     let userId: string | null = null;
     let lastError: string | null = null;
 
-    // Strategy 1: Standard Supabase Auth signUp (GoTrue natively handles password hashing, auth.users AND auth.identities)
+    // Strategy 1: Standard Supabase Auth signUp
     try {
       const { data: signUpData, error: signErr } = await supabaseAdmin.auth.signUp({
         email: data.email.trim(),
@@ -233,7 +660,11 @@ export const createStaffUserServer = createServerFn({ method: "POST" })
         userId = signUpData.user.id;
       } else if (signErr) {
         const msg = signErr.message?.toLowerCase() || "";
-        if (msg.includes("already registered") || msg.includes("already exists") || msg.includes("user already exists")) {
+        if (
+          msg.includes("already registered") ||
+          msg.includes("already exists") ||
+          msg.includes("user already exists")
+        ) {
           throw new Error(`A user with email "${data.email}" is already registered.`);
         }
         lastError = signErr.message;
@@ -243,17 +674,24 @@ export const createStaffUserServer = createServerFn({ method: "POST" })
       lastError = e?.message;
     }
 
-    // Strategy 2: Call secure database RPC (with complete auth.identities support)
+    // Strategy 2: Call secure database RPC
     if (!userId) {
       try {
-        const { data: rpcId, error: rpcErr } = await (supabaseAdmin as any).rpc("admin_create_staff_user", {
-          p_email: data.email.trim(),
-          p_password: data.password,
-          p_full_name: data.fullName.trim(),
-        });
+        const { data: rpcId, error: rpcErr } = await (supabaseAdmin as any).rpc(
+          "admin_create_staff_user",
+          {
+            p_email: data.email.trim(),
+            p_password: data.password,
+            p_full_name: data.fullName.trim(),
+          },
+        );
         if (!rpcErr && rpcId) {
           userId = rpcId;
-        } else if (rpcErr && !rpcErr.message?.includes("function") && !rpcErr.message?.includes("not found")) {
+        } else if (
+          rpcErr &&
+          !rpcErr.message?.includes("function") &&
+          !rpcErr.message?.includes("not found")
+        ) {
           if (rpcErr.message?.toLowerCase().includes("already exists")) {
             throw new Error(`A user with email "${data.email}" already exists.`);
           }
@@ -265,7 +703,7 @@ export const createStaffUserServer = createServerFn({ method: "POST" })
       }
     }
 
-    // Strategy 3: Supabase Auth Admin createUser (if service_role key is valid)
+    // Strategy 3: Supabase Auth Admin createUser
     if (!userId) {
       try {
         const { data: newUser, error: authErr } = await supabaseAdmin.auth.admin.createUser({
@@ -289,12 +727,9 @@ export const createStaffUserServer = createServerFn({ method: "POST" })
       throw new Error(lastError || "Failed to create user account.");
     }
 
-    // Attempt to invoke repair RPC in background to keep all users in auth.identities consistent
     try {
       await (supabaseAdmin as any).rpc("admin_repair_auth_identities");
-    } catch {
-      // Ignore if function not yet applied
-    }
+    } catch {}
 
     // 2. Upsert profile
     await supabaseAdmin.from("profiles").upsert({
@@ -304,74 +739,96 @@ export const createStaffUserServer = createServerFn({ method: "POST" })
     });
 
     // 3. Set Role in user_roles
-    if (data.role === "admin" || data.role === "super_admin" || data.permissions?.students || data.permissions?.services) {
-      await supabaseAdmin.from("user_roles").upsert(
-        { user_id: userId, role: "admin" },
-        { onConflict: "user_id,role" },
-      );
+    const normalizedPerms = normalizePermissions(data.permissions);
+    const hasAdminAccess =
+      data.role === "admin" ||
+      data.role === "super_admin" ||
+      data.roleId === "admin" ||
+      data.roleId === "super_admin" ||
+      normalizedPerms.students ||
+      normalizedPerms.services;
+
+    if (hasAdminAccess) {
+      await supabaseAdmin
+        .from("user_roles")
+        .upsert({ user_id: userId, role: "admin" }, { onConflict: "user_id,role" });
     } else {
       await supabaseAdmin.from("user_roles").delete().eq("user_id", userId).eq("role", "admin");
     }
 
-    // 4. Save Granular Permissions
-    const permissions: UserPermissions = data.permissions ||
-      (data.role === "super_admin"
-        ? defaultSuperAdminPermissions
-        : data.role === "admin"
-          ? defaultAdminPermissions
-          : defaultStaffPermissions);
+    // 4. Save Granular Permissions + Role metadata
+    const finalPerms = {
+      ...normalizedPerms,
+      _roleId: data.roleId || data.role,
+      _roleTitle: data.roleTitle || "",
+    };
 
     await supabaseAdmin.from("settings").upsert({
       key: `perms_${userId}`,
-      value: JSON.stringify(permissions),
+      value: JSON.stringify(finalPerms),
     });
 
     return { success: true, userId };
   });
 
 export const updateStaffPermissionsServer = createServerFn({ method: "POST" })
-  .validator(
+  .validator((input: unknown) =>
     z
       .object({
         userId: z.string(),
-        role: z.enum(["super_admin", "admin", "staff"]),
-        permissions: z.object({
-          dashboard: z.boolean(),
-          students: z.boolean(),
-          services: z.boolean(),
-          settings: z.boolean(),
-          reports: z.boolean(),
-          users: z.boolean(),
-          delete_students: z.boolean().optional().default(false),
-          delete_services: z.boolean().optional().default(false),
-          export_data: z.boolean().optional().default(true),
-        }),
+        role: z.string(),
+        roleId: z.string().optional(),
+        roleTitle: z.string().optional(),
+        permissions: z.record(z.any()),
       })
-      .parse,
+      .parse(input),
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Don't modify master super admin
-    const { data: profile } = await supabaseAdmin.from("profiles").select("email").eq("id", data.userId).maybeSingle();
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("email")
+      .eq("id", data.userId)
+      .maybeSingle();
     if (profile?.email === "anshsangani2007@gmail.com") {
       return { success: true };
     }
 
+    const normalizedPerms = normalizePermissions(data.permissions);
+
     // 1. Update user_roles
-    if (data.role === "admin" || data.role === "super_admin" || data.permissions.students || data.permissions.services) {
-      await supabaseAdmin.from("user_roles").upsert(
-        { user_id: data.userId, role: "admin" },
-        { onConflict: "user_id,role" },
-      );
+    const hasAdminAccess =
+      data.role === "admin" ||
+      data.role === "super_admin" ||
+      data.roleId === "admin" ||
+      data.roleId === "super_admin" ||
+      normalizedPerms.students ||
+      normalizedPerms.services;
+
+    if (hasAdminAccess) {
+      await supabaseAdmin
+        .from("user_roles")
+        .upsert({ user_id: data.userId, role: "admin" }, { onConflict: "user_id,role" });
     } else {
-      await supabaseAdmin.from("user_roles").delete().eq("user_id", data.userId).eq("role", "admin");
+      await supabaseAdmin
+        .from("user_roles")
+        .delete()
+        .eq("user_id", data.userId)
+        .eq("role", "admin");
     }
 
-    // 2. Update permissions JSON in settings
+    // 2. Update permissions JSON in settings with _roleId and _roleTitle
+    const permRecord = {
+      ...normalizedPerms,
+      _roleId: data.roleId || data.role,
+      _roleTitle: data.roleTitle || "",
+    };
+
     await supabaseAdmin.from("settings").upsert({
       key: `perms_${data.userId}`,
-      value: JSON.stringify(data.permissions),
+      value: JSON.stringify(permRecord),
     });
 
     return { success: true };
@@ -382,7 +839,11 @@ export const deleteStaffUserServer = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { data: profile } = await supabaseAdmin.from("profiles").select("email").eq("id", data.userId).maybeSingle();
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("email")
+      .eq("id", data.userId)
+      .maybeSingle();
     if (profile?.email === "anshsangani2007@gmail.com") {
       throw new Error("Cannot delete Master Super Admin account.");
     }
@@ -409,30 +870,93 @@ export const deleteStaffUserServer = createServerFn({ method: "POST" })
     return { success: true };
   });
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const resetStaffPasswordServer = createServerFn({ method: "POST" })
-  .validator((input: unknown) => z.object({ userId: z.string(), newPassword: z.string().min(6) }).parse(input))
+  .validator((input: unknown) =>
+    z
+      .object({
+        userId: z.string(),
+        email: z.string().optional(),
+        newPassword: z.string().min(6),
+      })
+      .parse(input),
+  )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Strategy 1: RPC reset password
+    let validUserId: string | null = UUID_REGEX.test(data.userId.trim())
+      ? data.userId.trim()
+      : null;
+    const emailToSearch = (
+      data.email ||
+      (data.userId.includes("@") ? data.userId : null) ||
+      (data.userId === "master-admin-anshsangani" ? "anshsangani2007@gmail.com" : null)
+    )
+      ?.trim()
+      .toLowerCase();
+
+    // 1. If not a valid UUID, attempt to resolve from profiles table by email
+    if (!validUserId && emailToSearch) {
+      const { data: prof } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .ilike("email", emailToSearch)
+        .maybeSingle();
+
+      if (prof?.id && UUID_REGEX.test(prof.id)) {
+        validUserId = prof.id;
+      }
+    }
+
+    // 2. Strategy 1: RPC reset password by UUID (if valid UUID)
+    if (validUserId) {
+      try {
+        const { error: rpcErr } = await (supabaseAdmin as any).rpc("admin_reset_user_password", {
+          p_user_id: validUserId,
+          p_new_password: data.newPassword,
+        });
+        if (!rpcErr) return { success: true };
+      } catch {
+        // RPC might fail or take text parameter, try next
+      }
+    }
+
+    // 3. Strategy 2: RPC reset password by text identifier or email
+    const identifier = validUserId || emailToSearch || data.userId;
     try {
       const { error: rpcErr } = await (supabaseAdmin as any).rpc("admin_reset_user_password", {
-        p_user_id: data.userId,
+        p_user_id: identifier,
         p_new_password: data.newPassword,
       });
       if (!rpcErr) return { success: true };
     } catch {
-      // RPC might not exist, try Admin API
+      // Continue
     }
 
-    // Strategy 2: Admin API
-    try {
-      const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, {
-        password: data.newPassword,
-      });
-      if (error) throw new Error(error.message);
-      return { success: true };
-    } catch (e: any) {
-      throw new Error(e?.message || "Failed to reset password. Please run the provided SQL script in Supabase.");
+    // 4. Strategy 3: Admin API updateUserById (ONLY call if valid UUID to avoid @supabase/auth-js parameter exception)
+    if (validUserId) {
+      try {
+        const { error } = await supabaseAdmin.auth.admin.updateUserById(validUserId, {
+          password: data.newPassword,
+        });
+        if (error) throw new Error(error.message);
+        return { success: true };
+      } catch (e: any) {
+        if (e?.message && !e.message.includes("UUID")) {
+          throw new Error(e.message);
+        }
+      }
     }
+
+    // If still unresolved
+    if (!validUserId) {
+      throw new Error(
+        `User ID (${data.userId}) is not a valid UUID. Please run the SQL setup query in Supabase SQL Editor to link profiles.`,
+      );
+    }
+
+    throw new Error(
+      "Failed to reset password. Please run the provided SQL script in Supabase SQL Editor.",
+    );
   });

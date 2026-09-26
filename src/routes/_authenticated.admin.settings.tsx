@@ -8,7 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Sliders, Save, CheckCircle2, Loader2, Eye, Receipt, SlidersHorizontal } from "lucide-react";
+import {
+  Sliders,
+  Save,
+  CheckCircle2,
+  Loader2,
+  Eye,
+  Receipt,
+  SlidersHorizontal,
+} from "lucide-react";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { getSettingsServer, updateSettingsServer } from "@/lib/settings.functions";
 import { ReceiptSlip } from "@/components/ReceiptSlip";
@@ -17,13 +25,23 @@ export const Route = createFileRoute("/_authenticated/admin/settings")({
   head: () => ({
     meta: [
       { title: "Limits & Messages — Gurukul Kiosk ERP" },
-      { name: "description", content: "Set cumulative daily spend cap and customize kiosk messages, title and receipt footer." },
+      {
+        name: "description",
+        content:
+          "Set cumulative daily spend cap and customize kiosk messages, title and receipt footer.",
+      },
     ],
   }),
   component: SettingsPage,
 });
 
-const FIELDS: { key: string; label: string; hint: string; multiline?: boolean; placeholder?: string }[] = [
+const FIELDS: {
+  key: string;
+  label: string;
+  hint: string;
+  multiline?: boolean;
+  placeholder?: string;
+}[] = [
   {
     key: "daily_limit",
     label: "Cumulative Daily Limit (₹)",
@@ -118,7 +136,8 @@ function SettingsPage() {
             <SlidersHorizontal className="size-8 text-[#8b2500]" /> Limits & Messages Configuration
           </h1>
           <p className="mt-1 text-sm text-[#7c533f] font-medium">
-            Configure global spending caps, kiosk display headings, custom error messages, and receipt layout.
+            Configure global spending caps, kiosk display headings, custom error messages, and
+            receipt layout.
           </p>
         </div>
 
@@ -128,7 +147,11 @@ function SettingsPage() {
           onClick={() => save.mutate()}
           className="btn-luxury-primary px-8 py-3 text-sm gap-2"
         >
-          {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+          {save.isPending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Save className="size-4" />
+          )}
           Save Changes
         </button>
       </header>
@@ -143,13 +166,20 @@ function SettingsPage() {
         {/* Main Settings Form */}
         <Card className="card-luxury p-6 md:p-8 lg:col-span-2 space-y-6">
           <div className="border-b border-[#e5d8c5] pb-4">
-            <h2 className="text-lg font-serif font-bold text-[#4a1c14]">Kiosk Parameters & Message Templates</h2>
-            <p className="text-xs text-[#7c533f]">Customize real-time terminal feedback and receipt texts</p>
+            <h2 className="text-lg font-serif font-bold text-[#4a1c14]">
+              Kiosk Parameters & Message Templates
+            </h2>
+            <p className="text-xs text-[#7c533f]">
+              Customize real-time terminal feedback and receipt texts
+            </p>
           </div>
 
           <div className="grid gap-6 sm:grid-cols-2">
             {FIELDS.map((f) => (
-              <div key={f.key} className={f.multiline ? "sm:col-span-2 space-y-1.5" : "space-y-1.5"}>
+              <div
+                key={f.key}
+                className={f.multiline ? "sm:col-span-2 space-y-1.5" : "space-y-1.5"}
+              >
                 <Label htmlFor={f.key} className="text-xs font-bold text-[#7c533f]">
                   {f.label}
                 </Label>
@@ -188,7 +218,11 @@ function SettingsPage() {
               onClick={() => save.mutate()}
               className="btn-luxury-primary px-8 py-3 text-sm gap-2"
             >
-              {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+              {save.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Save className="size-4" />
+              )}
               Save All Settings
             </button>
           </div>

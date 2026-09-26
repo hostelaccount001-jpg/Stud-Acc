@@ -24,7 +24,10 @@ export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Admin Security Portal — Gurukul Kiosk ERP" },
-      { name: "description", content: "Secure staff and administrator sign in to Gurukul Kiosk ERP." },
+      {
+        name: "description",
+        content: "Secure staff and administrator sign in to Gurukul Kiosk ERP.",
+      },
     ],
   }),
   ssr: false,
@@ -58,7 +61,9 @@ function AuthPage() {
       toast.success("Identity verified. Welcome to Gurukul Admin Portal!");
       navigate({ to: "/admin", replace: true });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Authentication failed. Invalid email or password.");
+      toast.error(
+        err instanceof Error ? err.message : "Authentication failed. Invalid email or password.",
+      );
     } finally {
       setBusy(false);
     }
@@ -69,14 +74,14 @@ function AuthPage() {
       {/* Dynamic Security Aura Background Effects */}
       <div className="absolute -top-40 -left-40 size-[32rem] rounded-full bg-gradient-to-br from-amber-600/15 via-[#8b2500]/20 to-transparent blur-3xl pointer-events-none" />
       <div className="absolute -bottom-40 -right-40 size-[32rem] rounded-full bg-gradient-to-tl from-amber-500/15 via-rose-950/20 to-transparent blur-3xl pointer-events-none" />
-      
+
       {/* Subtle Security Grid Pattern */}
-      <div 
-        className="absolute inset-0 opacity-[0.035] pointer-events-none" 
+      <div
+        className="absolute inset-0 opacity-[0.035] pointer-events-none"
         style={{
           backgroundImage: "radial-gradient(#f59e0b 1px, transparent 1px)",
-          backgroundSize: "24px 24px"
-        }} 
+          backgroundSize: "24px 24px",
+        }}
       />
 
       <div className="w-full max-w-lg relative z-10 space-y-4">
@@ -125,7 +130,8 @@ function AuthPage() {
                 Admin Security Portal
               </h1>
               <p className="text-xs text-zinc-400 font-medium max-w-sm mx-auto">
-                Authorized administrative terminal for student wallets, biometric logs, and financial records.
+                Authorized administrative terminal for student wallets, biometric logs, and
+                financial records.
               </p>
             </div>
           </div>
@@ -250,11 +256,10 @@ function AuthPage() {
 
         {/* Security Compliance Footer */}
         <div className="text-center space-y-1 text-[11px] text-zinc-500">
-          <p>
-            Shree Swaminarayan Gurukul Rajkot · Cashless ERP Engine
-          </p>
+          <p>Shree Swaminarayan Gurukul Rajkot · Cashless ERP Engine</p>
           <p className="text-[10px] text-zinc-600">
-            Unauthorized access or tampering is strictly prohibited under institutional cybersecurity policies.
+            Unauthorized access or tampering is strictly prohibited under institutional
+            cybersecurity policies.
           </p>
         </div>
       </div>

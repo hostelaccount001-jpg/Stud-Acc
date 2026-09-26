@@ -5,6 +5,7 @@ A high-performance, asynchronous FastAPI backend engineered for Gurukul campus s
 ---
 
 ## ⚡ Key Highlights
+
 - **Microsecond Response Time**: FastAPI + ASGI architecture with asynchronous database queries.
 - **Enterprise Security**: JWT Authentication, CORS protection, SQL injection prevention via parameterized queries.
 - **Hardware Integration**:
@@ -18,12 +19,15 @@ A high-performance, asynchronous FastAPI backend engineered for Gurukul campus s
 ## 🚀 How to Run
 
 ### 1. Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
 ### 2. Configure Environment
+
 Copy `.env` from root or configure `python_erp/.env`:
+
 ```env
 SUPABASE_URL=https://jjkxtgtbogtzhbuxutag.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
@@ -31,6 +35,7 @@ PORT=8000
 ```
 
 ### 3. Start the Server
+
 ```bash
 python run_server.py
 ```
@@ -42,16 +47,16 @@ python run_server.py
 
 ## 📚 API Endpoints Overview
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/kiosk/config` | Active services, settings & enrolled student cache |
-| `POST` | `/api/kiosk/lookup` | Step 1: Lookup student by NFC UID or SUID |
-| `POST` | `/api/kiosk/verify-fingerprint` | Step 2: 1:1 ISO minutiae fingerprint verification |
-| `POST` | `/api/kiosk/punch` | Step 3: Service punch, ledger commit & thermal print |
-| `GET` | `/api/students` | List, search and filter students |
-| `POST` | `/api/students` | Enroll student + 10-finger biometric minutiae |
-| `GET` | `/api/services` | List active services & price rates |
-| `GET` | `/api/reports/transactions` | Full ledger transaction history |
-| `GET` | `/api/reports/export-excel` | Export complete ledger to Excel (.xlsx) |
-| `POST` | `/api/hardware/mantra/match` | Direct Mantra minutiae matching bridge |
-| `POST` | `/api/hardware/printer/print-receipt` | Direct thermal ESC/POS print test |
+| Method | Endpoint                              | Description                                          |
+| ------ | ------------------------------------- | ---------------------------------------------------- |
+| `GET`  | `/api/kiosk/config`                   | Active services, settings & enrolled student cache   |
+| `POST` | `/api/kiosk/lookup`                   | Step 1: Lookup student by NFC UID or SUID            |
+| `POST` | `/api/kiosk/verify-fingerprint`       | Step 2: 1:1 ISO minutiae fingerprint verification    |
+| `POST` | `/api/kiosk/punch`                    | Step 3: Service punch, ledger commit & thermal print |
+| `GET`  | `/api/students`                       | List, search and filter students                     |
+| `POST` | `/api/students`                       | Enroll student + 10-finger biometric minutiae        |
+| `GET`  | `/api/services`                       | List active services & price rates                   |
+| `GET`  | `/api/reports/transactions`           | Full ledger transaction history                      |
+| `GET`  | `/api/reports/export-excel`           | Export complete ledger to Excel (.xlsx)              |
+| `POST` | `/api/hardware/mantra/match`          | Direct Mantra minutiae matching bridge               |
+| `POST` | `/api/hardware/printer/print-receipt` | Direct thermal ESC/POS print test                    |

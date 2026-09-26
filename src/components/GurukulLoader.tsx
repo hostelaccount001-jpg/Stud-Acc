@@ -31,7 +31,12 @@ export function GurukulLoader({
   }
 
   const content = (
-    <div className={cn("flex flex-col items-center justify-center text-center p-6 space-y-4 select-none", className)}>
+    <div
+      className={cn(
+        "flex flex-col items-center justify-center text-center p-6 space-y-4 select-none",
+        className,
+      )}
+    >
       {/* Outer Rotating Glow Frame with Slow-Blinking Gurukul Logo */}
       <div className="relative flex items-center justify-center">
         {/* Soft Ambient Gold Aura */}
@@ -39,8 +44,8 @@ export function GurukulLoader({
 
         {/* Dual Rotating Rings */}
         <div className="size-20 rounded-full border-2 border-dashed border-amber-500/40 animate-golden-orbit" />
-        <div 
-          className="absolute size-24 rounded-full border-2 border-[#8b2500]/30 border-t-[#8b2500] animate-golden-orbit" 
+        <div
+          className="absolute size-24 rounded-full border-2 border-[#8b2500]/30 border-t-[#8b2500] animate-golden-orbit"
           style={{ animationDuration: "1.8s", animationDirection: "reverse" }}
         />
 
@@ -63,9 +68,18 @@ export function GurukulLoader({
           <p className="text-xs text-[#7c533f] font-medium">{subtext}</p>
         ) : (
           <div className="flex items-center justify-center gap-1">
-            <span className="size-1.5 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: "0ms" }} />
-            <span className="size-1.5 rounded-full bg-amber-600 animate-bounce" style={{ animationDelay: "150ms" }} />
-            <span className="size-1.5 rounded-full bg-[#8b2500] animate-bounce" style={{ animationDelay: "300ms" }} />
+            <span
+              className="size-1.5 rounded-full bg-amber-500 animate-bounce"
+              style={{ animationDelay: "0ms" }}
+            />
+            <span
+              className="size-1.5 rounded-full bg-amber-600 animate-bounce"
+              style={{ animationDelay: "150ms" }}
+            />
+            <span
+              className="size-1.5 rounded-full bg-[#8b2500] animate-bounce"
+              style={{ animationDelay: "300ms" }}
+            />
           </div>
         )}
       </div>

@@ -34,51 +34,51 @@ PC ફુલ-સ્ક્રીન લોક (Kiosk Mode) મોડમાં ર
 
 ૨. એડમિન કંટ્રોલ પેનલ (Admin Panel)
 
-| ફીચર                   | વિગત                                                                          |
+| ફીચર | વિગત |
 
 | :--------------------- | :---------------------------------------------------------------------------- |
 
-| **Dashboard**          | પ્રોફેશનલ લૂક, આજનું કુલ ટ્રાન્ઝેક્શન અને કાઉન્ટ.                             |
+| **Dashboard** | પ્રોફેશનલ લૂક, આજનું કુલ ટ્રાન્ઝેક્શન અને કાઉન્ટ. |
 
-| **Student Management** | સિંગલ એન્ટ્રી + એક્સેલ બલ્ક અપલોડ (સેમ્પલ ફાઈલ ડાઉનલોડની સાથે).               |
+| **Student Management** | સિંગલ એન્ટ્રી + એક્સેલ બલ્ક અપલોડ (સેમ્પલ ફાઈલ ડાઉનલોડની સાથે). |
 
-| **Temporary Block**    | SUID સર્ચ કરીને કોઈ પણ વિદ્યાર્થીને એક ક્લિક પર બ્લોક/અનબ્લોક કરવું.          |
+| **Temporary Block** | SUID સર્ચ કરીને કોઈ પણ વિદ્યાર્થીને એક ક્લિક પર બ્લોક/અનબ્લોક કરવું. |
 
-| **Service Master**     | સર્વિસનું નામ, ફિક્સ રકમ (દા.ત. 30/50), અને પ્રિન્ટ કરવી કે નહીં (Checkbox).  |
+| **Service Master** | સર્વિસનું નામ, ફિક્સ રકમ (દા.ત. 30/50), અને પ્રિન્ટ કરવી કે નહીં (Checkbox). |
 
-| **Daily Limit**        | ગ્લોબલ અથવા સર્વિસ વાઈઝ લિમિટ (દા.ત. ₹500/દિવસ).                              |
+| **Daily Limit** | ગ્લોબલ અથવા સર્વિસ વાઈઝ લિમિટ (દા.ત. ₹500/દિવસ). |
 
-| **Custom Messages**    | Success Message, Limit Reached Message, અને Blocked Message જાતે બદલવાની છૂટ. |
+| **Custom Messages** | Success Message, Limit Reached Message, અને Blocked Message જાતે બદલવાની છૂટ. |
 
-| **User Rights**        | અલગ અલગ સ્ટાફને મેન્યુઅલી પરમિશન આપવી.                                        |
+| **User Rights** | અલગ અલગ સ્ટાફને મેન્યુઅલી પરમિશન આપવી. |
 
-| **Export Report**      | \`NFCNO                                                                       |
+| **Export Report** | \`NFCNO |
 
 ૩. બિઝનેસ લોજિક (Rules)
 
-  - કુલ મર્યાદા (Cumulative Limit): જો વિદ્યાર્થી દિવસમાં ₹100, ₹200 એમ વાપરે
+- કુલ મર્યાદા (Cumulative Limit): જો વિદ્યાર્થી દિવસમાં ₹100, ₹200 એમ વાપરે
 
-    અને ₹500 પહોંચે, તો તે પછીના પ્રયાસે રોકાઈ જવો જોઈએ.
+  અને ₹500 પહોંચે, તો તે પછીના પ્રયાસે રોકાઈ જવો જોઈએ.
 
-  - કસ્ટમ મેસેજ પ્રિન્ટ: લિમિટ પૂરી થતાં સ્ક્રીન પર એડમિને સેટ કરેલો મેસેજ આવવો
+- કસ્ટમ મેસેજ પ્રિન્ટ: લિમિટ પૂરી થતાં સ્ક્રીન પર એડમિને સેટ કરેલો મેસેજ આવવો
 
-    જોઈએ (દા.ત. "હવે કાલે આવજો, આજની લિમિટ પૂરી").
+  જોઈએ (દા.ત. "હવે કાલે આવજો, આજની લિમિટ પૂરી").
 
-  - સાયલન્ટ પ્રિન્ટિંગ (Silent Print): "Print Receipt" ઓન હોય તો કોઈપણ પ્રિન્ટ
+- સાયલન્ટ પ્રિન્ટિંગ (Silent Print): "Print Receipt" ઓન હોય તો કોઈપણ પ્રિન્ટ
 
-    ડાયલોગ બૉક્સ (Popup) વગર બેકગ્રાઉન્ડમાં થર્મલ પ્રિન્ટરથી પ્રિન્ટ નીકળવી
+  ડાયલોગ બૉક્સ (Popup) વગર બેકગ્રાઉન્ડમાં થર્મલ પ્રિન્ટરથી પ્રિન્ટ નીકળવી
 
-    જોઈએ.
+  જોઈએ.
 
 ૪. હાર્ડવેર અને ટેકનોલોજી સ્ટેક
 
-  - OS/Mode: Windows (Kiosk / Locked Desktop).
+- OS/Mode: Windows (Kiosk / Locked Desktop).
 
-  - Hardware: Mantra/Morpho Fingerprint, USB NFC Reader, 80mm/58mm Thermal
+- Hardware: Mantra/Morpho Fingerprint, USB NFC Reader, 80mm/58mm Thermal
 
-    Printer.
+  Printer.
 
-  - Suggested Stack: C# .NET Desktop App / Python (Tkinter/WPF) + SQLite/MySQL.
+- Suggested Stack: C# .NET Desktop App / Python (Tkinter/WPF) + SQLite/MySQL.
 
 🇬🇧 ENGLISH VERSION (Professional Prompt)
 
@@ -106,63 +106,63 @@ Strict UI Rule: Never display student balance on screen.
 
 2. Admin Configuration Panel
 
-| Module                | Description                                                                 |
+| Module | Description |
 
 | :-------------------- | :-------------------------------------------------------------------------- |
 
-| **Dashboard**         | Clean metrics (Today's count, total category hits).                         |
+| **Dashboard** | Clean metrics (Today's count, total category hits). |
 
-| **Student Master**    | Single Add + Bulk Excel Upload (with Sample Export link).                   |
+| **Student Master** | Single Add + Bulk Excel Upload (with Sample Export link). |
 
-| **Access Control**    | Instant Temporary Block/Unblock toggle via SUID search.                     |
+| **Access Control** | Instant Temporary Block/Unblock toggle via SUID search. |
 
-| **Service Config**    | Define Name, Fixed Price (e.g., 30/50), and `Print Receipt` boolean toggle. |
+| **Service Config** | Define Name, Fixed Price (e.g., 30/50), and `Print Receipt` boolean toggle. |
 
-| **Daily Cap**         | Cumulative daily spend limit (e.g., ₹500 max/day).                          |
+| **Daily Cap** | Cumulative daily spend limit (e.g., ₹500 max/day). |
 
-| **Dynamic Messages**  | Editable fields for Success, Limit Reached, and Blocked notices.            |
+| **Dynamic Messages** | Editable fields for Success, Limit Reached, and Blocked notices. |
 
-| **Staff Permissions** | Granular manual role assignments.                                           |
+| **Staff Permissions** | Granular manual role assignments. |
 
-| **Reports & Export**  | Columns: \`NFCNO                                                            |
+| **Reports & Export** | Columns: \`NFCNO |
 
 3. Enforcement Logic
 
-  - Cumulative Limit Check: Tracks sum of today's slips. E.g., if total reaches
+- Cumulative Limit Check: Tracks sum of today's slips. E.g., if total reaches
 
-    ₹500, next attempt is blocked.
+  ₹500, next attempt is blocked.
 
-  - Custom Block Notice: Displays admin's custom Gujarati/English warning (e.g.,
+- Custom Block Notice: Displays admin's custom Gujarati/English warning (e.g.,
 
-    "Aaj ni limit puri, kale avjo").
+  "Aaj ni limit puri, kale avjo").
 
-  - Silent/Raw Printing: Zero print popups. Direct ESC/POS thermal command
+- Silent/Raw Printing: Zero print popups. Direct ESC/POS thermal command
 
-    firing upon click/selection.
+  firing upon click/selection.
 
 4. Technical Blueprint
 
-  - Platform: Windows Desktop App (forced single-app kiosk policy).
+- Platform: Windows Desktop App (forced single-app kiosk policy).
 
-  - Peripherals: Biometric SDK (Mantra/Morpho), HID NFC Reader, POS Thermal
+- Peripherals: Biometric SDK (Mantra/Morpho), HID NFC Reader, POS Thermal
 
-    Printer.
+  Printer.
 
-  - Recommended Stack: C# (.NET WinForms/WPF) or Python + Local DB
+- Recommended Stack: C# (.NET WinForms/WPF) or Python + Local DB
 
-    (SQLite/MySQL).
+  (SQLite/MySQL).
 
 💡 ડેવલપરને આપતી વખતે સાથે આ પણ મોકલજો (Checklist to handover):
 
-| વસ્તુ             | તમે શું આપશો?                                                     |
+| વસ્તુ | તમે શું આપશો? |
 
 | :---------------- | :---------------------------------------------------------------- |
 
-| **Sample Excel**  | મેઈન ERP માં જે ફોર્મેટમાં ઇમ્પોર્ટ થાય છે તેની નાની એક્સેલ ફાઈલ. |
+| **Sample Excel** | મેઈન ERP માં જે ફોર્મેટમાં ઇમ્પોર્ટ થાય છે તેની નાની એક્સેલ ફાઈલ. |
 
-| **Printer Model** | થર્મલ પ્રિન્ટરનું મોડેલ નંબર (જેથી ડ્રાઇવર મિચ ન થાય).            |
+| **Printer Model** | થર્મલ પ્રિન્ટરનું મોડેલ નંબર (જેથી ડ્રાઇવર મિચ ન થાય). |
 
-| **Finger Device** | ફિંગરસ્કેનરની બ્રાન્ડ (Mantra કે Morpho - SDK અલગ હોય).           |
+| **Finger Device** | ફિંગરસ્કેનરની બ્રાન્ડ (Mantra કે Morpho - SDK અલગ હોય). |
 
 આ પ્રોમ્પ્ટ સીધો કોપી કરીને મોકલી દેશો એટલે કોઈ કન્ફ્યુઝન નહીં થાય! જય
 
