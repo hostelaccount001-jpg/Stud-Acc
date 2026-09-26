@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -86,7 +87,7 @@ import {
   type BiometricItem,
 } from "@/lib/face";
 import {
-  deleteStudentServer,
+  deleteSelectedStudentsServer,
   deleteAllStudentsServer,
   addStudentServer,
   updateStudentServer,
@@ -121,7 +122,7 @@ function StudentsPage() {
   const canDelete = !loading && (isSuperAdmin || Boolean(permissions?.delete_students));
   const canExport = !loading && (isSuperAdmin || Boolean(permissions?.export_data !== false));
 
-  const deleteStudentFn = useServerFn(deleteStudentServer);
+  const deleteSelectedStudentsFn = useServerFn(deleteSelectedStudentsServer);
   const deleteAllStudentsFn = useServerFn(deleteAllStudentsServer);
   const addStudentFn = useServerFn(addStudentServer);
   const updateStudentFn = useServerFn(updateStudentServer);
@@ -137,13 +138,15 @@ function StudentsPage() {
   const [activeTab, setActiveTab] = useState<"all" | "enrolled" | "missing" | "active" | "blocked">("all");
   const [copiedSuid, setCopiedSuid] = useState<string | null>(null);
 
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [showDeleteSelectedDialog, setShowDeleteSelectedDialog] = useState(false);
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [newFingers, setNewFingers] = useState<any[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState(emptyForm);
   const [editFingers, setEditFingers] = useState<any[]>([]);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [inlineRoomVal, setInlineRoomVal] = useState("");
@@ -281,25 +284,31 @@ function StudentsPage() {
     onError: (e: Error) => toast.error(e.message || "Failed to update student"),
   });
 
-  const deleteStudent = useMutation({
-    mutationFn: async (id: string) => {
+  const deleteSelectedStudents = useMutation({
+    mutationFn: async (ids: string[]) => {
       if (!canDelete) {
         throw new Error("You do not have permission to delete students. Please contact Super Admin.");
       }
+      if (ids.length === 0) return { count: 0 };
       try {
-        await deleteStudentFn({ data: { id } });
+        const res = await deleteSelectedStudentsFn({ data: { ids } });
+        return res;
       } catch (err) {
-        console.warn("Server delete failed, fallback client:", err);
-        const { error } = await supabase.from("students").delete().eq("id", id);
+        console.warn("Server bulk-delete failed, fallback client:", err);
+        await supabase.from("transactions").delete().in("student_id", ids);
+        const { error } = await supabase.from("students").delete().in("id", ids);
         if (error) throw error;
+        return { count: ids.length };
       }
     },
-    onSuccess: () => {
-      toast.success("Student removed successfully");
-      setDeleteId(null);
+    onSuccess: (res) => {
+      const count = res?.count ?? selectedIds.length;
+      toast.success(`${count} student${count === 1 ? "" : "s"} deleted successfully`);
+      setSelectedIds([]);
+      setShowDeleteSelectedDialog(false);
       qc.invalidateQueries({ queryKey: ["students"] });
     },
-    onError: (e: Error) => toast.error(e.message || "Failed to delete student"),
+    onError: (e: Error) => toast.error(e.message || "Failed to delete selected students"),
   });
 
   const deleteAllStudents = useMutation({
@@ -730,12 +739,45 @@ function StudentsPage() {
     });
   }, [studentList, search, activeTab, filterClass, sortKey, sortAsc]);
 
+  function toggleSelectStudent(id: string) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  }
+
+  function clearSelection() {
+    setSelectedIds([]);
+  }
+
+  function selectAllFiltered() {
+    setSelectedIds(filteredAndSortedStudents.map((s) => s.id));
+  }
+
+  const allFilteredSelected =
+    filteredAndSortedStudents.length > 0 &&
+    filteredAndSortedStudents.every((s) => selectedIds.includes(s.id));
+
+  const isSomeSelected =
+    selectedIds.length > 0 && !allFilteredSelected;
+
+  function toggleSelectAll() {
+    if (allFilteredSelected) {
+      setSelectedIds((prev) =>
+        prev.filter((id) => !filteredAndSortedStudents.some((s) => s.id === id))
+      );
+    } else {
+      const newIds = new Set([...selectedIds, ...filteredAndSortedStudents.map((s) => s.id)]);
+      setSelectedIds(Array.from(newIds));
+    }
+  }
+
   function resetDirectoryFilters() {
     setSearch("");
     setActiveTab("all");
     setFilterClass("all");
     setSortKey("name");
     setSortAsc(true);
+    setSelectedIds([]);
   }
 
   function renderHeader(label: string, key: StudentSortKey) {
@@ -837,14 +879,37 @@ function StudentsPage() {
           </button>
 
           {canDelete && (
-            <button
-              type="button"
-              onClick={() => setShowDeleteAllDialog(true)}
-              disabled={deleteAllStudents.isPending || studentList.length === 0}
-              className="btn-luxury-danger px-4 py-2.5 text-xs gap-2 disabled:opacity-50 cursor-pointer transition-transform hover:scale-102"
-            >
-              <Trash2 className="size-4" /> Delete All ({studentList.length})
-            </button>
+            <>
+              {selectedIds.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteSelectedDialog(true)}
+                  disabled={deleteSelectedStudents.isPending}
+                  className="btn-luxury-danger px-4 py-2.5 text-xs gap-2 cursor-pointer shadow-lg shadow-rose-900/20 transition-transform hover:scale-105 active:scale-95 animate-in fade-in"
+                  title={`Delete ${selectedIds.length} selected student(s)`}
+                >
+                  <Trash2 className="size-4" /> Delete Selected ({selectedIds.length})
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="btn-luxury-secondary px-4 py-2.5 text-xs gap-2 text-rose-800/40 border-rose-200/60 opacity-50 cursor-not-allowed"
+                  title="Select students using checkboxes below to delete"
+                >
+                  <Trash2 className="size-4 text-rose-400" /> Delete Selected (0)
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowDeleteAllDialog(true)}
+                disabled={deleteAllStudents.isPending || studentList.length === 0}
+                className="btn-luxury-secondary px-4 py-2.5 text-xs gap-2 text-rose-800 border-rose-300 hover:bg-rose-50 disabled:opacity-50 cursor-pointer transition-transform hover:scale-102"
+              >
+                <Trash2 className="size-4 text-rose-600" /> Delete All ({studentList.length})
+              </button>
+            </>
           )}
 
           <input
@@ -1120,11 +1185,74 @@ function StudentsPage() {
           </div>
         </div>
 
+        {/* Selected Students Batch Action Bar */}
+        {canDelete && selectedIds.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-rose-50 via-amber-50/70 to-rose-50 border-2 border-rose-300 rounded-2xl p-3 sm:px-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center gap-2.5">
+              <div className="size-8 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                {selectedIds.length}
+              </div>
+              <div>
+                <span className="font-bold text-xs sm:text-sm text-rose-950 font-sans">
+                  {selectedIds.length} {selectedIds.length === 1 ? "student selected" : "students selected"}
+                </span>
+                <span className="text-[11px] text-rose-700 ml-2 font-medium hidden sm:inline">
+                  (Checkboxes selected in table below)
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={selectAllFiltered}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-[#7c533f] border border-[#d8c5af] hover:bg-[#faf4eb] transition-colors cursor-pointer shadow-2xs"
+              >
+                Select All Visible ({filteredAndSortedStudents.length})
+              </button>
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-[#7c533f] border border-[#d8c5af] hover:bg-[#faf4eb] transition-colors cursor-pointer shadow-2xs"
+              >
+                Clear Selection
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDeleteSelectedDialog(true)}
+                disabled={deleteSelectedStudents.isPending}
+                className="btn-luxury-danger px-4 py-1.5 text-xs font-bold gap-2 shadow-sm cursor-pointer transition-transform hover:scale-102"
+              >
+                <Trash2 className="size-3.5" />
+                <span>Delete Selected ({selectedIds.length})</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Directory Table with Clickable Sort Headers & Sticky Header */}
         <div className="overflow-x-auto overflow-y-auto max-h-[720px] rounded-2xl border border-[#e5d8c5] scroll-smooth custom-scrollbar shadow-inner bg-white">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-[#faf6ef] z-10 shadow-xs border-b border-[#e5d8c5]">
               <tr className="text-left text-xs uppercase tracking-wider font-bold">
+                {canDelete && (
+                  <th className="py-3.5 pl-4 pr-2 w-10 text-center">
+                    <div className="flex items-center justify-center">
+                      <Checkbox
+                        checked={
+                          allFilteredSelected
+                            ? true
+                            : isSomeSelected
+                              ? "indeterminate"
+                              : false
+                        }
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Select all students"
+                        className="border-[#8b2500] data-[state=checked]:bg-[#8b2500] data-[state=checked]:text-white cursor-pointer"
+                      />
+                    </div>
+                  </th>
+                )}
                 {renderHeader("SUID / GR", "suid")}
                 {renderHeader("Student Name", "name")}
                 {renderHeader("Class", "class")}
@@ -1141,7 +1269,26 @@ function StudentsPage() {
                 const fingerCount = fingerList.length;
 
                 return (
-                  <tr key={s.id} className="table-row-luxury hover:bg-[#faf4eb] transition-colors">
+                  <tr
+                    key={s.id}
+                    className={`table-row-luxury transition-colors ${
+                      selectedIds.includes(s.id)
+                        ? "bg-amber-100/60 hover:bg-amber-100/80"
+                        : "hover:bg-[#faf4eb]"
+                    }`}
+                  >
+                    {canDelete && (
+                      <td className="py-3.5 pl-4 pr-2 text-center" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center">
+                          <Checkbox
+                            checked={selectedIds.includes(s.id)}
+                            onCheckedChange={() => toggleSelectStudent(s.id)}
+                            aria-label={`Select student ${s.name}`}
+                            className="border-[#8b2500] data-[state=checked]:bg-[#8b2500] data-[state=checked]:text-white cursor-pointer"
+                          />
+                        </div>
+                      </td>
+                    )}
                     <td className="py-3.5 pr-4 font-bold text-[#8b2500]">
                       <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#faf6ef] border border-[#d8c5af] group/suid">
                         <span className="font-mono text-xs font-bold text-[#8b2500]">{s.suid}</span>
@@ -1276,16 +1423,6 @@ function StudentsPage() {
                         >
                           <Pencil className="size-4" />
                         </button>
-                        {canDelete && (
-                          <button
-                            type="button"
-                            onClick={() => setDeleteId(s.id)}
-                            className="p-1.5 rounded-lg text-[#7c533f] hover:text-rose-600 hover:bg-rose-50 transition-all hover:scale-110 active:scale-95 cursor-pointer"
-                            title="Delete Student"
-                          >
-                            <Trash2 className="size-4" />
-                          </button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -1294,7 +1431,7 @@ function StudentsPage() {
 
               {filteredAndSortedStudents.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-sm font-sans text-[#7c533f]">
+                  <td colSpan={canDelete ? 8 : 7} className="py-12 text-center text-sm font-sans text-[#7c533f]">
                     {studentList.length === 0 ? (
                       <div className="space-y-3">
                         <p className="font-semibold text-base text-[#4a1c14]">No student records in database yet</p>
@@ -1644,24 +1781,84 @@ function StudentsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* SINGLE STUDENT DELETE CONFIRMATION */}
-      <AlertDialog open={canDelete && deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
-        <AlertDialogContent className="bg-white border border-[#e5d8c5] shadow-2xl rounded-3xl p-6">
+      {/* DELETE SELECTED STUDENTS CONFIRMATION */}
+      <AlertDialog
+        open={canDelete && showDeleteSelectedDialog}
+        onOpenChange={setShowDeleteSelectedDialog}
+      >
+        <AlertDialogContent className="modal-luxury max-w-lg bg-[#fdfbf7] border-2 border-rose-300 rounded-3xl shadow-2xl p-6 sm:p-7">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-serif font-bold text-rose-700 flex items-center gap-2">
-              <Trash2 className="size-5" /> Delete Student Record?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-[#7c533f]">
-              The student profile and enrolled biometrics will be permanently removed from the active database. Past transaction logs are preserved in reports.
+            <div className="flex items-center gap-3">
+              <div className="size-11 rounded-2xl bg-rose-100 border border-rose-300 flex items-center justify-center text-rose-700 shrink-0 shadow-xs">
+                <Trash2 className="size-6 text-rose-600" />
+              </div>
+              <div>
+                <AlertDialogTitle className="font-serif text-xl font-bold text-rose-800">
+                  Delete {selectedIds.length} Selected {selectedIds.length === 1 ? "Student" : "Students"}?
+                </AlertDialogTitle>
+                <p className="text-xs text-[#7c533f] mt-0.5">
+                  Permanent removal from database
+                </p>
+              </div>
+            </div>
+
+            <AlertDialogDescription asChild>
+              <div className="text-xs text-[#7c533f] pt-2 space-y-3">
+                <p>
+                  Are you sure you want to delete the <strong className="text-rose-900 font-bold">{selectedIds.length}</strong> selected student record{selectedIds.length === 1 ? "" : "s"}?
+                  This action is <strong className="text-rose-700">irreversible</strong> and will permanently remove student profiles, biometrics (fingerprints), and associated kiosk credentials.
+                </p>
+
+                {/* Preview list of selected students */}
+                <div className="max-h-48 overflow-y-auto rounded-xl border border-[#e5d8c5] bg-white p-2.5 space-y-1 custom-scrollbar">
+                  {studentList
+                    .filter((s) => selectedIds.includes(s.id))
+                    .slice(0, 15)
+                    .map((s) => (
+                      <div
+                        key={s.id}
+                        className="flex items-center justify-between text-[11px] font-mono py-1 px-2.5 rounded-lg bg-[#faf6ef]/80 border border-[#e5d8c5]/60"
+                      >
+                        <span className="font-bold text-[#8b2500]">{s.suid}</span>
+                        <span className="font-sans font-semibold text-[#2c1810] truncate max-w-[200px]">
+                          {s.name}
+                        </span>
+                        <span className="text-zinc-500 font-sans text-[10px]">
+                          {s.class_name || "—"}
+                        </span>
+                      </div>
+                    ))}
+                  {selectedIds.length > 15 && (
+                    <p className="text-center text-[10px] text-zinc-500 font-sans italic pt-1">
+                      + {selectedIds.length - 15} more selected students
+                    </p>
+                  )}
+                </div>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 pt-4">
-            <AlertDialogCancel className="btn-luxury-secondary px-4 py-2 text-xs">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="btn-luxury-danger px-4 py-2 text-xs"
-              onClick={() => deleteId && deleteStudent.mutate(deleteId)}
+
+          <AlertDialogFooter className="gap-2.5 pt-4 border-t border-[#e5d8c5]">
+            <AlertDialogCancel
+              disabled={deleteSelectedStudents.isPending}
+              className="btn-luxury-secondary px-5 py-2.5 text-xs font-semibold cursor-pointer"
             >
-              Confirm Delete
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteSelectedStudents.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                deleteSelectedStudents.mutate(selectedIds);
+              }}
+              className="btn-luxury-danger px-6 py-2.5 text-xs font-bold gap-2 shadow-md cursor-pointer"
+            >
+              {deleteSelectedStudents.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+              Yes, Delete {selectedIds.length} {selectedIds.length === 1 ? "Student" : "Students"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

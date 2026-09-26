@@ -24,6 +24,20 @@ export const deleteStudentServer = createServerFn({ method: "POST" })
     return { success: true, count: del?.length ?? 0 };
   });
 
+export const deleteSelectedStudentsServer = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({ ids: z.array(z.string()).min(1) }).parse(input))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("transactions").delete().in("student_id", data.ids);
+    const { data: del, error } = await supabaseAdmin
+      .from("students")
+      .delete()
+      .in("id", data.ids)
+      .select("id");
+    if (error) throw new Error(error.message);
+    return { success: true, count: del?.length ?? 0 };
+  });
+
 export const deleteAllStudentsServer = createServerFn({ method: "POST" }).handler(
   async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
