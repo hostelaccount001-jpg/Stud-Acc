@@ -780,6 +780,9 @@ function StaffPage() {
                       <th className="py-3.5 px-2 text-center" title="Can Delete Records">
                         <span className="text-[11px] font-bold text-rose-800">Delete</span>
                       </th>
+                      <th className="py-3.5 px-2 text-center" title="Can Print Receipts & Reports">
+                        <span className="text-[11px] font-bold text-amber-900">Print</span>
+                      </th>
                       <th className="py-3.5 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -905,6 +908,18 @@ function StaffPage() {
                                   </>
                                 )}
                               </span>
+
+                              {/* Print Right */}
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 ${
+                                  Boolean(u.permissions.reports_print_slip)
+                                    ? "bg-amber-100 text-amber-900 border-amber-300 font-extrabold"
+                                    : "bg-zinc-50 text-zinc-400 border-zinc-200"
+                                }`}
+                              >
+                                <Printer className="size-3" />
+                                {Boolean(u.permissions.reports_print_slip) ? "Print OK" : "No Print"}
+                              </span>
                             </div>
                           </td>
 
@@ -944,6 +959,17 @@ function StaffPage() {
                               disabled={!isSuperAdmin || isMaster || toggleQuickPerm.isPending}
                               onCheckedChange={(v) =>
                                 toggleQuickPerm.mutate({ user: u, key: "delete_students", value: v })
+                              }
+                            />
+                          </td>
+
+                          {/* Quick Print Toggle */}
+                          <td className="py-3.5 px-2 text-center">
+                            <Switch
+                              checked={isMaster || Boolean(u.permissions.reports_print_slip)}
+                              disabled={!isSuperAdmin || isMaster || toggleQuickPerm.isPending}
+                              onCheckedChange={(v) =>
+                                toggleQuickPerm.mutate({ user: u, key: "reports_print_slip", value: v })
                               }
                             />
                           </td>
@@ -1004,7 +1030,7 @@ function StaffPage() {
 
                     {filteredUsers.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center text-[#7c533f]">
+                        <td colSpan={8} className="py-12 text-center text-[#7c533f]">
                           <div className="max-w-xs mx-auto space-y-2">
                             <ShieldAlert className="size-8 text-amber-600 mx-auto opacity-70" />
                             <p className="font-bold text-[#4a1c14] text-sm">
@@ -1611,13 +1637,28 @@ function StaffPage() {
                     </label>
 
                     <label className="flex items-center justify-between p-2 rounded-xl bg-white border border-[#e5d8c5]">
-                      <span className="font-semibold text-[#4a1c14]">Export Excel & Print</span>
+                      <span className="font-semibold text-[#4a1c14]">Export to Excel</span>
                       <Switch
                         checked={Boolean(createForm.permissions.reports_export || createForm.permissions.export_data)}
                         onCheckedChange={(v) =>
                           setCreateForm({
                             ...createForm,
                             permissions: { ...createForm.permissions, reports_export: v, export_data: v },
+                          })
+                        }
+                      />
+                    </label>
+
+                    <label className="flex items-center justify-between p-2 rounded-xl bg-white border border-amber-300">
+                      <span className="font-semibold text-amber-900 flex items-center gap-1.5">
+                        <Printer className="size-3.5 text-[#8b2500]" /> Print Slips & Reports
+                      </span>
+                      <Switch
+                        checked={Boolean(createForm.permissions.reports_print_slip)}
+                        onCheckedChange={(v) =>
+                          setCreateForm({
+                            ...createForm,
+                            permissions: { ...createForm.permissions, reports_print_slip: v },
                           })
                         }
                       />
@@ -1776,6 +1817,18 @@ function StaffPage() {
                       checked={Boolean(editPerms.reports_export || editPerms.export_data)}
                       onCheckedChange={(v) =>
                         setEditPerms({ ...editPerms, reports_export: v, export_data: v })
+                      }
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-white border border-amber-300">
+                    <span className="font-semibold text-amber-900 flex items-center gap-1.5">
+                      <Printer className="size-3.5 text-[#8b2500]" /> Print Slips & Reports
+                    </span>
+                    <Switch
+                      checked={Boolean(editPerms.reports_print_slip)}
+                      onCheckedChange={(v) =>
+                        setEditPerms({ ...editPerms, reports_print_slip: v })
                       }
                     />
                   </div>
@@ -1987,7 +2040,7 @@ function StaffPage() {
                   </label>
 
                   <label className="flex items-center justify-between p-2 rounded-xl bg-white border border-[#e5d8c5]">
-                    <span className="font-medium text-[#4a1c14]">Export Excel & Print</span>
+                    <span className="font-medium text-[#4a1c14]">Export to Excel</span>
                     <Switch
                       checked={Boolean(
                         roleForm.permissions.reports_export || roleForm.permissions.export_data
@@ -1999,6 +2052,24 @@ function StaffPage() {
                             ...roleForm.permissions,
                             reports_export: v,
                             export_data: v,
+                          },
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between p-2 rounded-xl bg-white border border-amber-300">
+                    <span className="font-semibold text-amber-900 flex items-center gap-1.5">
+                      <Printer className="size-3.5 text-[#8b2500]" /> Print Slips & Reports
+                    </span>
+                    <Switch
+                      checked={Boolean(roleForm.permissions.reports_print_slip)}
+                      onCheckedChange={(v) =>
+                        setRoleForm({
+                          ...roleForm,
+                          permissions: {
+                            ...roleForm.permissions,
+                            reports_print_slip: v,
                           },
                         })
                       }

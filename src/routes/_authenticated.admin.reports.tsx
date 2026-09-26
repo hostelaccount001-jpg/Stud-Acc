@@ -263,6 +263,10 @@ function ReportsPage() {
   });
 
   function handlePrintReceipt(row: TransactionRow) {
+    if (!canPrintSlip) {
+      toast.error("Access Denied: You do not have permission to print receipt slips.");
+      return;
+    }
     setPrintMode("slip");
     const rData: ReceiptData = {
       receiptNo: row.receipt_no,
@@ -281,12 +285,14 @@ function ReportsPage() {
         window.print();
       } catch (e) {
         console.error("Print trigger failed:", e);
+      } finally {
+        setTimeout(() => setActiveReceipt(null), 1000);
       }
-    }, 100);
+    }, 150);
   }
 
   function handlePrintFullReport() {
-    if (!canExportReports) {
+    if (!canPrintSlip) {
       toast.error("Access Denied: You do not have permission to print full reports.");
       return;
     }
@@ -301,8 +307,10 @@ function ReportsPage() {
         window.print();
       } catch (e) {
         console.error("Print trigger failed:", e);
+      } finally {
+        setTimeout(() => setPrintMode("slip"), 1000);
       }
-    }, 100);
+    }, 150);
   }
 
   function openEdit(row: TransactionRow) {
@@ -428,9 +436,11 @@ function ReportsPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in zoom-in-98 duration-300">
-      {/* 1. Thermal Receipt Slip Component (For Single Slip Print) */}
+      {/* 1. Thermal Receipt Slip Component (For Single Slip Print) - STRICTLY HIDDEN ON SCREEN */}
       {printMode === "slip" && activeReceipt && (
-        <ReceiptSlip title={kioskTitle} receipt={activeReceipt} footerText={receiptFooter} />
+        <div className="hidden print:block">
+          <ReceiptSlip title={kioskTitle} receipt={activeReceipt} footerText={receiptFooter} />
+        </div>
       )}
 
       {/* 2. Full A4 Report Printable Template (For Full Report Print) */}

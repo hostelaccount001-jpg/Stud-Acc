@@ -43,7 +43,7 @@ export function ReceiptSlip({
         "font-mono text-black text-xs leading-tight w-full max-w-[70mm] mx-auto p-3 bg-white box-border",
         preview
           ? "rounded-2xl border-2 border-dashed border-[#d8c5af] shadow-sm space-y-1"
-          : "print:block",
+          : "hidden print:block",
       )}
     >
       {/* Header */}
