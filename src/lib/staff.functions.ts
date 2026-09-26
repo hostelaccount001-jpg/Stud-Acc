@@ -74,7 +74,7 @@ export function normalizePermissions(raw?: Partial<UserPermissions>): UserPermis
     reports_export: p.reports_export ?? exportData,
     reports_edit: p.reports_edit ?? false,
     reports_delete: p.reports_delete ?? false,
-    reports_print_slip: p.reports_print_slip ?? true,
+    reports_print_slip: p.reports_print_slip ?? false,
 
     students_view: p.students_view ?? hasStudents,
     students_create: p.students_create ?? (hasStudents && (p.students_create ?? false)),
@@ -202,7 +202,7 @@ export const defaultReportViewerPermissions: UserPermissions = {
   reports_export: true,
   reports_edit: false,
   reports_delete: false,
-  reports_print_slip: true,
+  reports_print_slip: false,
 
   students_view: false,
   students_create: false,
@@ -240,7 +240,7 @@ export const defaultStaffPermissions: UserPermissions = {
   reports_export: false,
   reports_edit: false,
   reports_delete: false,
-  reports_print_slip: true,
+  reports_print_slip: false,
 
   students_view: false,
   students_create: false,
@@ -278,7 +278,7 @@ export const BUILTIN_ROLES: CustomRole[] = [
   {
     id: "admin",
     name: "Administrator",
-    description: "Full management of students, services, and reports with export rights.",
+    description: "Full management of students, services, and reports with export and print rights.",
     color: "blue",
     isSystem: true,
     permissions: defaultAdminPermissions,
@@ -287,7 +287,7 @@ export const BUILTIN_ROLES: CustomRole[] = [
     id: "report_viewer",
     name: "Report Viewer (Strict View & Export Only)",
     description:
-      "Can view and export reports to Excel/Print only. Strictly blocked from editing or deleting transactions.",
+      "Can view and export reports to Excel only. Strictly blocked from printing slips, editing, or deleting transactions.",
     color: "emerald",
     isSystem: true,
     permissions: defaultReportViewerPermissions,

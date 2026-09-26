@@ -102,10 +102,11 @@ function ReportsPage() {
   const canViewReports = !userLoading && (isSuperAdmin || permissions.reports !== false);
   const canExportReports =
     !userLoading &&
-    (isSuperAdmin || permissions.reports_export !== false || permissions.export_data !== false);
+    (isSuperAdmin || Boolean(permissions.reports_export || permissions.export_data));
   const canEditReports = !userLoading && (isSuperAdmin || Boolean(permissions.reports_edit));
   const canDeleteReports = !userLoading && (isSuperAdmin || Boolean(permissions.reports_delete));
-  const canPrintSlip = !userLoading && (isSuperAdmin || permissions.reports_print_slip !== false);
+  const canPrintSlip = !userLoading && (isSuperAdmin || Boolean(permissions.reports_print_slip));
+  const hasAnyRowAction = canPrintSlip || canEditReports || canDeleteReports;
 
   const updateTxFn = useServerFn(updateTransactionServer);
   const deleteTxFn = useServerFn(deleteTransactionServer);
@@ -529,40 +530,42 @@ function ReportsPage() {
               Print full report summaries, reprint thermal receipts, edit or delete entries, and
               export to Excel.
             </p>
-            {!isSuperAdmin && !canEditReports && !canDeleteReports && (
+            {!isSuperAdmin && !canPrintSlip && !canEditReports && !canDeleteReports && (
               <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-800 border border-emerald-500/30 shadow-xs">
                 <ShieldCheck className="size-3.5 text-emerald-600" />
-                <span>{roleTitle || "Report Viewer"}: View & Export Only</span>
+                <span>{roleTitle || "Report Viewer"}: View & Export Only (Print Restricted)</span>
               </span>
             )}
           </div>
         </div>
 
-        {/* Header Action Buttons: Print Report + Export Excel */}
+        {/* Header Action Buttons: Export Excel + Print Report (Separate Rights) */}
         <div className="flex items-center gap-2.5">
-          {canExportReports ? (
-            <>
-              <button
-                type="button"
-                onClick={handlePrintFullReport}
-                disabled={rows.length === 0}
-                className="btn-luxury-secondary px-5 py-2.5 text-xs gap-2 shadow-md disabled:opacity-50"
-              >
-                <Printer className="size-4 text-[#8b2500]" /> Print Report ({rows.length})
-              </button>
+          {canExportReports && (
+            <button
+              type="button"
+              onClick={exportExcel}
+              disabled={rows.length === 0}
+              className="btn-luxury-primary px-6 py-2.5 text-xs gap-2 shadow-lg disabled:opacity-50 cursor-pointer active:scale-95"
+            >
+              <Download className="size-4" /> Export Excel ({rows.length})
+            </button>
+          )}
 
-              <button
-                type="button"
-                onClick={exportExcel}
-                disabled={rows.length === 0}
-                className="btn-luxury-primary px-6 py-2.5 text-xs gap-2 shadow-lg disabled:opacity-50"
-              >
-                <Download className="size-4" /> Export Excel ({rows.length})
-              </button>
-            </>
-          ) : (
+          {canPrintSlip && (
+            <button
+              type="button"
+              onClick={handlePrintFullReport}
+              disabled={rows.length === 0}
+              className="btn-luxury-secondary px-5 py-2.5 text-xs gap-2 shadow-md disabled:opacity-50 cursor-pointer active:scale-95"
+            >
+              <Printer className="size-4 text-[#8b2500]" /> Print Report ({rows.length})
+            </button>
+          )}
+
+          {!canExportReports && !canPrintSlip && (
             <div className="px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-[#8b2500] text-xs font-bold flex items-center gap-2 shadow-sm">
-              <Lock className="size-4 text-[#8b2500]" /> View-Only Access (Export Disabled)
+              <Lock className="size-4 text-[#8b2500]" /> View-Only Access (Export & Print Disabled)
             </div>
           )}
         </div>
@@ -725,7 +728,7 @@ function ReportsPage() {
                 {header("Student Name", "name")}
                 {header("Service", "service")}
                 {header("Amount (₹)", "amount")}
-                <th className="py-3 pl-4 text-right">Actions</th>
+                {hasAnyRowAction && <th className="py-3 pl-4 text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e5d8c5]/60 font-mono text-xs">
@@ -759,56 +762,52 @@ function ReportsPage() {
                       ₹{Number(r.amount).toFixed(2)}
                     </td>
 
-                    {/* Per-Entry Actions: Print Receipt, Edit, Delete */}
-                    <td className="py-3.5 pl-4 text-right font-sans">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {canPrintSlip && (
-                          <button
-                            type="button"
-                            title="Reprint Thermal Receipt Slip"
-                            onClick={() => handlePrintReceipt(r)}
-                            className="btn-luxury-secondary px-3 py-1.5 text-xs gap-1.5 shadow-sm text-[#4a1c14] hover:text-[#8b2500]"
-                          >
-                            <Printer className="size-3.5 text-[#8b2500]" /> Print
-                          </button>
-                        )}
+                    {/* Per-Entry Actions: Only rendered if user has row action rights */}
+                    {hasAnyRowAction && (
+                      <td className="py-3.5 pl-4 text-right font-sans">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {canPrintSlip && (
+                            <button
+                              type="button"
+                              title="Reprint Thermal Receipt Slip"
+                              onClick={() => handlePrintReceipt(r)}
+                              className="btn-luxury-secondary px-3 py-1.5 text-xs gap-1.5 shadow-sm text-[#4a1c14] hover:text-[#8b2500] cursor-pointer active:scale-95"
+                            >
+                              <Printer className="size-3.5 text-[#8b2500]" /> Print
+                            </button>
+                          )}
 
-                        {canEditReports && (
-                          <button
-                            type="button"
-                            title="Edit Entry Amount/Service"
-                            onClick={() => openEdit(r)}
-                            className="btn-luxury-secondary px-3 py-1.5 text-xs gap-1.5 shadow-sm text-[#4a1c14]"
-                          >
-                            <Pencil className="size-3.5 text-amber-700" /> Edit
-                          </button>
-                        )}
+                          {canEditReports && (
+                            <button
+                              type="button"
+                              title="Edit Entry Amount/Service"
+                              onClick={() => openEdit(r)}
+                              className="btn-luxury-secondary px-3 py-1.5 text-xs gap-1.5 shadow-sm text-[#4a1c14] cursor-pointer active:scale-95"
+                            >
+                              <Pencil className="size-3.5 text-amber-700" /> Edit
+                            </button>
+                          )}
 
-                        {canDeleteReports && (
-                          <button
-                            type="button"
-                            title="Delete Transaction"
-                            onClick={() => setDeletingRow(r)}
-                            className="btn-luxury-danger px-2.5 py-1.5 text-xs shadow-sm"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </button>
-                        )}
-
-                        {!canPrintSlip && !canEditReports && !canDeleteReports && (
-                          <span className="text-[11px] text-[#7c533f]/60 italic font-mono px-2 py-0.5 rounded bg-amber-50 border border-amber-200/40">
-                            View Only
-                          </span>
-                        )}
-                      </div>
-                    </td>
+                          {canDeleteReports && (
+                            <button
+                              type="button"
+                              title="Delete Transaction"
+                              onClick={() => setDeletingRow(r)}
+                              className="btn-luxury-danger px-2.5 py-1.5 text-xs shadow-sm cursor-pointer active:scale-95"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
 
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-sm text-[#7c533f] font-sans">
+                  <td colSpan={hasAnyRowAction ? 7 : 6} className="py-12 text-center text-sm text-[#7c533f] font-sans">
                     No transactions match the selected filters.
                   </td>
                 </tr>
