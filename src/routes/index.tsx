@@ -1,4 +1,4 @@
-import React, { useReducer, useEffect, useRef, useCallback, useMemo, useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
@@ -18,19 +18,12 @@ import {
   HeartPulse,
   ChevronRight,
   Tag,
-  Wallet,
 } from "lucide-react";
 import { captureFinger, identify, useMantraDevice } from "@/lib/mantra";
-import {
-  getKioskConfig,
-  punchService,
-  getStudentGallery,
-  getStudentKioskData,
-  type StudentKioskData,
-} from "@/lib/kiosk.functions";
-import { supabase } from "@/integrations/supabase/client";
+import { getKioskConfig, punchService, getStudentGallery } from "@/lib/kiosk.functions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -82,103 +75,6 @@ type ServiceItem = {
   print_receipt: boolean;
 };
 
-type KioskState = {
-  step: Step;
-  scannerStatus: "idle" | "scanning" | "matching" | "loading";
-  capturedScan: CapturedScan | null;
-  student: VerifiedStudent | null;
-  walletData: StudentKioskData | null;
-  error: string;
-  successBanner: string | null;
-  punchingService: string | null;
-};
-
-type KioskAction =
-  | { type: "START_SCAN" }
-  | { type: "START_MATCHING"; capture: CapturedScan }
-  | { type: "START_LOADING" }
-  | { type: "VERIFIED_SUCCESS"; student: VerifiedStudent; walletData: StudentKioskData }
-  | { type: "SCAN_MISMATCH"; error: string }
-  | { type: "SCAN_ERROR"; error: string }
-  | { type: "CLEAR_ERROR" }
-  | { type: "SET_SUCCESS_BANNER"; banner: string | null }
-  | { type: "START_PUNCH"; serviceName: string }
-  | { type: "PUNCH_COMPLETE"; error?: string }
-  | { type: "RESET" };
-
-const initialKioskState: KioskState = {
-  step: "scan",
-  scannerStatus: "idle",
-  capturedScan: null,
-  student: null,
-  walletData: null,
-  error: "",
-  successBanner: null,
-  punchingService: null,
-};
-
-function kioskReducer(state: KioskState, action: KioskAction): KioskState {
-  switch (action.type) {
-    case "START_SCAN":
-      if (state.scannerStatus === "scanning" && state.step === "scan") return state;
-      return { ...state, scannerStatus: "scanning" };
-
-    case "START_MATCHING":
-      return { ...state, scannerStatus: "matching", capturedScan: action.capture };
-
-    case "START_LOADING":
-      return { ...state, scannerStatus: "loading" };
-
-    case "VERIFIED_SUCCESS":
-      return {
-        ...state,
-        step: "service",
-        scannerStatus: "idle",
-        student: action.student,
-        walletData: action.walletData,
-        error: "",
-        successBanner: `Biometric Verified: Welcome, ${action.student.name}!`,
-      };
-
-    case "SCAN_MISMATCH":
-    case "SCAN_ERROR":
-      return {
-        ...state,
-        scannerStatus: "idle",
-        error: action.error,
-      };
-
-    case "CLEAR_ERROR":
-      if (!state.error) return state;
-      return { ...state, error: "" };
-
-    case "SET_SUCCESS_BANNER":
-      if (state.successBanner === action.banner) return state;
-      return { ...state, successBanner: action.banner };
-
-    case "START_PUNCH":
-      return { ...state, punchingService: action.serviceName, error: "" };
-
-    case "PUNCH_COMPLETE":
-      return { ...state, punchingService: null, error: action.error || "" };
-
-    case "RESET":
-      return {
-        step: "scan",
-        scannerStatus: "idle",
-        capturedScan: null,
-        student: null,
-        walletData: null,
-        error: "",
-        successBanner: null,
-        punchingService: null,
-      };
-
-    default:
-      return state;
-  }
-}
-
 function getServiceMeta(name: string) {
   const s = name.toLowerCase();
   if (s.includes("store") || s.includes("shop") || s.includes("સ્ટોર")) {
@@ -226,80 +122,15 @@ function getServiceMeta(name: string) {
   };
 }
 
-// React.memo memoized service card component to prevent UI lag on re-renders
-const ServiceCard = React.memo(function ServiceCard({
-  service,
-  disabled,
-  onClick,
-}: {
-  service: ServiceItem;
-  disabled: boolean;
-  onClick: (service: ServiceItem) => void;
-}) {
-  const meta = getServiceMeta(service.name);
-  const IconComp = meta.icon;
-
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => onClick(service)}
-      className="p-4 sm:p-5 rounded-3xl bg-white hover:bg-white/95 border-2 border-[#e6d8c6] hover:border-[#8b2500] shadow-[0_4px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_32px_rgba(139,37,0,0.12)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-300 text-left flex flex-col justify-between h-40 group relative overflow-hidden cursor-pointer"
-    >
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <span
-              className={`size-7 rounded-lg flex items-center justify-center border shadow-xs transition-transform group-hover:scale-110 ${meta.iconBg}`}
-            >
-              <IconComp className="size-3.5" />
-            </span>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#8b2500] bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md">
-              {meta.tag}
-            </span>
-          </div>
-
-          {service.print_receipt && (
-            <span
-              title="Thermal receipt will be printed"
-              className="p-1.5 rounded-lg bg-[#f7efe6] text-[#7c533f] group-hover:text-[#8b2500] transition-colors"
-            >
-              <Printer className="size-3" />
-            </span>
-          )}
-        </div>
-
-        <h4 className="text-base sm:text-lg font-bold tracking-tight text-[#2d140d] group-hover:text-[#8b2500] transition-colors line-clamp-2 leading-snug font-sans">
-          {service.name}
-        </h4>
-      </div>
-
-      <div className="flex items-center justify-between pt-2.5 border-t border-[#f2e7db] mt-1">
-        {service.price === 0 ? (
-          <span className="text-sm font-extrabold text-[#8b2500] tracking-tight font-sans">
-            Manual Amount
-          </span>
-        ) : (
-          <div className="flex items-baseline gap-0.5">
-            <span className="text-base font-bold text-[#8b2500]">₹</span>
-            <span className="text-2xl sm:text-3xl font-black tracking-tight text-[#2d140d] font-sans">
-              {service.price}
-            </span>
-          </div>
-        )}
-
-        <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#8b2500] to-amber-700 text-white font-bold text-xs shadow-xs group-hover:shadow-md group-hover:from-[#a32c00] group-hover:to-amber-600 transition-all">
-          <span>Pay</span>
-          <ChevronRight className="size-3 group-hover:translate-x-0.5 transition-transform" />
-        </div>
-      </div>
-    </button>
-  );
-});
-
 function Kiosk() {
-  const [state, dispatch] = useReducer(kioskReducer, initialKioskState);
-  const [autoDetect, setAutoDetect] = useState(true);
+  const [step, setStep] = useState<Step>("scan");
+  const [capturedScan, setCapturedScan] = useState<CapturedScan | null>(null);
+  const [student, setStudent] = useState<VerifiedStudent | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [punchingService, setPunchingService] = useState<string | null>(null);
+  const [error, setError] = useState<string>("");
+  const [successBanner, setSuccessBanner] = useState<string | null>(null);
 
   // Background printing receipt container
   const [activeReceipt, setActiveReceipt] = useState<ReceiptData | null>(null);
@@ -308,132 +139,89 @@ function Kiosk() {
   const [customService, setCustomService] = useState<ServiceItem | null>(null);
   const [customAmountStr, setCustomAmountStr] = useState<string>("0");
 
+  // Zero-Touch Auto-Detect Mode: device continuously listens for finger touch
+  const [autoDetect, setAutoDetect] = useState<boolean>(true);
+
   const getConfig = useServerFn(getKioskConfig);
   const punch = useServerFn(punchService);
   const getGallery = useServerFn(getStudentGallery);
-  const getStudentData = useServerFn(getStudentKioskData);
 
-  // Live Mantra MFS100 device status (warm connection)
-  const { device, checking: deviceChecking, isConnected } = useMantraDevice(5000);
-
-  // In-flight guard ref to prevent overlapping captures
-  const inFlightRef = useRef(false);
-  // Ref for session timeout resets (avoids top-level state timer re-renders)
-  const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Live Mantra MFS100 device status
+  const { device, checking: deviceChecking, isConnected } = useMantraDevice(3000);
 
   const config = useQuery({
     queryKey: ["kiosk-config"],
     queryFn: () => getConfig(),
-    refetchInterval: 60000,
-    staleTime: 60000,
+    refetchInterval: 30000,
   });
 
   const galleryQuery = useQuery({
     queryKey: ["kiosk-gallery"],
     queryFn: () => getGallery(),
-    refetchInterval: 600000, // Loaded once, refreshed every 10 minutes
-    staleTime: 600000,
+    refetchInterval: 60000,
   });
 
   const title = config.data?.settings["kiosk_title"] || "Shree Swaminarayan Gurukul, Rajkot";
   const subtitle = config.data?.settings["kiosk_subtitle"] || "Cashless Biometric Kiosk Terminal";
   const footerText = config.data?.settings["receipt_footer"] || "Jay Swaminarayan";
 
-  // Realtime Supabase synchronization for active services and student templates
+  // Auto-dismiss success banner
   useEffect(() => {
-    const channel = supabase
-      .channel("kiosk-live-updates")
-      .on("postgres_changes", { event: "*", schema: "public", table: "services" }, () => {
-        void config.refetch();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "students" }, () => {
-        void galleryQuery.refetch();
-      })
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [config, galleryQuery]);
-
-  // Auto-dismiss success banner without re-rendering top state
-  useEffect(() => {
-    if (state.successBanner) {
-      const timer = setTimeout(() => dispatch({ type: "SET_SUCCESS_BANNER", banner: null }), 3500);
+    if (successBanner) {
+      const timer = setTimeout(() => setSuccessBanner(null), 3500);
       return () => clearTimeout(timer);
     }
     return undefined;
-  }, [state.successBanner]);
+  }, [successBanner]);
 
-  const reset = useCallback(() => {
-    if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-    inFlightRef.current = false;
-    dispatch({ type: "RESET" });
+  function reset() {
+    setStep("scan");
+    setCapturedScan(null);
+    setStudent(null);
+    setError("");
     setCustomService(null);
     setCustomAmountStr("0");
-  }, []);
+    setScanning(false);
+    setBusy(false);
+  }
 
-  // AUTO-DETECT: Zero-Touch Single Sequential Biometric Sensing Loop
+  // AUTO-DETECT: Zero-Touch Continuous Biometric Sensing Loop
+  // The moment any student places their finger on the sensor glass, it auto-captures and verifies
   useEffect(() => {
     let cancelled = false;
 
-    if (state.step !== "scan" || !autoDetect || !isConnected) {
+    if (step !== "scan" || !autoDetect || !isConnected || busy) {
       return;
     }
 
-    const runLoop = async () => {
-      while (!cancelled && state.step === "scan" && autoDetect && isConnected) {
-        if (inFlightRef.current) {
-          await new Promise((r) => setTimeout(r, 50));
-          continue;
-        }
+    const runAutoSensing = async () => {
+      const gallery = galleryQuery.data || [];
+      if (gallery.length === 0) {
+        return;
+      }
 
-        const gallery = galleryQuery.data || [];
-        if (gallery.length === 0) {
-          await new Promise((r) => setTimeout(r, 400));
-          continue;
-        }
-
-        inFlightRef.current = true;
-        dispatch({ type: "START_SCAN" });
-
+      while (!cancelled && step === "scan" && autoDetect) {
+        setScanning(true);
         try {
-          const t0 = performance.now();
-
-          // Stage (a): Finger placed to capture returns (quality=60, timeout=10000ms)
-          const tCaptureStart = performance.now();
-          const capture = await captureFinger(60, 10000);
-          const tCaptureEnd = performance.now();
-          const captureMs = Math.round(tCaptureEnd - tCaptureStart);
-
+          // Listen on sensor for up to 5 seconds per sensing block
+          const capture = await captureFinger(45, 5);
           if (cancelled) break;
 
           if (capture.ok && capture.template) {
-            dispatch({
-              type: "START_MATCHING",
-              capture: {
-                template: capture.template,
-                quality: capture.quality,
-                serial: capture.serial,
-                at: new Date().toISOString(),
-              },
+            setScanning(false);
+            setBusy(true);
+
+            setCapturedScan({
+              template: capture.template,
+              quality: capture.quality,
+              serial: capture.serial,
+              at: new Date().toISOString(),
             });
 
-            // Stage (b): Template matching against in-memory gallery
-            const tMatchStart = performance.now();
-            const matched = await identify(capture.template, gallery, 8);
-            const tMatchEnd = performance.now();
-            const matchMs = Math.round(tMatchEnd - tMatchStart);
+            // Fast 1:N Hardware/Algorithm Match across enrolled students
+            const matched = await identify(capture.template, gallery);
 
             if (matched) {
-              dispatch({ type: "START_LOADING" });
-
-              // Stage (c): Supabase fetch student + wallet + services in ONE round trip
-              const tSupabaseStart = performance.now();
-              const studentKioskData = await getStudentData({ data: { studentId: matched.id } });
-              const tSupabaseEnd = performance.now();
-              const supabaseMs = Math.round(tSupabaseEnd - tSupabaseStart);
-
               const verified: VerifiedStudent = {
                 id: matched.id,
                 suid: matched.suid,
@@ -443,121 +231,91 @@ function Kiosk() {
                 templates: matched.templates || [],
               };
 
-              // Stage (d): State update to first paint
-              const tRenderStart = performance.now();
-              dispatch({
-                type: "VERIFIED_SUCCESS",
-                student: verified,
-                walletData: studentKioskData,
-              });
-
-              requestAnimationFrame(() => {
-                const tRenderEnd = performance.now();
-                const renderMs = Math.round(tRenderEnd - tRenderStart);
-                const totalMs = Math.round(tRenderEnd - t0);
-                console.log(
-                  `[scan] capture=${captureMs}ms match=${matchMs}ms supabase=${supabaseMs}ms render=${renderMs}ms total=${totalMs}ms`,
-                );
-              });
-
-              // Set clean auto-reset after 30 seconds idle on service screen
-              if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-              resetTimerRef.current = setTimeout(() => {
-                dispatch({ type: "RESET" });
-              }, 30000);
-
-              break; // Student verified, cleanly exit sensing loop
+              setStudent(verified);
+              setSuccessBanner(`Biometric Verified: Welcome, ${verified.name}!`);
+              setStep("service");
+              setBusy(false);
+              break; // exit loop as student is now verified
             } else {
-              dispatch({
-                type: "SCAN_MISMATCH",
-                error:
-                  "❌ Fingerprint not recognized. Please place your registered finger firmly on the Mantra sensor.",
-              });
-              setTimeout(() => {
-                if (!cancelled) dispatch({ type: "CLEAR_ERROR" });
-              }, 2000);
+              setError(
+                "❌ Fingerprint not recognized. Please place your registered finger firmly on the sensor.",
+              );
+              setBusy(false);
+              await new Promise((resolve) => setTimeout(resolve, 2500));
+              if (!cancelled) setError("");
             }
+          } else {
+            // Normal timeout (no finger touched during 5s window)
+            // Pause 200ms and continue next sensing loop seamlessly
+            await new Promise((resolve) => setTimeout(resolve, 200));
           }
-        } catch (err) {
-          console.error("Auto-sensing capture exception:", err);
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         } finally {
-          inFlightRef.current = false;
+          if (!cancelled && step === "scan") {
+            setScanning(false);
+          }
         }
       }
     };
 
-    void runLoop();
+    const timer = setTimeout(() => {
+      void runAutoSensing();
+    }, 400);
 
     return () => {
       cancelled = true;
-      inFlightRef.current = false;
+      clearTimeout(timer);
     };
-  }, [state.step, autoDetect, isConnected, galleryQuery.data, getStudentData]);
+  }, [step, autoDetect, isConnected, busy, galleryQuery.data]);
 
-  // STEP 1: Direct Fingerprint Scan (Manual Button Fallback)
+  // STEP 1: Direct Fingerprint Scan & 1:N Identification (Manual Button Fallback)
   async function startFingerScan() {
-    if (inFlightRef.current || state.scannerStatus !== "idle") return;
-    inFlightRef.current = true;
-    dispatch({ type: "START_SCAN" });
+    if (scanning || busy) return;
+    setScanning(true);
+    setError("");
 
     try {
-      const gallery = galleryQuery.data || [];
-      if (gallery.length === 0) {
-        dispatch({
-          type: "SCAN_ERROR",
-          error: "Student database is loading or no biometric records enrolled.",
-        });
-        return;
-      }
-
-      const t0 = performance.now();
-
-      // Stage (a)
-      const tCaptureStart = performance.now();
-      const capture = await captureFinger(60, 10000);
-      const tCaptureEnd = performance.now();
-      const captureMs = Math.round(tCaptureEnd - tCaptureStart);
-
+      const capture = await captureFinger(50, 10);
       if (!capture.ok) {
-        dispatch({
-          type: "SCAN_ERROR",
-          error: capture.error || "Failed to capture fingerprint. Place finger firmly on sensor glass.",
-        });
+        setError(
+          capture.error ||
+            "Failed to capture fingerprint. Please place finger firmly on sensor glass.",
+        );
+        setScanning(false);
         return;
       }
 
-      dispatch({
-        type: "START_MATCHING",
-        capture: {
-          template: capture.template,
-          quality: capture.quality,
-          serial: capture.serial,
-          at: new Date().toISOString(),
-        },
+      setCapturedScan({
+        template: capture.template,
+        quality: capture.quality,
+        serial: capture.serial,
+        at: new Date().toISOString(),
       });
 
-      // Stage (b)
-      const tMatchStart = performance.now();
-      const matched = await identify(capture.template, gallery, 8);
-      const tMatchEnd = performance.now();
-      const matchMs = Math.round(tMatchEnd - tMatchStart);
+      setBusy(true);
 
-      if (!matched) {
-        dispatch({
-          type: "SCAN_MISMATCH",
-          error:
-            "❌ Fingerprint not recognized. Please place your registered finger firmly on the Mantra sensor.",
-        });
+      const gallery = galleryQuery.data || [];
+      if (gallery.length === 0) {
+        setError(
+          "Student database is loading or no biometric records enrolled. Please contact admin.",
+        );
+        setScanning(false);
+        setBusy(false);
         return;
       }
 
-      dispatch({ type: "START_LOADING" });
+      // Fast 1:N Identification across all enrolled students
+      const matched = await identify(capture.template, gallery);
 
-      // Stage (c)
-      const tSupabaseStart = performance.now();
-      const studentKioskData = await getStudentData({ data: { studentId: matched.id } });
-      const tSupabaseEnd = performance.now();
-      const supabaseMs = Math.round(tSupabaseEnd - tSupabaseStart);
+      if (!matched) {
+        setError(
+          "❌ Fingerprint not recognized. Please place your registered finger firmly on the Mantra sensor.",
+        );
+        setScanning(false);
+        setBusy(false);
+        return;
+      }
 
       const verified: VerifiedStudent = {
         id: matched.id,
@@ -568,67 +326,46 @@ function Kiosk() {
         templates: matched.templates || [],
       };
 
-      // Stage (d)
-      const tRenderStart = performance.now();
-      dispatch({
-        type: "VERIFIED_SUCCESS",
-        student: verified,
-        walletData: studentKioskData,
-      });
-
-      requestAnimationFrame(() => {
-        const tRenderEnd = performance.now();
-        const renderMs = Math.round(tRenderEnd - tRenderStart);
-        const totalMs = Math.round(tRenderEnd - t0);
-        console.log(
-          `[scan] capture=${captureMs}ms match=${matchMs}ms supabase=${supabaseMs}ms render=${renderMs}ms total=${totalMs}ms`,
-        );
-      });
-
-      if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-      resetTimerRef.current = setTimeout(() => {
-        dispatch({ type: "RESET" });
-      }, 30000);
+      setStudent(verified);
+      setSuccessBanner(`Biometric Verified: Welcome, ${verified.name}!`);
+      setStep("service");
     } catch {
-      dispatch({
-        type: "SCAN_ERROR",
-        error: "Communication error with Mantra scanner. Check USB connection and driver.",
-      });
+      setError("Communication error with Mantra scanner. Check USB connection and driver.");
     } finally {
-      inFlightRef.current = false;
+      setScanning(false);
+      setBusy(false);
     }
   }
 
   // STEP 2: Service Selection & Execution
-  const handleServiceClick = useCallback((service: ServiceItem) => {
+  function handleServiceClick(service: ServiceItem) {
     if (service.price === 0) {
       setCustomService(service);
       setCustomAmountStr("0");
     } else {
       void executePunch(service.id, service.price, service.name);
     }
-  }, []);
+  }
 
   async function executePunch(serviceId: string, amount?: number, serviceName?: string) {
-    if (!state.student) return;
-    dispatch({ type: "START_PUNCH", serviceName: serviceName || "Campus Service" });
-    const studentName = state.student.name;
+    if (!student) return;
+    setBusy(true);
+    setPunchingService(serviceName || "Campus Service");
+    setError("");
+    const studentName = student.name;
 
     try {
       const res = await punch({
         data: {
-          studentId: state.student.id,
-          suid: state.student.suid,
+          studentId: student.id,
+          suid: student.suid,
           serviceId,
           customAmount: amount && amount > 0 ? amount : undefined,
         },
       });
 
       if (res.status === "ok") {
-        dispatch({
-          type: "SET_SUCCESS_BANNER",
-          banner: `✅ ${res.message} for ${studentName}`,
-        });
+        setSuccessBanner(`✅ ${res.message} for ${studentName}`);
 
         if (res.print && res.receipt) {
           const rData: ReceiptData = {
@@ -643,49 +380,57 @@ function Kiosk() {
           };
           setActiveReceipt(rData);
 
+          // Trigger thermal receipt print
           setTimeout(() => {
             window.print();
-          }, 200);
+          }, 300);
         }
 
-        // Auto-reset back to scan screen after transaction
-        if (resetTimerRef.current) clearTimeout(resetTimerRef.current);
-        resetTimerRef.current = setTimeout(() => {
+        // Auto-reset back to Step 1 for next student
+        setTimeout(() => {
           reset();
         }, 3500);
-
-        dispatch({ type: "PUNCH_COMPLETE" });
       } else if (res.status === "blocked") {
-        dispatch({ type: "PUNCH_COMPLETE", error: `❌ Student Account Blocked: ${res.message}` });
+        setError(`❌ Student Account Blocked: ${res.message}`);
       } else if (res.status === "limit") {
-        dispatch({ type: "PUNCH_COMPLETE", error: `⚠️ Daily Limit Exceeded: ${res.message}` });
+        setError(`⚠️ Daily Limit Exceeded: ${res.message}`);
       } else {
-        dispatch({ type: "PUNCH_COMPLETE", error: "❌ Transaction failed. Please try again." });
+        setError("❌ Transaction failed. Please try again.");
       }
     } catch {
-      dispatch({ type: "PUNCH_COMPLETE", error: "Transaction error. Please try again." });
+      setError("Transaction error. Please try again.");
+    } finally {
+      setBusy(false);
+      setPunchingService(null);
     }
   }
 
   // Touch Keypad Handlers
-  const handleKeypadDigit = useCallback((digit: string) => {
-    setCustomAmountStr((prev) => (prev === "0" ? digit : prev + digit));
-  }, []);
+  function handleKeypadDigit(digit: string) {
+    if (customAmountStr === "0") {
+      setCustomAmountStr(digit);
+    } else {
+      setCustomAmountStr((prev) => prev + digit);
+    }
+  }
 
-  const handleKeypadBackspace = useCallback(() => {
-    setCustomAmountStr((prev) => (prev.length <= 1 ? "0" : prev.slice(0, -1)));
-  }, []);
+  function handleKeypadBackspace() {
+    if (customAmountStr.length <= 1) {
+      setCustomAmountStr("0");
+    } else {
+      setCustomAmountStr((prev) => prev.slice(0, -1));
+    }
+  }
 
-  const handleKeypadClear = useCallback(() => {
+  function handleKeypadClear() {
     setCustomAmountStr("0");
-  }, []);
+  }
 
-  const handleAddChipAmount = useCallback((add: number) => {
-    setCustomAmountStr((prev) => {
-      const current = Number(prev) || 0;
-      return String(Math.min(10000, current + add));
-    });
-  }, []);
+  function handleAddChipAmount(add: number) {
+    const current = Number(customAmountStr) || 0;
+    const next = Math.min(10000, current + add);
+    setCustomAmountStr(String(next));
+  }
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-gradient-to-br from-[#f8f5ee] via-[#f4ecdf] to-[#ede3d1] text-[#2c1810] p-4 md:p-8 select-none relative overflow-hidden">
@@ -742,12 +487,12 @@ function Kiosk() {
         <div className="flex items-center gap-3 justify-center pt-3">
           <span
             className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
-              state.step === "scan"
+              step === "scan"
                 ? "bg-[#4a1c14] text-white shadow-lg scale-105 ring-2 ring-amber-500/40"
                 : "bg-emerald-600/20 text-emerald-900 border border-emerald-500/40"
             }`}
           >
-            {state.student ? (
+            {student ? (
               <CheckCircle2 className="size-3.5 text-emerald-600" />
             ) : (
               <Fingerprint className="size-3.5" />
@@ -757,7 +502,7 @@ function Kiosk() {
           <span className="text-[#c5a880] font-bold">———</span>
           <span
             className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 ${
-              state.step === "service"
+              step === "service"
                 ? "bg-[#4a1c14] text-white shadow-lg scale-105 ring-2 ring-amber-500/40"
                 : "bg-[#ebdcc8] text-[#7c533f]"
             }`}
@@ -769,17 +514,17 @@ function Kiosk() {
       </header>
 
       {/* Instant Success Flash Notification */}
-      {state.successBanner && (
+      {successBanner && (
         <div className="max-w-xl mx-auto w-full p-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-2xl flex items-center justify-center gap-3 text-center text-sm md:text-base font-bold animate-in fade-in slide-in-from-top-4 duration-300 z-30">
           <CheckCircle2 className="size-6 shrink-0 text-emerald-200" />
-          <span>{state.successBanner}</span>
+          <span>{successBanner}</span>
         </div>
       )}
 
       {/* Main Terminal Stage */}
       <main className="flex-1 flex items-center justify-center my-4 relative z-10">
         {/* STEP 1: Direct Fingerprint Scan on Mantra MFS100 */}
-        {state.step === "scan" && (
+        {step === "scan" && (
           <Card className="w-full max-w-xl p-8 md:p-12 text-center bg-white/95 backdrop-blur-md border-2 border-[#e5d8c5] shadow-[0_20px_60px_-15px_rgba(74,28,20,0.15)] rounded-3xl space-y-6 animate-in fade-in zoom-in-95 duration-300">
             {/* Device Connectivity & Auto-Sense Badges */}
             <div className="flex flex-wrap items-center justify-center gap-2 min-h-[32px]">
@@ -831,11 +576,7 @@ function Kiosk() {
                   [ 500 DPI ]
                 </span>
                 <span className="tracking-wider uppercase font-bold text-[#8b2500]">
-                  {state.scannerStatus === "scanning"
-                    ? "CAPTURE IN PROGRESS"
-                    : state.scannerStatus === "matching"
-                      ? "BIOMETRIC MATCHING"
-                      : "OPTICAL ARMED"}
+                  {scanning ? "CAPTURE IN PROGRESS" : "OPTICAL ARMED"}
                 </span>
                 <span>[ ISO/IEC ]</span>
               </div>
@@ -854,7 +595,7 @@ function Kiosk() {
                 {/* Ambient Outer Pulse Halo */}
                 <div
                   className={`absolute inset-3 rounded-full transition-all duration-500 pointer-events-none ${
-                    state.scannerStatus === "scanning"
+                    scanning
                       ? "bg-rose-500/15 ring-4 ring-rose-500/30 animate-ping"
                       : "bg-amber-500/10 animate-pulse-ring"
                   }`}
@@ -879,7 +620,7 @@ function Kiosk() {
                   {/* Holographic Breathing Fingerprint Icon */}
                   <Fingerprint
                     className={`size-24 md:size-28 transition-all duration-300 drop-shadow-lg z-10 ${
-                      state.scannerStatus === "scanning"
+                      scanning
                         ? "text-rose-600 scale-110 animate-pulse drop-shadow-[0_0_15px_rgba(225,29,72,0.6)]"
                         : "text-[#8b2500] animate-holographic-breathe group-hover:scale-105"
                     }`}
@@ -913,25 +654,19 @@ function Kiosk() {
             {/* Stable Non-Jittering Heading & Instruction Text Block */}
             <div className="space-y-1.5 min-h-[76px] flex flex-col justify-center select-none">
               <h2 className="text-2xl md:text-3xl font-serif font-bold text-[#4a1c14] leading-tight">
-                {state.scannerStatus === "scanning"
-                  ? "Place Finger on Scanner Glass"
-                  : state.scannerStatus === "matching"
-                    ? "Verifying Fingerprint..."
-                    : "Place Finger to Authenticate"}
+                {scanning ? "Place Finger on Scanner Glass" : "Place Finger to Authenticate"}
               </h2>
               <p className="text-sm md:text-base text-[#7c533f] font-medium leading-normal">
-                {state.scannerStatus === "scanning"
+                {scanning
                   ? "🟢 Optical sensor active. Place registered finger directly on Mantra glass."
-                  : state.scannerStatus === "matching"
-                    ? "Searching biometric enrolled records..."
-                    : "Mantra optical biometric sensor is armed and ready."}
+                  : "Mantra optical biometric sensor is armed and ready."}
               </p>
             </div>
 
-            {state.error && (
+            {error && (
               <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium flex items-center gap-3 text-left animate-in fade-in duration-200">
                 <AlertCircle className="size-5 shrink-0 text-rose-600" />
-                <span>{state.error}</span>
+                <span>{error}</span>
               </div>
             )}
 
@@ -939,18 +674,13 @@ function Kiosk() {
               <Button
                 size="lg"
                 onClick={() => void startFingerScan()}
-                disabled={state.scannerStatus === "scanning" || state.scannerStatus === "matching" || inFlightRef.current}
+                disabled={busy}
                 className="w-full h-15 text-lg font-bold text-white rounded-2xl shadow-[0_12px_28px_-6px_rgba(139,37,0,0.45)] transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] shimmer-btn cursor-pointer bg-gradient-to-r from-[#4a1c14] via-[#6d2518] to-[#8b2500] border border-amber-500/20"
               >
-                {state.scannerStatus === "scanning" ? (
+                {scanning ? (
                   <>
                     <Loader2 className="size-6 animate-spin mr-2" />
                     Scanning Fingerprint...
-                  </>
-                ) : state.scannerStatus === "matching" ? (
-                  <>
-                    <Loader2 className="size-6 animate-spin mr-2" />
-                    Matching Fingerprint...
                   </>
                 ) : (
                   <>
@@ -983,40 +713,20 @@ function Kiosk() {
         )}
 
         {/* STEP 2: Student Verified Screen */}
-        {state.step === "service" && state.student && (
+        {step === "service" && student && (
           <div className="w-full max-w-5xl space-y-4 animate-in fade-in zoom-in-95 duration-300 font-sans">
             {/* Top Verified Student Header Banner */}
             <div className="bg-gradient-to-r from-[#4a1c14] via-[#5c2016] to-[#3a140d] text-white rounded-3xl p-5 sm:p-6 shadow-xl border border-amber-500/30 flex flex-wrap items-center justify-between gap-4 select-none">
               <div className="space-y-1">
                 <h2 className="text-2xl sm:text-3xl font-serif font-black tracking-tight uppercase text-white">
-                  {state.student.name}
+                  {student.name}
                 </h2>
-                <div className="flex flex-wrap items-center gap-3 text-xs sm:text-sm font-semibold tracking-wider text-amber-200/90 font-mono uppercase">
-                  <span>
-                    UNIQUE/HR NO.: <span className="font-bold text-white">{state.student.suid}</span>
-                  </span>
-                  {state.student.class_name && (
-                    <span>
-                      • CLASS: <span className="font-bold text-white">{state.student.class_name}</span>
-                    </span>
-                  )}
-                  {state.student.room_no && (
-                    <span>
-                      • ROOM: <span className="font-bold text-white">{state.student.room_no}</span>
-                    </span>
-                  )}
-                </div>
+                <p className="text-xs sm:text-sm font-semibold tracking-wider text-amber-200/90 font-mono uppercase">
+                  UNIQUE/HR NO.: <span className="font-bold text-white">{student.suid}</span>
+                </p>
               </div>
 
               <div className="flex items-center gap-3">
-                {state.walletData?.dailyLimit && (
-                  <div className="hidden sm:flex flex-col items-end px-3 py-1.5 rounded-xl bg-white/10 border border-white/10 text-right">
-                    <span className="text-[10px] uppercase tracking-wider text-amber-200 font-mono">Daily Limit</span>
-                    <span className="text-sm font-bold text-white font-mono">
-                      ₹{state.walletData.dailyLimit} (₹{state.walletData.spentToday} used)
-                    </span>
-                  </div>
-                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -1028,10 +738,10 @@ function Kiosk() {
               </div>
             </div>
 
-            {state.error && (
+            {error && (
               <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm font-medium flex items-center gap-3">
                 <AlertCircle className="size-5 shrink-0 text-rose-600" />
-                <span>{state.error}</span>
+                <span>{error}</span>
               </div>
             )}
 
@@ -1047,14 +757,67 @@ function Kiosk() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
-                {(config.data?.services ?? []).map((service) => (
-                  <ServiceCard
-                    key={service.id}
-                    service={service}
-                    disabled={state.punchingService !== null}
-                    onClick={handleServiceClick}
-                  />
-                ))}
+                {(config.data?.services ?? []).map((service) => {
+                  const meta = getServiceMeta(service.name);
+                  const IconComp = meta.icon;
+
+                  return (
+                    <button
+                      key={service.id}
+                      disabled={busy}
+                      onClick={() => handleServiceClick(service)}
+                      className="p-4 sm:p-5 rounded-3xl bg-white hover:bg-white/95 border-2 border-[#e6d8c6] hover:border-[#8b2500] shadow-[0_4px_16px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_32px_rgba(139,37,0,0.12)] hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.99] transition-all duration-300 text-left flex flex-col justify-between h-40 group relative overflow-hidden cursor-pointer"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`size-7 rounded-lg flex items-center justify-center border shadow-xs transition-transform group-hover:scale-110 ${meta.iconBg}`}
+                            >
+                              <IconComp className="size-3.5" />
+                            </span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#8b2500] bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded-md">
+                              {meta.tag}
+                            </span>
+                          </div>
+
+                          {service.print_receipt && (
+                            <span
+                              title="Thermal receipt will be printed"
+                              className="p-1.5 rounded-lg bg-[#f7efe6] text-[#7c533f] group-hover:text-[#8b2500] transition-colors"
+                            >
+                              <Printer className="size-3" />
+                            </span>
+                          )}
+                        </div>
+
+                        <h4 className="text-base sm:text-lg font-bold tracking-tight text-[#2d140d] group-hover:text-[#8b2500] transition-colors line-clamp-2 leading-snug font-sans">
+                          {service.name}
+                        </h4>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2.5 border-t border-[#f2e7db] mt-1">
+                        {service.price === 0 ? (
+                          <span className="text-sm font-extrabold text-[#8b2500] tracking-tight font-sans">
+                            Manual Amount
+                          </span>
+                        ) : (
+                          <div className="flex items-baseline gap-0.5">
+                            <span className="text-base font-bold text-[#8b2500]">₹</span>
+                            <span className="text-2xl sm:text-3xl font-black tracking-tight text-[#2d140d] font-sans">
+                              {service.price}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#8b2500] to-amber-700 text-white font-bold text-xs shadow-xs group-hover:shadow-md group-hover:from-[#a32c00] group-hover:to-amber-600 transition-all">
+                          <span>Pay</span>
+                          <ChevronRight className="size-3 group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1062,12 +825,12 @@ function Kiosk() {
       </main>
 
       {/* Gurukul Logo Loading Circle Overlay during Service Selection & Payment */}
-      {(state.punchingService !== null || state.scannerStatus === "loading") && state.step === "service" && (
+      {busy && step === "service" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-md animate-in fade-in duration-200 p-4">
           <div className="bg-[#fefcf9] p-8 md:p-10 rounded-3xl border-2 border-amber-500/40 shadow-[0_25px_60px_-15px_rgba(74,28,20,0.3)] max-w-sm w-full mx-auto text-center space-y-2">
             <GurukulLoader
               size="md"
-              text={state.punchingService ? `Processing ${state.punchingService}...` : "Loading Student Data..."}
+              text={punchingService ? `Processing ${punchingService}...` : "Processing Service..."}
               subtext="Generating thermal receipt & recording cashless entry..."
             />
           </div>
@@ -1156,14 +919,14 @@ function Kiosk() {
             </Button>
             <Button
               type="button"
-              disabled={state.punchingService !== null || Number(customAmountStr) <= 0}
+              disabled={busy || Number(customAmountStr) <= 0}
               onClick={() =>
                 customService &&
                 executePunch(customService.id, Number(customAmountStr), customService.name)
               }
               className="w-full sm:flex-1 h-12 text-base font-bold bg-[#4a1c14] hover:bg-[#8b2500] text-white rounded-xl shadow-lg cursor-pointer"
             >
-              {state.punchingService !== null ? (
+              {busy ? (
                 <Loader2 className="size-5 animate-spin mr-2" />
               ) : (
                 `Confirm & Pay ₹${customAmountStr}`

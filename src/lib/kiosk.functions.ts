@@ -89,17 +89,8 @@ const suidSchema = z.object({
   suid: z.string().trim().min(1).max(32),
 });
 
-let cachedConfig: KioskConfig | null = null;
-let configCachedAt = 0;
-const CONFIG_CACHE_TTL = 60000; // 60 seconds memory cache
-
 export const getKioskConfig = createServerFn({ method: "GET" }).handler(
   async (): Promise<KioskConfig> => {
-    const now = Date.now();
-    if (cachedConfig && now - configCachedAt < CONFIG_CACHE_TTL) {
-      return cachedConfig;
-    }
-
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [{ data: services }, { data: settings }, { data: students }] = await Promise.all([
       supabaseAdmin
@@ -114,7 +105,7 @@ export const getKioskConfig = createServerFn({ method: "GET" }).handler(
         .eq("blocked", false),
     ]);
 
-    cachedConfig = {
+    return {
       services: (services ?? []).map((s) => ({ ...s, price: Number(s.price) })),
       settings: Object.fromEntries((settings ?? []).map((s) => [s.key, s.value])),
       enrolledStudents: (students ?? []).map((s) => ({
@@ -125,71 +116,8 @@ export const getKioskConfig = createServerFn({ method: "GET" }).handler(
         nfc_no: s.nfc_no,
       })),
     };
-    configCachedAt = now;
-    return cachedConfig;
   },
 );
-
-export type StudentKioskData = {
-  student: {
-    id: string;
-    suid: string;
-    name: string;
-    class_name: string | null;
-    room_no: string | null;
-    nfc_no: string;
-    blocked: boolean;
-  } | null;
-  todaysTransactions: {
-    id: string;
-    service_name: string;
-    amount: number;
-    receipt_no: number;
-    created_at: string;
-  }[];
-  spentToday: number;
-  dailyLimit: number;
-  balanceRemaining: number | null;
-};
-
-export const getStudentKioskData = createServerFn({ method: "POST" })
-  .validator((input: unknown) => z.object({ studentId: z.string().uuid() }).parse(input))
-  .handler(async ({ data }): Promise<StudentKioskData> => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const dayStart = new Date();
-    dayStart.setHours(0, 0, 0, 0);
-
-    const [studentRes, todaysRes, settingsRes] = await Promise.all([
-      supabaseAdmin
-        .from("students")
-        .select("id, suid, name, class_name, room_no, nfc_no, blocked")
-        .eq("id", data.studentId)
-        .maybeSingle(),
-      supabaseAdmin
-        .from("transactions")
-        .select("id, service_name, amount, receipt_no, created_at")
-        .eq("student_id", data.studentId)
-        .gte("created_at", dayStart.toISOString())
-        .order("created_at", { ascending: false }),
-      supabaseAdmin.from("settings").select("key, value"),
-    ]);
-
-    const student = studentRes.data;
-    const transactions = (todaysRes.data ?? []).map((t) => ({ ...t, amount: Number(t.amount) }));
-    const settings = Object.fromEntries((settingsRes.data ?? []).map((s) => [s.key, s.value]));
-
-    const dailyLimit = Number(settings["daily_limit"] ?? 0);
-    const spentToday = transactions.reduce((sum, t) => sum + t.amount, 0);
-    const balanceRemaining = dailyLimit > 0 ? Math.max(0, dailyLimit - spentToday) : null;
-
-    return {
-      student,
-      todaysTransactions: transactions,
-      spentToday,
-      dailyLimit,
-      balanceRemaining,
-    };
-  });
 
 export const lookupStudentBySuid = createServerFn({ method: "POST" })
   .validator((input: unknown) => suidSchema.parse(input))
