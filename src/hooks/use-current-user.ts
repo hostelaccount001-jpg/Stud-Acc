@@ -18,76 +18,95 @@ export type CurrentUserState = {
   loading: boolean;
 };
 
-// In-memory singleton state so all components in the app share the exact same user state instantly
-let cachedState: CurrentUserState | null = null;
-const subscribers = new Set<(state: CurrentUserState) => void>();
-let fetchPromise: Promise<void> | null = null;
+const defaultLoggedOutState: CurrentUserState = {
+  email: null,
+  userId: null,
+  isAdmin: false,
+  isSuperAdmin: false,
+  roleTitle: "Guest",
+  permissions: { ...defaultStaffPermissions },
+  loading: false,
+};
 
-function getStoredCache(): CurrentUserState | null {
-  if (cachedState) return cachedState;
+const defaultLoadingState: CurrentUserState = {
+  email: null,
+  userId: null,
+  isAdmin: false,
+  isSuperAdmin: false,
+  roleTitle: "Staff",
+  permissions: { ...defaultStaffPermissions },
+  loading: true,
+};
+
+const SESSION_CACHE_PREFIX = "gurukul_auth_user_v3_";
+
+// In-memory singleton state so all components in the app share the exact same user state instantly
+let cachedState: CurrentUserState = defaultLoadingState;
+const subscribers = new Set<(state: CurrentUserState) => void>();
+let fetchPromise: Promise<CurrentUserState> | null = null;
+let authListenerRegistered = false;
+
+function notifySubscribers(state: CurrentUserState) {
+  cachedState = state;
+  subscribers.forEach((fn) => fn(state));
+}
+
+// Function to immediately wipe user session cache when a user logs out
+export function clearUserSessionCache() {
+  fetchPromise = null;
+  cachedState = { ...defaultLoggedOutState };
+
   if (typeof window !== "undefined") {
     try {
-      const raw = sessionStorage.getItem("gurukul_auth_user_cache_v2");
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed.permissions === "object") {
-          cachedState = {
-            ...parsed,
-            loading: false,
-          };
-          return cachedState;
+      sessionStorage.removeItem("gurukul_auth_user_cache_v2");
+      sessionStorage.removeItem("gurukul_auth_user_cache_v3");
+      for (let i = sessionStorage.length - 1; i >= 0; i--) {
+        const key = sessionStorage.key(i);
+        if (key && (key.startsWith("gurukul_") || key.includes("auth_user"))) {
+          sessionStorage.removeItem(key);
         }
       }
     } catch {}
   }
-  return null;
+
+  notifySubscribers(cachedState);
 }
 
-function getSafeInitialState(): CurrentUserState {
-  const fromCache = getStoredCache();
-  if (fromCache) return fromCache;
-
-  return {
-    email: null,
-    userId: null,
-    isAdmin: false,
-    isSuperAdmin: false,
-    roleTitle: "Staff",
-    // CRITICAL: Safe default permissions (delete_students: false, delete_services: false, users: false)
-    permissions: { ...defaultStaffPermissions },
-    loading: true,
-  };
-}
-
-async function refreshUserPermissions(force = false) {
+// Function to refresh permissions for the currently authenticated Supabase user
+export async function refreshUserPermissions(force = false): Promise<CurrentUserState> {
   if (fetchPromise && !force) return fetchPromise;
 
   fetchPromise = (async () => {
     try {
-      const { data } = await supabase.auth.getUser();
-      const user = data.user;
-      const userEmail = user?.email ?? null;
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+      const user = session?.user;
 
-      if (!user) {
-        cachedState = {
-          email: null,
-          userId: null,
-          isAdmin: false,
-          isSuperAdmin: false,
-          roleTitle: "Guest",
-          permissions: { ...defaultStaffPermissions },
-          loading: false,
-        };
-        try {
-          sessionStorage.removeItem("gurukul_auth_user_cache_v2");
-        } catch {}
-        subscribers.forEach((fn) => fn(cachedState!));
-        return;
+      if (sessionError || !user) {
+        clearUserSessionCache();
+        return defaultLoggedOutState;
       }
 
+      // Check if we have an immediate match in sessionStorage for this specific user ID
+      if (typeof window !== "undefined") {
+        try {
+          const stored = sessionStorage.getItem(`${SESSION_CACHE_PREFIX}${user.id}`);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed && parsed.userId === user.id && typeof parsed.permissions === "object") {
+              notifySubscribers({ ...parsed, loading: false });
+            }
+          }
+        } catch {}
+      }
+
+      const userEmail = user.email ?? null;
       const isMaster = userEmail === "anshsangani2007@gmail.com";
+
       if (isMaster) {
-        cachedState = {
+        const masterState: CurrentUserState = {
           email: userEmail,
           userId: user.id,
           isAdmin: true,
@@ -96,11 +115,16 @@ async function refreshUserPermissions(force = false) {
           permissions: { ...defaultSuperAdminPermissions },
           loading: false,
         };
-        try {
-          sessionStorage.setItem("gurukul_auth_user_cache_v2", JSON.stringify(cachedState));
-        } catch {}
-        subscribers.forEach((fn) => fn(cachedState!));
-        return;
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.setItem(
+              `${SESSION_CACHE_PREFIX}${user.id}`,
+              JSON.stringify(masterState),
+            );
+          } catch {}
+        }
+        notifySubscribers(masterState);
+        return masterState;
       }
 
       try {
@@ -115,7 +139,8 @@ async function refreshUserPermissions(force = false) {
             : res.role === "admin"
               ? "Administrator"
               : "Staff");
-        cachedState = {
+
+        const state: CurrentUserState = {
           email: userEmail,
           userId: user.id,
           isAdmin: res.role === "admin" || res.role === "super_admin",
@@ -125,15 +150,27 @@ async function refreshUserPermissions(force = false) {
           permissions: res.permissions,
           loading: false,
         };
-      } catch {
-        // Fallback to direct user_roles check
+
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.setItem(
+              `${SESSION_CACHE_PREFIX}${user.id}`,
+              JSON.stringify(state),
+            );
+          } catch {}
+        }
+
+        notifySubscribers(state);
+        return state;
+      } catch (err) {
+        console.warn("Falling back to direct user_roles check:", err);
         const { data: roles } = await supabase
           .from("user_roles")
           .select("role")
           .eq("user_id", user.id);
         const hasAdmin = (roles ?? []).some((r) => r.role === "admin");
 
-        cachedState = {
+        const fallbackState: CurrentUserState = {
           email: userEmail,
           userId: user.id,
           isAdmin: hasAdmin,
@@ -144,12 +181,23 @@ async function refreshUserPermissions(force = false) {
             : { ...defaultStaffPermissions },
           loading: false,
         };
-      }
 
-      try {
-        sessionStorage.setItem("gurukul_auth_user_cache_v2", JSON.stringify(cachedState));
-      } catch {}
-      subscribers.forEach((fn) => fn(cachedState!));
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.setItem(
+              `${SESSION_CACHE_PREFIX}${user.id}`,
+              JSON.stringify(fallbackState),
+            );
+          } catch {}
+        }
+
+        notifySubscribers(fallbackState);
+        return fallbackState;
+      }
+    } catch (err) {
+      console.error("Error refreshing user permissions:", err);
+      clearUserSessionCache();
+      return defaultLoggedOutState;
     } finally {
       fetchPromise = null;
     }
@@ -158,14 +206,37 @@ async function refreshUserPermissions(force = false) {
   return fetchPromise;
 }
 
+// Kept for backward compatibility
+export function invalidateUserSessionCache() {
+  clearUserSessionCache();
+  void refreshUserPermissions(true);
+}
+
+function registerAuthListener() {
+  if (authListenerRegistered || typeof window === "undefined") return;
+  authListenerRegistered = true;
+
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event === "SIGNED_OUT" || !session) {
+      clearUserSessionCache();
+    } else if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+      if (cachedState.userId !== session.user.id) {
+        clearUserSessionCache();
+        await refreshUserPermissions(true);
+      }
+    }
+  });
+}
+
 export function useCurrentUser() {
-  const [state, setState] = useState<CurrentUserState>(getSafeInitialState);
+  const [state, setState] = useState<CurrentUserState>(() => cachedState);
 
   useEffect(() => {
+    registerAuthListener();
     subscribers.add(setState);
 
-    // If no cache, fetch immediately
-    if (!cachedState) {
+    // If still in default loading state or has no userId, trigger refresh
+    if (cachedState.loading || !cachedState.userId) {
       void refreshUserPermissions();
     }
 
@@ -175,14 +246,4 @@ export function useCurrentUser() {
   }, []);
 
   return state;
-}
-
-// Function to immediately invalidate auth cache when user logs in or out
-export function invalidateUserSessionCache() {
-  cachedState = null;
-  fetchPromise = null;
-  try {
-    sessionStorage.removeItem("gurukul_auth_user_cache_v2");
-  } catch {}
-  void refreshUserPermissions(true);
 }

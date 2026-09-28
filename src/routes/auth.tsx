@@ -1,6 +1,8 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { clearUserSessionCache, refreshUserPermissions } from "@/hooks/use-current-user";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +38,7 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -43,8 +46,11 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/admin", replace: true });
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (data.session) {
+        await refreshUserPermissions();
+        navigate({ to: "/admin", replace: true });
+      }
     });
   }, [navigate]);
 
@@ -56,8 +62,19 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      // 1. Wipe any existing cache and React Query caches before authenticating new user
+      clearUserSessionCache();
+      queryClient.clear();
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
       if (error) throw error;
+
+      // 2. Fetch fresh user role & permissions for the new user into cache BEFORE navigation
+      await refreshUserPermissions(true);
+
       toast.success("Identity verified. Welcome to Gurukul Admin Portal!");
       navigate({ to: "/admin", replace: true });
     } catch (err) {
